@@ -33,7 +33,7 @@ body {
 .nav {
 	width: 220px;
 	padding-top: 185px;
-	background: url(../images/bgheader.gif) 50% 0 no-repeat;
+	background: url("../images/bgheader.gif") 50% 0 no-repeat;
 }
 
 .grid_12 .grid_4 {
