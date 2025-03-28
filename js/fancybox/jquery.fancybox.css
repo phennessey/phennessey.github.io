@@ -9,7 +9,7 @@
 
 .fancybox-wrap {
 	min-width: 740px;
-	position: fixed !important; /*absolute;*/
+	position: absolute;
 	margin-top: 70px;
 	margin-left: 200px;
 	z-index: 1002;
