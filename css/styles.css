@@ -8,7 +8,7 @@ body {
 	font-family: Georgia, "Times New Roman", Times, serif; }
 
 .nav { position: fixed; }
-.grid_12 { margin-left:240px; }
+.grid_12, .grid_8 { margin-left:240px; }
 
 /* Grid 960
 --------------------------------------------------------------------------
