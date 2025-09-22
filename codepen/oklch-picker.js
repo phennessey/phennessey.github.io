@@ -1,40 +1,6 @@
-//attempt 2
+// 3
 "use strict";
-var OKLCH = (() => {
-  var __defProp = Object.defineProperty;
-  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-  var __getOwnPropNames = Object.getOwnPropertyNames;
-  var __hasOwnProp = Object.prototype.hasOwnProperty;
-  var __export = (target, all) => {
-    for (var name in all)
-      __defProp(target, name, { get: all[name], enumerable: true });
-  };
-  var __copyProps = (to, from, except, desc) => {
-    if (from && typeof from === "object" || typeof from === "function") {
-      for (let key of __getOwnPropNames(from))
-        if (!__hasOwnProp.call(to, key) && key !== except)
-          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
-    }
-    return to;
-  };
-  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-
-  // main.ts
-  var main_exports = {};
-  __export(main_exports, {
-    build: () => build,
-    canvasFormat: () => canvasFormat,
-    formatLch: () => formatLch,
-    formatRgb: () => formatRgb2,
-    generateGetSeparator: () => generateGetSeparator,
-    getCleanCtx: () => getCleanCtx,
-    initCanvasSize: () => initCanvasSize,
-    paintPixel: () => paintPixel,
-    parse: () => parse2,
-    parseAnything: () => parseAnything,
-    toRgb: () => toRgb
-  });
-
+(() => {
   // node_modules/culori/src/rgb/parseNumber.js
   var parseNumber = (color, len) => {
     if (typeof color !== "number") return;
@@ -2138,5 +2104,21 @@ var OKLCH = (() => {
     pixels.data[pos + 2] = pixel[3];
     pixels.data[pos + 3] = 255;
   }
-  return __toCommonJS(main_exports);
+
+  // main.ts
+  if (typeof window !== "undefined") {
+    window.OKLCH = {
+      build,
+      canvasFormat,
+      parse: parse2,
+      parseAnything,
+      toRgb,
+      formatRgb: formatRgb2,
+      formatLch,
+      getCleanCtx,
+      initCanvasSize,
+      paintPixel,
+      generateGetSeparator
+    };
+  }
 })();
