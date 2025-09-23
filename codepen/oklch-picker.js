@@ -2109,16 +2109,7 @@
   if (typeof window !== "undefined") {
     window.MYPICKER = {
       build,
-      canvasFormat,
-      parse: parse2,
-      parseAnything,
-      toRgb,
-      formatRgb: formatRgb2,
-      formatLch,
-      getCleanCtx,
-      initCanvasSize,
-      paintPixel,
-      generateGetSeparator
+      canvasFormat
     };
   }
 })();
