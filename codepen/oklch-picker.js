@@ -1,4 +1,4 @@
-//7
+//8
 "use strict";
 (() => {
   // node_modules/culori/src/rgb/parseNumber.js
