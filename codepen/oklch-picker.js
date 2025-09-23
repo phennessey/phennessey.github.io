@@ -1,7 +1,13 @@
-//5
+//6
+"use strict";
 (() => {
-  // Minimal test object
-  window.OKLCH = {
-    hello: () => "Hello from OKLCH!"
-  };
+  // main.ts
+  function test() {
+    return "Hello OKLCH";
+  }
+  if (typeof window !== "undefined") {
+    window.OKLCH = {
+      test
+    };
+  }
 })();
