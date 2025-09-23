@@ -1,4 +1,4 @@
-// 3
+// 4
 "use strict";
 (() => {
   // node_modules/culori/src/rgb/parseNumber.js
@@ -2106,19 +2106,17 @@
   }
 
   // main.ts
-  if (typeof window !== "undefined") {
-    window.OKLCH = {
-      build,
-      canvasFormat,
-      parse: parse2,
-      parseAnything,
-      toRgb,
-      formatRgb: formatRgb2,
-      formatLch,
-      getCleanCtx,
-      initCanvasSize,
-      paintPixel,
-      generateGetSeparator
-    };
-  }
+  window.OKLCH = {
+    build,
+    canvasFormat,
+    parse: parse2,
+    parseAnything,
+    toRgb,
+    formatRgb: formatRgb2,
+    formatLch,
+    getCleanCtx,
+    initCanvasSize,
+    paintPixel,
+    generateGetSeparator
+  };
 })();
