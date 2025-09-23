@@ -2108,8 +2108,7 @@
   // main.ts
   if (typeof window !== "undefined") {
     window.MYPICKER = {
-      build,
-      canvasFormat
+      console.log("jrterterter");
     };
   }
 })();
