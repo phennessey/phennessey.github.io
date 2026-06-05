@@ -159,8 +159,8 @@
     const MAX_CUTOFF  = 20000;
     const EXPO        = 2;
     const FILTER_Q    = 0.1;
-    const FADE_MS     = 30;  // fade duration in ms for both play and pause
-    const FADE_STEPS  = 30;   // number of steps in the fade
+    const FADE_MS     = 30;   // fade duration in ms for both play and pause
+    const FADE_STEP_MS = 10;  // interval between volume steps in ms
 
     let audioCtx, sourceNode, filterNode, gainNode;
     let isPlaying    = false;
@@ -224,26 +224,26 @@
     function fadeIn() {
       clearFade();
       audioEl.volume = 0;
-      const step = 1 / FADE_STEPS;
-      const ms = FADE_IN_MS / FADE_STEPS;
+      const steps = Math.ceil(FADE_MS / FADE_STEP_MS);
+      const step = 1 / steps;
       fadeInterval = setInterval(() => {
         audioEl.volume = Math.min(1, audioEl.volume + step);
         if (audioEl.volume >= 1) clearFade();
-      }, ms);
+      }, FADE_STEP_MS);
     }
 
     function fadeOut(onDone) {
       clearFade();
-      audioEl.volume = 1;
-      const step = 1 / FADE_STEPS;
-      const ms = FADE_OUT_MS / FADE_STEPS;
+      const startVol = audioEl.volume;
+      const steps = Math.ceil(FADE_MS / FADE_STEP_MS);
+      const step = startVol / steps;
       fadeInterval = setInterval(() => {
         audioEl.volume = Math.max(0, audioEl.volume - step);
         if (audioEl.volume <= 0) {
           clearFade();
           onDone();
         }
-      }, ms);
+      }, FADE_STEP_MS);
     }
 
     playBtn.addEventListener('click', async () => {
