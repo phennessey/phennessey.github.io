@@ -19,15 +19,14 @@
 
     .player-wrap {
       display: flex;
-      flex-direction: column;
       align-items: center;
-      justify-content: center;
-      gap: 2rem;
+      gap: 20px;
     }
 
     .play-btn {
-      width: 80px;
-      height: 80px;
+      width: 44px;
+      height: 44px;
+      flex-shrink: 0;
       border-radius: 50%;
       border: 1.5px solid rgba(255,255,255,0.25);
       background: rgba(255,255,255,0.06);
@@ -43,21 +42,19 @@
       background: rgba(255,255,255,0.12);
     }
 
-    .slider-section {
-      display: none;
-      align-items: center;
-      justify-content: center;
-      width: 320px;
-      opacity: 0;
-      transition: opacity 0.4s ease;
-    }
-
-    .slider-section.visible {
+    .slider-wrap {
       display: flex;
+      flex-direction: column;
+      justify-content: center;
+      width: 260px;
     }
 
-    .slider-section.faded-in {
-      opacity: 1;
+    .slider-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: rgba(232,244,248,0.45);
+      padding-bottom: 2px;
     }
 
     input[type=range] {
@@ -68,20 +65,21 @@
       background: rgba(255,255,255,0.15);
       border-radius: 2px;
       outline: none;
+      display: block;
     }
 
     input[type=range]::-webkit-slider-thumb {
       -webkit-appearance: none;
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
       border-radius: 50%;
       background: #e8f4f8;
       cursor: pointer;
     }
 
     input[type=range]::-moz-range-thumb {
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
       border-radius: 50%;
       background: #e8f4f8;
       border: none;
@@ -92,12 +90,13 @@
 <body>
   <div class="player-wrap">
     <button class="play-btn" id="playBtn" aria-label="Play ocean audio">
-      <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+      <svg id="btnIcon" viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
         <polygon points="5,3 19,12 5,21"/>
       </svg>
     </button>
 
-    <div class="slider-section" id="sliderSection">
+    <div class="slider-wrap">
+      <span class="slider-label">TONE</span>
       <input type="range" min="0" max="1" step="0.001" value="0" id="filterSlider" aria-label="Filter intensity" />
     </div>
   </div>
@@ -111,10 +110,21 @@
     const FILTER_Q = 0.1;
 
     let audioCtx, sourceNode, filterNode, buffer;
+    let isPlaying = false;
+    let isInitialized = false;
+    let startTime = 0;
+    let pauseOffset = 0;
 
     const playBtn = document.getElementById('playBtn');
-    const sliderSection = document.getElementById('sliderSection');
+    const btnIcon = document.getElementById('btnIcon');
     const filterSlider = document.getElementById('filterSlider');
+
+    function setIcon(playing) {
+      btnIcon.innerHTML = playing
+        ? '<rect x="6" y="3" width="4" height="18"/><rect x="14" y="3" width="4" height="18"/>'
+        : '<polygon points="5,3 19,12 5,21"/>';
+      playBtn.setAttribute('aria-label', playing ? 'Pause ocean audio' : 'Play ocean audio');
+    }
 
     async function initAudio() {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -130,10 +140,10 @@
         navigator.mediaSession.metadata = new MediaMetadata({ title: 'Ocean' });
       }
 
-      startLoop();
+      isInitialized = true;
     }
 
-    function startLoop() {
+    function startSource(offset) {
       if (sourceNode) {
         sourceNode.disconnect();
         sourceNode.stop();
@@ -142,7 +152,8 @@
       sourceNode.buffer = buffer;
       sourceNode.loop = true;
       applyFilter(parseFloat(filterSlider.value));
-      sourceNode.start(0);
+      sourceNode.start(0, offset % buffer.duration);
+      startTime = audioCtx.currentTime - (offset % buffer.duration);
     }
 
     function applyFilter(val) {
@@ -161,12 +172,24 @@
     }
 
     playBtn.addEventListener('click', async () => {
-      playBtn.style.display = 'none';
-      sliderSection.classList.add('visible');
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => sliderSection.classList.add('faded-in'));
-      });
-      await initAudio();
+      if (!isInitialized) {
+        await initAudio();
+        startSource(0);
+        isPlaying = true;
+        setIcon(true);
+        return;
+      }
+
+      if (isPlaying) {
+        pauseOffset = (audioCtx.currentTime - startTime) % buffer.duration;
+        sourceNode.stop();
+        isPlaying = false;
+        setIcon(false);
+      } else {
+        startSource(pauseOffset);
+        isPlaying = true;
+        setIcon(true);
+      }
     });
 
     filterSlider.addEventListener('input', () => {
