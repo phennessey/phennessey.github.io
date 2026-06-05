@@ -159,7 +159,7 @@
     const MAX_CUTOFF  = 20000;
     const EXPO        = 2;
     const FILTER_Q    = 0.1;
-    const FADE_TC     = 0.01; // gain fade time constant in seconds
+    const FADE_TC     = 0.015; // gain fade time constant in seconds
 
     let audioCtx, sourceNode, filterNode, gainNode;
     let isPlaying    = false;
@@ -226,9 +226,9 @@
         gainNode.gain.setValueAtTime(1, now);
         gainNode.gain.setTargetAtTime(0, now, FADE_TC);
         setTimeout(() => {
-          audioEl.pause();
           gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
-          gainNode.gain.value = 1;
+          gainNode.gain.value = 0;
+          audioEl.pause();
         }, FADE_TC * 1000 * 6);
         isPlaying = false;
         setIcon(false);
