@@ -189,9 +189,10 @@
 
     function valFromY(clientY) {
       const rect = pillTrack.getBoundingClientRect();
+      const scaleY = rect.height / pillTrack.offsetHeight;
       const thumbR = THUMB_D / 2;
-      const travel = rect.height - INSET * 2 - THUMB_D;
-      const y = clientY - rect.top - INSET - thumbR;
+      const travel = pillTrack.offsetHeight - INSET * 2 - THUMB_D;
+      const y = (clientY - rect.top) / scaleY - INSET - thumbR;
       return Math.max(0, Math.min(1, y / travel));
     }
 
@@ -240,10 +241,9 @@
       isDragging = true;
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
       const rect = pillTrack.getBoundingClientRect();
+      const scaleY = rect.height / pillTrack.offsetHeight;
       const thumbTop = parseFloat(pillThumb.style.top) || 0;
       const thumbBottom = thumbTop + THUMB_D;
-      // y relative to pill content (account for CSS scale transform on playerWrap)
-      const scaleY = rect.height / pillTrack.offsetHeight;
       const yInPill = (clientY - rect.top) / scaleY;
 
       if (yInPill >= thumbTop && yInPill <= thumbBottom) {
@@ -268,7 +268,9 @@
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
       if (dragRelative) {
         const rect = pillTrack.getBoundingClientRect();
-        const delta = (clientY - dragStartY) / (rect.height - INSET * 2 - THUMB_D);
+        const scaleY = rect.height / pillTrack.offsetHeight;
+        const travel = pillTrack.offsetHeight - INSET * 2 - THUMB_D;
+        const delta = (clientY - dragStartY) / scaleY / travel;
         sliderVal = Math.max(0, Math.min(1, dragStartVal + delta));
       } else {
         sliderVal = valFromY(clientY);
