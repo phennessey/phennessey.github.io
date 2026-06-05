@@ -258,21 +258,29 @@
     }
 
     playBtn.addEventListener('click', () => {
-      if (!isInitialized) initAudio();
-      audioCtx.resume().then(() => applyFilter(sliderVal, true));
+      if (!isInitialized) {
+        initAudio();
+        audioCtx.resume();
+      }
       if (isPlaying) {
         gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, FADE_TC);
         setTimeout(() => {
           audioEl.pause();
-          gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
-          gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
+          audioCtx.suspend().then(() => {
+            gainNode.gain.cancelScheduledValues(0);
+            gainNode.gain.value = 1;
+          });
         }, FADE_WAIT);
         isPlaying = false;
         setIcon(false);
       } else {
-        gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-        gainNode.gain.setTargetAtTime(1, audioCtx.currentTime, FADE_TC);
-        audioEl.play();
+        audioCtx.resume().then(() => {
+          applyFilter(sliderVal, true);
+          gainNode.gain.cancelScheduledValues(0);
+          gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+          gainNode.gain.setTargetAtTime(1, audioCtx.currentTime, FADE_TC);
+          audioEl.play();
+        });
         isPlaying = true;
         setIcon(true);
       }
