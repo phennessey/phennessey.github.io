@@ -172,6 +172,8 @@
     const MAX_CUTOFF = 20000;
     const EXPO = 2;
     const FILTER_Q = 0.1;
+    const FADE_TC = 0.05;    // gain fade time constant in seconds (larger = slower)
+    const FADE_WAIT = 300;   // ms to wait before pausing (should be ~6x FADE_TC * 1000)
 
     let audioCtx, sourceNode, filterNode, gainNode;
     let isPlaying = false;
@@ -255,16 +257,16 @@
       if (!isInitialized) initAudio();
       audioCtx.resume();
       if (isPlaying) {
-        gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.007);
+        gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, FADE_TC);
         setTimeout(() => {
           audioEl.pause();
           gainNode.gain.value = 1;
-        }, 80);
+        }, FADE_WAIT);
         isPlaying = false;
         setIcon(false);
       } else {
         gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-        gainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.007);
+        gainNode.gain.setTargetAtTime(1, audioCtx.currentTime, FADE_TC);
         audioEl.play();
         isPlaying = true;
         setIcon(true);
