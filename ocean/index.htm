@@ -69,6 +69,7 @@
     .pill-track {
       position: relative;
       width: 43px;
+      height: 200px;
       border-radius: 999px;
       border: 1.5px solid rgba(255,255,255,0.25);
       background: rgba(255,255,255,0.06);
@@ -262,19 +263,18 @@
     pillThumb.style.width = THUMB_D + 'px';
     pillThumb.style.height = THUMB_D + 'px';
 
+    const playerWrap = document.querySelector('.player-wrap');
+    const BASE_H = 43 + 12 + 200 + 8 + 24; // btn + gap + pill + gap + labels = 287px
+
     function resizeUI() {
-      const BTN_H = 43;
-      const GAP_BTN = 12;
-      const GAP_LABELS = 8;
-      const LABELS_H = sliderValue.offsetHeight + document.querySelector('.slider-label').offsetHeight + 2;
-      const overhead = BTN_H + GAP_BTN + GAP_LABELS + LABELS_H;
-      const pillH = Math.max(120, (window.innerHeight * 0.86) - overhead);
-      pillTrack.style.height = pillH + 'px';
-      updateSliderUI(sliderVal);
+      const scale = (window.innerHeight * 0.86) / BASE_H;
+      playerWrap.style.transform = `scale(${scale})`;
+      playerWrap.style.transformOrigin = 'center center';
     }
 
     window.addEventListener('resize', resizeUI);
     resizeUI();
+    updateSliderUI(0);
   </script>
 </body>
 </html>
