@@ -265,8 +265,7 @@
         setTimeout(() => {
           audioEl.pause();
           gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
-          gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-          gainNode.gain.setTargetAtTime(1, audioCtx.currentTime + 0.001, FADE_TC);
+          gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
         }, FADE_WAIT);
         isPlaying = false;
         setIcon(false);
