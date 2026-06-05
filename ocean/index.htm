@@ -155,10 +155,13 @@
   </div>
 
   <script>
-    const MIN_CUTOFF = 200;
-    const MAX_CUTOFF = 20000;
-    const EXPO       = 2;
-    const FILTER_Q   = 0.1;
+    const MIN_CUTOFF  = 200;
+    const MAX_CUTOFF  = 20000;
+    const EXPO        = 2;
+    const FILTER_Q    = 0.1;
+    const FADE_IN_MS  = 300;  // total fade-in duration in ms
+    const FADE_OUT_MS = 300;  // total fade-out duration in ms
+    const FADE_STEPS  = 30;   // number of steps in the fade
 
     let audioCtx, sourceNode, filterNode, gainNode;
     let isPlaying    = false;
@@ -213,6 +216,37 @@
       }
     }
 
+    let fadeInterval = null;
+
+    function clearFade() {
+      if (fadeInterval) { clearInterval(fadeInterval); fadeInterval = null; }
+    }
+
+    function fadeIn() {
+      clearFade();
+      audioEl.volume = 0;
+      const step = 1 / FADE_STEPS;
+      const ms = FADE_IN_MS / FADE_STEPS;
+      fadeInterval = setInterval(() => {
+        audioEl.volume = Math.min(1, audioEl.volume + step);
+        if (audioEl.volume >= 1) clearFade();
+      }, ms);
+    }
+
+    function fadeOut(onDone) {
+      clearFade();
+      audioEl.volume = 1;
+      const step = 1 / FADE_STEPS;
+      const ms = FADE_OUT_MS / FADE_STEPS;
+      fadeInterval = setInterval(() => {
+        audioEl.volume = Math.max(0, audioEl.volume - step);
+        if (audioEl.volume <= 0) {
+          clearFade();
+          onDone();
+        }
+      }, ms);
+    }
+
     playBtn.addEventListener('click', async () => {
       if (!isInitialized) {
         initAudio();
@@ -220,16 +254,18 @@
       }
 
       if (isPlaying) {
-        audioEl.pause();
-        gainNode.gain.value = 1;
         isPlaying = false;
         setIcon(false);
+        fadeOut(() => {
+          audioEl.pause();
+          audioEl.volume = 1;
+        });
       } else {
         applyFilter(sliderVal, true);
-        gainNode.gain.value = 1;
         audioEl.play();
         isPlaying = true;
         setIcon(true);
+        fadeIn();
       }
     });
 
