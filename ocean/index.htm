@@ -228,19 +228,23 @@
         gainNode.gain.setValueAtTime(1, now);
         gainNode.gain.linearRampToValueAtTime(0, now + fadeSec);
         setTimeout(() => {
-          audioEl.pause();
-          gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
-          gainNode.gain.value = 1;
+          audioCtx.suspend().then(() => {
+            audioEl.pause();
+            gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+            gainNode.gain.value = 1;
+          });
         }, FADE_MS + 10);
         isPlaying = false;
         setIcon(false);
       } else {
         applyFilter(sliderVal, true);
-        const now = audioCtx.currentTime;
-        gainNode.gain.cancelScheduledValues(now);
-        gainNode.gain.setValueAtTime(0, now);
-        gainNode.gain.linearRampToValueAtTime(1, now + fadeSec);
-        audioEl.play();
+        audioCtx.resume().then(() => {
+          const now = audioCtx.currentTime;
+          gainNode.gain.cancelScheduledValues(now);
+          gainNode.gain.setValueAtTime(0, now);
+          gainNode.gain.linearRampToValueAtTime(1, now + fadeSec);
+          audioEl.play();
+        });
         isPlaying = true;
         setIcon(true);
       }
