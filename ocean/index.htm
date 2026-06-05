@@ -159,7 +159,6 @@
     const MAX_CUTOFF  = 20000;
     const EXPO        = 2;
     const FILTER_Q    = 0.1;
-    const FADE_MS     = 100;   // fade duration in ms for both play and pause
 
     let audioCtx, sourceNode, filterNode, gainNode;
     let isPlaying    = false;
@@ -214,40 +213,6 @@
       }
     }
 
-    let fadeRAF = null;
-
-    function clearFade() {
-      if (fadeRAF) { cancelAnimationFrame(fadeRAF); fadeRAF = null; }
-    }
-
-    function fadeIn() {
-      clearFade();
-      audioEl.volume = 0;
-      const startTime = performance.now();
-      function step(now) {
-        const t = Math.min(1, (now - startTime) / FADE_MS);
-        audioEl.volume = t;
-        if (t < 1) fadeRAF = requestAnimationFrame(step);
-      }
-      fadeRAF = requestAnimationFrame(step);
-    }
-
-    function fadeOut(onDone) {
-      clearFade();
-      const startTime = performance.now();
-      function step(now) {
-        const t = Math.min(1, (now - startTime) / FADE_MS);
-        audioEl.volume = 1 - t;
-        if (t < 1) {
-          fadeRAF = requestAnimationFrame(step);
-        } else {
-          audioEl.volume = 0;
-          onDone();
-        }
-      }
-      fadeRAF = requestAnimationFrame(step);
-    }
-
     playBtn.addEventListener('click', async () => {
       if (!isInitialized) {
         initAudio();
@@ -255,18 +220,14 @@
       }
 
       if (isPlaying) {
+        audioEl.pause();
         isPlaying = false;
         setIcon(false);
-        fadeOut(() => {
-          audioEl.pause();
-          audioEl.volume = 1;
-        });
       } else {
         applyFilter(sliderVal, true);
         audioEl.play();
         isPlaying = true;
         setIcon(true);
-        fadeIn();
       }
     });
 
