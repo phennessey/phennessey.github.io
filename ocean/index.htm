@@ -25,19 +25,45 @@
       color: #e8f4f8;
     }
 
+    /*
+      Base design (px):
+        pill-h: 160, pill-w: 43, btn: 43, gap: 6
+        total-h: 209
+      Scale factor: 86vh / 209px
+      All sizes expressed as multiples of that ratio using vh.
+      43/209 * 86vh = 17.67vh  (pill width & btn size)
+      160/209 * 86vh = 65.89vh (pill height)
+      6/209 * 86vh  = 2.47vh   (gap)
+      1.5/209 * 86vh = 0.617vh (border)
+    */
+
+    :root {
+      --unit: calc(0.86vh / 2.0930);  /* 1px in base design = this many vh */
+      --pill-w: calc(43 * var(--unit));
+      --pill-h: calc(160 * var(--unit));
+      --btn-sz: calc(43 * var(--unit));
+      --gap:    calc(6 * var(--unit));
+      --border: calc(1.5 * var(--unit));
+      --inset:  calc(1.5 * var(--unit));
+      --thumb-d: calc(var(--pill-w) - var(--border) * 2 - var(--inset) * 2);
+      --icon-sz: calc(17 * var(--unit));
+      --font-tone: calc(4.5 * var(--unit));
+      --font-val:  calc(5.5 * var(--unit));
+    }
+
     .player-wrap {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 6px;
+      gap: var(--gap);
     }
 
     .play-btn {
-      width: 43px;
-      height: 43px;
+      width: var(--btn-sz);
+      height: var(--btn-sz);
       flex-shrink: 0;
       border-radius: 50%;
-      border: 1.5px solid rgba(255,255,255,0.25);
+      border: var(--border) solid rgba(255,255,255,0.25);
       background: rgba(255,255,255,0.06);
       color: #e8f4f8;
       cursor: pointer;
@@ -47,35 +73,33 @@
       transition: background 0.2s;
     }
 
-    .play-btn:hover {
-      background: rgba(255,255,255,0.12);
-    }
+    .play-btn:hover { background: rgba(255,255,255,0.12); }
 
     .slider-wrap {
       display: flex;
       flex-direction: column;
       align-items: center;
-      width: 43px;
+      width: var(--pill-w);
     }
 
     .pill-track {
       position: relative;
-      width: 43px;
-      height: 160px;
+      width: var(--pill-w);
+      height: var(--pill-h);
       border-radius: 999px;
-      border: 1.5px solid rgba(255,255,255,0.25);
+      border: var(--border) solid rgba(255,255,255,0.25);
       background: rgba(255,255,255,0.06);
       overflow: hidden;
       cursor: pointer;
-      transform: translateZ(0);
       -webkit-transform: translateZ(0);
+      transform: translateZ(0);
     }
 
     .pill-fill {
       position: absolute;
-      bottom: 1.5px;
-      left: 1.5px;
-      right: 1.5px;
+      bottom: var(--inset);
+      left: var(--inset);
+      right: var(--inset);
       border-radius: 0 0 999px 999px;
       background: rgba(255,255,255,0.09);
       pointer-events: none;
@@ -85,6 +109,8 @@
       position: absolute;
       left: 50%;
       transform: translateX(-50%);
+      width: var(--thumb-d);
+      height: var(--thumb-d);
       border-radius: 50%;
       background: #667887;
       cursor: pointer;
@@ -93,11 +119,11 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 0px;
+      gap: 0;
     }
 
     .slider-label {
-      font-size: 4.5px;
+      font-size: var(--font-tone);
       font-weight: 700;
       letter-spacing: 0.1em;
       color: rgba(13,27,42,0.3);
@@ -108,7 +134,7 @@
     }
 
     .slider-value {
-      font-size: 5.5px;
+      font-size: var(--font-val);
       font-weight: 700;
       letter-spacing: 0;
       color: rgba(13,27,42,0.6);
@@ -124,7 +150,8 @@
 
   <div class="player-wrap">
     <button class="play-btn" id="playBtn" aria-label="Play ocean audio">
-      <svg id="btnIcon" viewBox="0 0 24 24" fill="currentColor" width="17" height="17">
+      <svg id="btnIcon" viewBox="0 0 24 24" fill="currentColor"
+           style="width:var(--icon-sz);height:var(--icon-sz)">
         <polygon points="5,3 19,12 5,21" transform="translate(1,0)"/>
       </svg>
     </button>
@@ -137,7 +164,6 @@
           <span class="slider-value" id="sliderValue">100</span>
         </div>
       </div>
-
     </div>
   </div>
 
@@ -147,53 +173,57 @@
     const EXPO = 2;
     const FILTER_Q = 0.1;
 
-    const BORDER = 1.5;
-    const GAP = 1.5;
-    const PILL_W = 43;
-    const INNER_W = PILL_W - (BORDER * 2); // actual content width = 40px
-    const THUMB_D = INNER_W - (GAP * 2);   // thumb = 40 - 4 = 36px
-    const INSET = GAP;                      // position offset from content edge
-
     let audioCtx, sourceNode, filterNode;
     let isPlaying = false;
     let isInitialized = false;
     let isDragging = false;
-    let sliderVal = 0; // 0 = top (no filter), 1 = bottom (max filter)
+    let dragRelative = false;
+    let dragStartY = 0;
+    let dragStartVal = 0;
+    let sliderVal = 0;
 
-    const playBtn = document.getElementById('playBtn');
-    const btnIcon = document.getElementById('btnIcon');
-    const audioEl = document.getElementById('audioEl');
+    const playBtn   = document.getElementById('playBtn');
+    const btnIcon   = document.getElementById('btnIcon');
+    const audioEl   = document.getElementById('audioEl');
     const pillTrack = document.getElementById('pillTrack');
-    const pillFill = document.getElementById('pillFill');
+    const pillFill  = document.getElementById('pillFill');
     const pillThumb = document.getElementById('pillThumb');
     const sliderValue = document.getElementById('sliderValue');
 
-    function setIcon(playing) {
-      btnIcon.innerHTML = playing
-        ? '<rect x="6" y="4" width="4" height="15"/><rect x="14" y="4" width="4" height="15"/>'
-        : '<polygon points="5,3 19,12 5,21" transform="translate(1,0)"/>';
-      playBtn.setAttribute('aria-label', playing ? 'Pause ocean audio' : 'Play ocean audio');
+    // Read computed px values from CSS custom properties
+    function getCSSPx(prop) {
+      return parseFloat(getComputedStyle(document.documentElement).getPropertyValue(prop));
     }
+
+    function thumbD()  { return pillThumb.offsetWidth; }
+    function insetPx() { return pillThumb.offsetLeft; } // distance from pill left edge to thumb left
 
     function updateSliderUI(val) {
       const trackH = pillTrack.clientHeight;
-      const thumbR = THUMB_D / 2;
-      const travel = trackH - INSET * 2 - THUMB_D;
-      const thumbTop = INSET + val * travel;
+      const td = thumbD();
+      const inset = (pillTrack.clientWidth - td) / 2; // gap on each side
+      const travel = trackH - inset * 2 - td;
+      const thumbTop = inset + val * travel;
       pillThumb.style.top = thumbTop + 'px';
-      const thumbCenter = thumbTop + thumbR;
-      const fillHeight = trackH - thumbCenter - GAP;
+      const fillHeight = trackH - (thumbTop + td / 2) - inset;
       pillFill.style.height = Math.max(0, fillHeight) + 'px';
       sliderValue.textContent = Math.round((1 - val) * 100);
     }
 
     function valFromY(clientY) {
       const rect = pillTrack.getBoundingClientRect();
-      const scaleY = rect.height / pillTrack.offsetHeight;
-      const thumbR = THUMB_D / 2;
-      const travel = pillTrack.offsetHeight - INSET * 2 - THUMB_D;
-      const y = (clientY - rect.top) / scaleY - INSET - thumbR;
+      const td = thumbD();
+      const inset = (pillTrack.clientWidth - td) / 2;
+      const travel = pillTrack.clientHeight - inset * 2 - td;
+      const y = (clientY - rect.top) - inset - td / 2;
       return Math.max(0, Math.min(1, y / travel));
+    }
+
+    function setIcon(playing) {
+      btnIcon.innerHTML = playing
+        ? '<rect x="6" y="4" width="4" height="15"/><rect x="14" y="4" width="4" height="15"/>'
+        : '<polygon points="5,3 19,12 5,21" transform="translate(1,0)"/>';
+      playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
     }
 
     function initAudio() {
@@ -205,9 +235,8 @@
       filterNode.frequency.value = MAX_CUTOFF;
       sourceNode.connect(filterNode);
       filterNode.connect(audioCtx.destination);
-      if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = new MediaMetadata({ title: 'Ocean' });
-      }
+      if ('mediaSession' in navigator)
+        navigator.mediaSession.metadata = new MediaMetadata({ title: 'Ocean Waves' });
       isInitialized = true;
     }
 
@@ -222,37 +251,25 @@
       if (!isInitialized) initAudio();
       audioCtx.resume();
       if (isPlaying) {
-        audioEl.pause();
-        isPlaying = false;
-        setIcon(false);
+        audioEl.pause(); isPlaying = false; setIcon(false);
       } else {
-        audioEl.play();
-        isPlaying = true;
-        setIcon(true);
+        audioEl.play(); isPlaying = true; setIcon(true);
       }
     });
-
-    // Touch & mouse drag on pill
-    let dragStartY = 0;
-    let dragStartVal = 0;
-    let dragRelative = false;
 
     function onDragStart(e) {
       isDragging = true;
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
       const rect = pillTrack.getBoundingClientRect();
-      const scaleY = rect.height / pillTrack.offsetHeight;
+      const td = thumbD();
       const thumbTop = parseFloat(pillThumb.style.top) || 0;
-      const thumbBottom = thumbTop + THUMB_D;
-      const yInPill = (clientY - rect.top) / scaleY;
+      const yInPill = clientY - rect.top;
 
-      if (yInPill >= thumbTop && yInPill <= thumbBottom) {
-        // pressed on thumb — relative drag
+      if (yInPill >= thumbTop && yInPill <= thumbTop + td) {
         dragRelative = true;
         dragStartY = clientY;
         dragStartVal = sliderVal;
       } else {
-        // pressed outside thumb — jump to position
         dragRelative = false;
         sliderVal = valFromY(clientY);
         dragStartY = clientY;
@@ -267,10 +284,10 @@
       e.preventDefault();
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
       if (dragRelative) {
-        const rect = pillTrack.getBoundingClientRect();
-        const scaleY = rect.height / pillTrack.offsetHeight;
-        const travel = pillTrack.offsetHeight - INSET * 2 - THUMB_D;
-        const delta = (clientY - dragStartY) / scaleY / travel;
+        const td = thumbD();
+        const inset = (pillTrack.clientWidth - td) / 2;
+        const travel = pillTrack.clientHeight - inset * 2 - td;
+        const delta = (clientY - dragStartY) / travel;
         sliderVal = Math.max(0, Math.min(1, dragStartVal + delta));
       } else {
         sliderVal = valFromY(clientY);
@@ -288,21 +305,7 @@
     window.addEventListener('mouseup', onDragEnd);
     window.addEventListener('touchend', onDragEnd);
 
-    // Init UI
-    pillThumb.style.width = THUMB_D + 'px';
-    pillThumb.style.height = THUMB_D + 'px';
-
-    const playerWrap = document.querySelector('.player-wrap');
-    const BASE_H = 43 + 6 + 160; // btn + gap + pill = 209px
-
-    function resizeUI() {
-      const scale = (window.innerHeight * 0.86) / BASE_H;
-      playerWrap.style.transform = `scale(${scale})`;
-      playerWrap.style.transformOrigin = 'center center';
-    }
-
-    window.addEventListener('resize', resizeUI);
-    resizeUI();
+    window.addEventListener('resize', () => updateSliderUI(sliderVal));
     updateSliderUI(0);
   </script>
 </body>
