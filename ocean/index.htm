@@ -222,6 +222,8 @@
 
       if (isPlaying) {
         const now = audioCtx.currentTime;
+        gainNode.gain.cancelScheduledValues(now);
+        gainNode.gain.setValueAtTime(1, now);
         gainNode.gain.setTargetAtTime(0, now, FADE_TC);
         setTimeout(() => {
           audioEl.pause();
