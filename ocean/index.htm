@@ -215,32 +215,32 @@
       }
     }
 
-    playBtn.addEventListener('click', () => {
+    playBtn.addEventListener('click', async () => {
       if (!isInitialized) {
         initAudio();
-        audioCtx.resume();
+        await audioCtx.resume();
       }
+
       if (isPlaying) {
         const now = audioCtx.currentTime;
         gainNode.gain.cancelScheduledValues(now);
-        gainNode.gain.setValueAtTime(gainNode.gain.value, now);
+        gainNode.gain.setValueAtTime(1, now);
         gainNode.gain.linearRampToValueAtTime(0.0001, now + FADE_TC * 4);
+        isPlaying = false;
+        setIcon(false);
         setTimeout(() => {
           audioEl.pause();
           gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
           gainNode.gain.value = 1;
         }, FADE_WAIT);
-        isPlaying = false;
-        setIcon(false);
       } else {
-        audioCtx.resume().then(() => {
-          applyFilter(sliderVal, true);
-          const now = audioCtx.currentTime;
-          gainNode.gain.cancelScheduledValues(now);
-          gainNode.gain.setValueAtTime(0, now);
-          gainNode.gain.linearRampToValueAtTime(1, now + FADE_TC * 4);
-          audioEl.play();
-        });
+        await audioCtx.resume();
+        applyFilter(sliderVal, true);
+        const now = audioCtx.currentTime;
+        gainNode.gain.cancelScheduledValues(now);
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(1, now + FADE_TC * 4);
+        await audioEl.play();
         isPlaying = true;
         setIcon(true);
       }
