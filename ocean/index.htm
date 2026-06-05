@@ -27,8 +27,9 @@
 
     .player-wrap {
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 11px;
+      gap: 12px;
     }
 
     .play-btn {
@@ -51,66 +52,71 @@
     }
 
     .slider-wrap {
-      position: relative;
-      width: 260px;
-      height: 43px;
       display: flex;
+      flex-direction: column;
       align-items: center;
+      gap: 8px;
+      width: 43px;
+    }
+
+    .slider-labels {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .pill-track {
+      position: relative;
+      width: 43px;
+      height: 200px;
+      border-radius: 999px;
+      border: 1.5px solid rgba(255,255,255,0.25);
+      background: rgba(255,255,255,0.06);
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .pill-fill {
+      position: absolute;
+      bottom: 2px;
+      left: 2px;
+      right: 2px;
+      border-radius: 0 0 999px 999px;
+      background: rgba(255,255,255,0.18);
+      pointer-events: none;
+    }
+
+    .pill-thumb {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      border-radius: 50%;
+      background: #667887;
+      cursor: pointer;
+      pointer-events: none;
     }
 
     .slider-label {
-      position: absolute;
-      top: 0px;
-      left: 0;
       font-size: 9px;
       font-weight: 700;
       letter-spacing: 0.1em;
-      color: rgba(232,244,248,0.45);
+      color: rgba(232,244,248,0.3);
       line-height: 1;
+      text-align: center;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
-    input[type=range] {
-      width: 100%;
-      -webkit-appearance: none;
-      appearance: none;
-      height: 4px;
-      background: rgba(255,255,255,0.15);
-      border-radius: 2px;
-      outline: none;
-      display: block;
-      margin: 0;
-      padding: 0;
-    }
-
-    input[type=range]::-webkit-slider-runnable-track {
-      height: 4px;
-      background: rgba(255,255,255,0.15);
-      border-radius: 2px;
-    }
-
-    input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 17px;
-      height: 17px;
-      border-radius: 50%;
-      background: #e8f4f8;
-      cursor: pointer;
-      margin-top: -6px;
-    }
-
-    input[type=range]::-moz-range-track {
-      height: 4px;
-      background: rgba(255,255,255,0.15);
-      border-radius: 2px;
-    }
-
-    input[type=range]::-moz-range-thumb {
-      width: 17px;
-      height: 17px;
-      border-radius: 50%;
-      background: #e8f4f8;
-      border: none;
-      cursor: pointer;
+    .slider-value {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: rgba(232,244,248,0.6);
+      line-height: 1;
+      text-align: center;
+      user-select: none;
+      -webkit-user-select: none;
     }
   </style>
 </head>
@@ -125,8 +131,14 @@
     </button>
 
     <div class="slider-wrap">
-      <span class="slider-label">TONE</span>
-      <input type="range" min="0" max="1" step="0.001" value="0" id="filterSlider" aria-label="Filter intensity" />
+      <div class="pill-track" id="pillTrack">
+        <div class="pill-fill" id="pillFill"></div>
+        <div class="pill-thumb" id="pillThumb"></div>
+      </div>
+      <div class="slider-labels">
+        <span class="slider-label">TONE</span>
+        <span class="slider-value" id="sliderValue">100</span>
+      </div>
     </div>
   </div>
 
@@ -136,14 +148,26 @@
     const EXPO = 2;
     const FILTER_Q = 0.1;
 
+    const BORDER = 1.5;
+    const GAP = 2;
+    const PILL_W = 43;
+    const INNER_W = PILL_W - (BORDER * 2); // actual content width = 40px
+    const THUMB_D = INNER_W - (GAP * 2);   // thumb = 40 - 4 = 36px
+    const INSET = GAP;                      // position offset from content edge
+
     let audioCtx, sourceNode, filterNode;
     let isPlaying = false;
     let isInitialized = false;
+    let isDragging = false;
+    let sliderVal = 0; // 0 = top (no filter), 1 = bottom (max filter)
 
     const playBtn = document.getElementById('playBtn');
     const btnIcon = document.getElementById('btnIcon');
-    const filterSlider = document.getElementById('filterSlider');
     const audioEl = document.getElementById('audioEl');
+    const pillTrack = document.getElementById('pillTrack');
+    const pillFill = document.getElementById('pillFill');
+    const pillThumb = document.getElementById('pillThumb');
+    const sliderValue = document.getElementById('sliderValue');
 
     function setIcon(playing) {
       btnIcon.innerHTML = playing
@@ -152,13 +176,35 @@
       playBtn.setAttribute('aria-label', playing ? 'Pause ocean audio' : 'Play ocean audio');
     }
 
+    function updateSliderUI(val) {
+      const trackH = pillTrack.clientHeight;
+      const thumbR = THUMB_D / 2;
+      const travel = trackH - INSET * 2 - THUMB_D;
+      const thumbTop = INSET + val * travel;
+      pillThumb.style.top = thumbTop + 'px';
+      const thumbCenter = thumbTop + thumbR;
+      const fillHeight = trackH - thumbCenter - GAP;
+      pillFill.style.height = Math.max(0, fillHeight) + 'px';
+      sliderValue.textContent = Math.round((1 - val) * 100);
+    }
+
+    function valFromY(clientY) {
+      const rect = pillTrack.getBoundingClientRect();
+      const thumbR = THUMB_D / 2;
+      const travel = rect.height - INSET * 2 - THUMB_D;
+      const y = clientY - rect.top - INSET - thumbR;
+      return Math.max(0, Math.min(1, y / travel));
+    }
+
     function initAudio() {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       sourceNode = audioCtx.createMediaElementSource(audioEl);
       filterNode = audioCtx.createBiquadFilter();
       filterNode.type = 'lowpass';
       filterNode.Q.value = FILTER_Q;
-      sourceNode.connect(audioCtx.destination);
+      filterNode.frequency.value = MAX_CUTOFF;
+      sourceNode.connect(filterNode);
+      filterNode.connect(audioCtx.destination);
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({ title: 'Ocean' });
       }
@@ -166,23 +212,14 @@
     }
 
     function applyFilter(val) {
-      if (!sourceNode) return;
-      sourceNode.disconnect();
-      if (val === 0) {
-        sourceNode.connect(audioCtx.destination);
-      } else {
-        const curved = Math.pow(val, 1 / EXPO);
-        const cutoff = MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
-        filterNode.frequency.setTargetAtTime(cutoff, audioCtx.currentTime, 0.05);
-        sourceNode.connect(filterNode);
-        filterNode.connect(audioCtx.destination);
-      }
+      if (!filterNode) return;
+      const curved = Math.pow(val, 1 / EXPO);
+      const cutoff = MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
+      filterNode.frequency.setTargetAtTime(cutoff, audioCtx.currentTime, 0.05);
     }
 
     playBtn.addEventListener('click', () => {
-      if (!isInitialized) {
-        initAudio();
-      }
+      if (!isInitialized) initAudio();
       audioCtx.resume();
       if (isPlaying) {
         audioEl.pause();
@@ -195,9 +232,37 @@
       }
     });
 
-    filterSlider.addEventListener('input', () => {
-      applyFilter(parseFloat(filterSlider.value));
-    });
+    // Touch & mouse drag on pill
+    function onDragStart(e) {
+      isDragging = true;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      sliderVal = valFromY(clientY);
+      updateSliderUI(sliderVal);
+      if (isInitialized) applyFilter(sliderVal);
+    }
+
+    function onDragMove(e) {
+      if (!isDragging) return;
+      e.preventDefault();
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      sliderVal = valFromY(clientY);
+      updateSliderUI(sliderVal);
+      if (isInitialized) applyFilter(sliderVal);
+    }
+
+    function onDragEnd() { isDragging = false; }
+
+    pillTrack.addEventListener('mousedown', onDragStart);
+    pillTrack.addEventListener('touchstart', onDragStart, { passive: true });
+    window.addEventListener('mousemove', onDragMove);
+    window.addEventListener('touchmove', onDragMove, { passive: false });
+    window.addEventListener('mouseup', onDragEnd);
+    window.addEventListener('touchend', onDragEnd);
+
+    // Init UI
+    pillThumb.style.width = THUMB_D + 'px';
+    pillThumb.style.height = THUMB_D + 'px';
+    updateSliderUI(0);
   </script>
 </body>
 </html>
