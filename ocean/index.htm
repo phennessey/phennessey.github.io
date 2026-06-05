@@ -29,7 +29,7 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 12px;
+      gap: 6px;
     }
 
     .play-btn {
@@ -55,21 +55,13 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 8px;
       width: 43px;
-    }
-
-    .slider-labels {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 2px;
     }
 
     .pill-track {
       position: relative;
       width: 43px;
-      height: 200px;
+      height: 160px;
       border-radius: 999px;
       border: 1.5px solid rgba(255,255,255,0.25);
       background: rgba(255,255,255,0.06);
@@ -79,11 +71,11 @@
 
     .pill-fill {
       position: absolute;
-      bottom: 2px;
-      left: 2px;
-      right: 2px;
+      bottom: 1.5px;
+      left: 1.5px;
+      right: 1.5px;
       border-radius: 0 0 999px 999px;
-      background: rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.09);
       pointer-events: none;
     }
 
@@ -95,13 +87,18 @@
       background: #667887;
       cursor: pointer;
       pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0px;
     }
 
     .slider-label {
-      font-size: 9px;
+      font-size: 4.5px;
       font-weight: 700;
       letter-spacing: 0.1em;
-      color: rgba(232,244,248,0.3);
+      color: rgba(13,27,42,0.3);
       line-height: 1;
       text-align: center;
       user-select: none;
@@ -109,10 +106,10 @@
     }
 
     .slider-value {
-      font-size: 11px;
+      font-size: 5.5px;
       font-weight: 700;
-      letter-spacing: 0.1em;
-      color: rgba(232,244,248,0.6);
+      letter-spacing: 0;
+      color: rgba(13,27,42,0.6);
       line-height: 1;
       text-align: center;
       user-select: none;
@@ -133,12 +130,12 @@
     <div class="slider-wrap">
       <div class="pill-track" id="pillTrack">
         <div class="pill-fill" id="pillFill"></div>
-        <div class="pill-thumb" id="pillThumb"></div>
+        <div class="pill-thumb" id="pillThumb">
+          <span class="slider-label">TONE</span>
+          <span class="slider-value" id="sliderValue">100</span>
+        </div>
       </div>
-      <div class="slider-labels">
-        <span class="slider-label">TONE</span>
-        <span class="slider-value" id="sliderValue">100</span>
-      </div>
+
     </div>
   </div>
 
@@ -149,7 +146,7 @@
     const FILTER_Q = 0.1;
 
     const BORDER = 1.5;
-    const GAP = 2;
+    const GAP = 1.5;
     const PILL_W = 43;
     const INNER_W = PILL_W - (BORDER * 2); // actual content width = 40px
     const THUMB_D = INNER_W - (GAP * 2);   // thumb = 40 - 4 = 36px
@@ -264,7 +261,7 @@
     pillThumb.style.height = THUMB_D + 'px';
 
     const playerWrap = document.querySelector('.player-wrap');
-    const BASE_H = 43 + 12 + 200 + 8 + 24; // btn + gap + pill + gap + labels = 287px
+    const BASE_H = 43 + 6 + 160; // btn + gap + pill = 209px
 
     function resizeUI() {
       const scale = (window.innerHeight * 0.86) / BASE_H;
