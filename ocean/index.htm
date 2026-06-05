@@ -243,6 +243,7 @@
         await audioCtx.resume();
         audioEl.play();
         const now = audioCtx.currentTime;
+        gainNode.gain.setValueAtTime(0, now);
         gainNode.gain.setTargetAtTime(1, now, FADE_TC);
         isPlaying = true;
         setIcon(true);
