@@ -225,10 +225,9 @@
         isPlaying = false;
         setIcon(false);
       } else {
-        await audioCtx.resume();
         applyFilter(sliderVal, true);
         gainNode.gain.value = 1;
-        await audioEl.play();
+        audioEl.play();
         isPlaying = true;
         setIcon(true);
       }
