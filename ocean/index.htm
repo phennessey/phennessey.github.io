@@ -38,7 +38,7 @@
     */
 
     :root {
-      --unit: calc(0.86vh / 2.0930);  /* 1px in base design = this many vh */
+      --unit: 0px; /* set by JS */
       --pill-w: calc(43 * var(--unit));
       --pill-h: calc(160 * var(--unit));
       --btn-sz: calc(43 * var(--unit));
@@ -305,7 +305,21 @@
     window.addEventListener('mouseup', onDragEnd);
     window.addEventListener('touchend', onDragEnd);
 
-    window.addEventListener('resize', () => updateSliderUI(sliderVal));
+    const BASE_H = 209;
+
+    function setUnit() {
+      // Use visualViewport if available (most accurate on iOS Chrome)
+      const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+      const unit = (h * 0.86) / BASE_H;
+      document.documentElement.style.setProperty('--unit', unit + 'px');
+      updateSliderUI(sliderVal);
+    }
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', setUnit);
+    }
+    window.addEventListener('resize', setUnit);
+    setUnit();
     updateSliderUI(0);
   </script>
 </body>
