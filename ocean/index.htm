@@ -173,7 +173,7 @@
     const EXPO = 2;
     const FILTER_Q = 0.1;
 
-    let audioCtx, sourceNode, filterNode;
+    let audioCtx, sourceNode, filterNode, gainNode;
     let isPlaying = false;
     let isInitialized = false;
     let isDragging = false;
@@ -233,8 +233,11 @@
       filterNode.type = 'lowpass';
       filterNode.Q.value = FILTER_Q;
       filterNode.frequency.value = MAX_CUTOFF;
+      gainNode = audioCtx.createGain();
+      gainNode.gain.value = 1;
       sourceNode.connect(filterNode);
-      filterNode.connect(audioCtx.destination);
+      filterNode.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
       applyFilter(sliderVal);
       if ('mediaSession' in navigator)
         navigator.mediaSession.metadata = new MediaMetadata({ title: 'Ocean Waves' });
@@ -252,9 +255,19 @@
       if (!isInitialized) initAudio();
       audioCtx.resume();
       if (isPlaying) {
-        audioEl.pause(); isPlaying = false; setIcon(false);
+        gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.007);
+        setTimeout(() => {
+          audioEl.pause();
+          gainNode.gain.value = 1;
+        }, 80);
+        isPlaying = false;
+        setIcon(false);
       } else {
-        audioEl.play(); isPlaying = true; setIcon(true);
+        gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+        gainNode.gain.setTargetAtTime(1, audioCtx.currentTime, 0.007);
+        audioEl.play();
+        isPlaying = true;
+        setIcon(true);
       }
     });
 
