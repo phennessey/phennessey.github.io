@@ -141,10 +141,25 @@
       color: rgba(232,244,248,0.4);
       pointer-events: none;
     }
+
+    #debugLog {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 8px;
+      font-size: 11px;
+      color: rgba(232,244,248,0.6);
+      background: rgba(0,0,0,0.5);
+      pointer-events: none;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
   </style>
 </head>
 <body>
   <div id="loadingMsg">loading...</div>
+  <div id="debugLog"></div>
 
   <div class="player-wrap">
     <button class="play-btn" id="playBtn" aria-label="Play ocean audio" disabled>
@@ -175,9 +190,10 @@
     const FADE_WAIT  = 120;   // ms before cutting audio after fade starts
 
     let audioCtx, buffer, sourceNode, filterNode, gainNode;
+    let arrayBufPromise = null;
     let isPlaying   = false;
-    let pauseOffset = 0;      // where in the buffer we paused
-    let startedAt   = 0;      // audioCtx.currentTime when source started
+    let pauseOffset = 0;
+    let startedAt   = 0;
     let sliderVal   = 0;
     let isDragging  = false;
     let dragRelative = false;
@@ -192,20 +208,37 @@
     const sliderValue = document.getElementById('sliderValue');
     const loadingMsg = document.getElementById('loadingMsg');
 
-    // --- Audio setup ---
-    async function loadAudio() {
+    const debugEl = document.getElementById('debugLog');
+    function log(msg) {
+      debugEl.textContent += msg + '\n';
+    }
+
+    let isInitialized = false;
+    arrayBufPromise = fetch(AUDIO_SRC).then(r => r.arrayBuffer());
+    log('fetch started');
+
+    async function initAudio() {
+      log('creating AudioContext...');
       audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+      log('ctx state: ' + audioCtx.state);
+      await audioCtx.resume();
+      log('ctx resumed: ' + audioCtx.state);
+
       filterNode = audioCtx.createBiquadFilter();
       filterNode.type = 'lowpass';
       filterNode.Q.value = FILTER_Q;
-      gainNode  = audioCtx.createGain();
+
+      gainNode = audioCtx.createGain();
       gainNode.gain.value = 1;
+
       filterNode.connect(gainNode);
       gainNode.connect(audioCtx.destination);
 
-      const res = await fetch(AUDIO_SRC);
-      const arrayBuf = await res.arrayBuffer();
-      buffer = await audioCtx.decodeAudioData(arrayBuf);
+      log('awaiting fetch...');
+      const arrayBuf = await arrayBufPromise;
+      log('fetch done, decoding...');
+      buffer = await audioCtx.decodeAudioData(arrayBuf.slice(0));
+      log('decode done, duration: ' + buffer.duration.toFixed(1) + 's');
 
       applyFilter(sliderVal, true);
       loadingMsg.style.display = 'none';
@@ -243,9 +276,24 @@
       }
     }
 
-    playBtn.addEventListener('click', () => {
-      if (!buffer) return;
+    playBtn.addEventListener('click', async () => {
+      log('tap: isInitialized=' + isInitialized + ' isPlaying=' + isPlaying);
+      if (!isInitialized) {
+        playBtn.disabled = true;
+        loadingMsg.style.display = 'block';
+        try {
+          await initAudio();
+        } catch(e) {
+          log('ERROR: ' + e.message);
+          loadingMsg.style.display = 'none';
+          playBtn.disabled = false;
+          return;
+        }
+        isInitialized = true;
+      }
+      if (!buffer) { log('no buffer!'); return; }
       audioCtx.resume();
+      log('playing=' + isPlaying + ' ctx=' + audioCtx.state);
 
       if (isPlaying) {
         // ramp to near-zero then snap off
@@ -362,9 +410,8 @@
     window.addEventListener('resize', setUnit);
     setUnit();
     updateSliderUI(0);
-
-    // Load audio immediately — buffer will be ready by the time user taps play
-    loadAudio();
+    playBtn.disabled = false;
+    loadingMsg.style.display = 'none';
   </script>
 </body>
 </html>
