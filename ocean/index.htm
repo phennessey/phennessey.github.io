@@ -240,22 +240,26 @@
       sourceNode.connect(filterNode);
       filterNode.connect(gainNode);
       gainNode.connect(audioCtx.destination);
-      applyFilter(sliderVal);
+      applyFilter(sliderVal, true);
       if ('mediaSession' in navigator)
         navigator.mediaSession.metadata = new MediaMetadata({ title: 'Ocean Waves' });
       isInitialized = true;
     }
 
-    function applyFilter(val) {
+    function applyFilter(val, instant) {
       if (!filterNode) return;
       const curved = Math.pow(val, 1 / EXPO);
       const cutoff = MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
-      filterNode.frequency.setTargetAtTime(cutoff, audioCtx.currentTime, 0.05);
+      if (instant) {
+        filterNode.frequency.value = cutoff;
+      } else {
+        filterNode.frequency.setTargetAtTime(cutoff, audioCtx.currentTime, 0.05);
+      }
     }
 
     playBtn.addEventListener('click', () => {
       if (!isInitialized) initAudio();
-      audioCtx.resume();
+      audioCtx.resume().then(() => applyFilter(sliderVal, true));
       if (isPlaying) {
         gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, FADE_TC);
         setTimeout(() => {
