@@ -215,6 +215,14 @@
       }
     }
 
+    let fadePending = null;
+
+    function cancelFade() {
+      if (fadePending) { clearTimeout(fadePending); fadePending = null; }
+      gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+      gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
+    }
+
     playBtn.addEventListener('click', async () => {
       if (!isInitialized) {
         initAudio();
@@ -222,23 +230,24 @@
       }
 
       if (isPlaying) {
+        cancelFade();
         const now = audioCtx.currentTime;
-        gainNode.gain.cancelScheduledValues(now);
-        gainNode.gain.setValueAtTime(1, now);
         gainNode.gain.setTargetAtTime(0, now, FADE_TC);
-        setTimeout(() => {
+        fadePending = setTimeout(() => {
+          fadePending = null;
           gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
           gainNode.gain.value = 0;
           audioEl.pause();
-        }, FADE_TC * 1000 * 6);
+        }, FADE_MS);
         isPlaying = false;
         setIcon(false);
       } else {
+        cancelFade();
         applyFilter(sliderVal, true);
         await audioCtx.resume();
-        gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-        gainNode.gain.setTargetAtTime(1, audioCtx.currentTime, FADE_TC);
         audioEl.play();
+        const now = audioCtx.currentTime;
+        gainNode.gain.setTargetAtTime(1, now, FADE_TC);
         isPlaying = true;
         setIcon(true);
       }
