@@ -256,6 +256,7 @@
       sourceNode.buffer = buffer;
       sourceNode.loop = true;
       sourceNode.connect(filterNode);
+      log('source created, loop=' + sourceNode.loop);
     }
 
     function setIcon(playing) {
@@ -314,11 +315,13 @@
         createSource();
         applyFilter(sliderVal, true);
         const now = audioCtx.currentTime;
+        log('play: offset=' + pauseOffset.toFixed(2) + ' gain=' + gainNode.gain.value.toFixed(3));
         gainNode.gain.cancelScheduledValues(now);
         gainNode.gain.setValueAtTime(0, now);
         gainNode.gain.linearRampToValueAtTime(1, now + FADE_TC * 4);
         sourceNode.start(0, pauseOffset);
         startedAt = now - pauseOffset;
+        log('source started, ctx=' + audioCtx.state);
         isPlaying = true;
         setIcon(true);
       }
