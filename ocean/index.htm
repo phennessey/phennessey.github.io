@@ -204,15 +204,11 @@
       isInitialized = true;
     }
 
-    function applyFilter(val, instant) {
+    function applyFilter(val) {
       if (!filterNode) return;
       const curved = Math.pow(val, 1 / EXPO);
       const cutoff = MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
-      if (instant || !isPlaying) {
-        filterNode.frequency.value = cutoff;
-      } else {
-        filterNode.frequency.setTargetAtTime(cutoff, audioCtx.currentTime, 0.05);
-      }
+      filterNode.frequency.value = cutoff;
     }
 
     let fadePending = null;
@@ -243,7 +239,7 @@
         setIcon(false);
       } else {
         cancelFade();
-        applyFilter(sliderVal, true);
+        applyFilter(sliderVal);
         await audioCtx.resume();
         audioEl.play();
         const now = audioCtx.currentTime;
@@ -300,7 +296,6 @@
 
     function onDragMove(e) {
       if (!isDragging) return;
-      e.preventDefault();
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
       if (dragRelative) {
         const td = thumbD();
@@ -319,8 +314,9 @@
 
     pillTrack.addEventListener('mousedown', onDragStart);
     pillTrack.addEventListener('touchstart', onDragStart, { passive: true });
+    pillTrack.addEventListener('touchmove', onDragMove, { passive: false });
     window.addEventListener('mousemove', onDragMove);
-    window.addEventListener('touchmove', onDragMove, { passive: false });
+    window.addEventListener('touchmove', (e) => { if (isDragging) onDragMove(e); }, { passive: true });
     window.addEventListener('mouseup', onDragEnd);
     window.addEventListener('touchend', onDragEnd);
 
