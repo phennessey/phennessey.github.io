@@ -159,7 +159,8 @@
     const MAX_CUTOFF  = 20000;
     const EXPO        = 2;
     const FILTER_Q    = 0.1;
-    const FADE_TC     = 0.015; // gain fade time constant in seconds
+    const FADE_MS     = 100;                    // fade duration in ms
+    const FADE_TC     = FADE_MS / 6000;         // derived time constant for setTargetAtTime
 
     let audioCtx, sourceNode, filterNode, gainNode;
     let isPlaying    = false;
