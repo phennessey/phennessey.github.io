@@ -235,6 +235,7 @@
       filterNode.frequency.value = MAX_CUTOFF;
       sourceNode.connect(filterNode);
       filterNode.connect(audioCtx.destination);
+      applyFilter(sliderVal);
       if ('mediaSession' in navigator)
         navigator.mediaSession.metadata = new MediaMetadata({ title: 'Ocean Waves' });
       isInitialized = true;
