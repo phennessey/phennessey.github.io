@@ -115,6 +115,8 @@
   </style>
 </head>
 <body>
+  <audio id="audioEl" src="ocean.mp3" loop preload="auto"></audio>
+
   <div class="player-wrap">
     <button class="play-btn" id="playBtn" aria-label="Play ocean audio">
       <svg id="btnIcon" viewBox="0 0 24 24" fill="currentColor" width="17" height="17">
@@ -129,22 +131,19 @@
   </div>
 
   <script>
-    const AUDIO_SRC = 'ocean.mp3';
-
     const MIN_CUTOFF = 200;
     const MAX_CUTOFF = 20000;
     const EXPO = 2;
     const FILTER_Q = 0.1;
 
-    let audioCtx, sourceNode, filterNode, buffer;
+    let audioCtx, sourceNode, filterNode;
     let isPlaying = false;
     let isInitialized = false;
-    let startTime = 0;
-    let pauseOffset = 0;
 
     const playBtn = document.getElementById('playBtn');
     const btnIcon = document.getElementById('btnIcon');
     const filterSlider = document.getElementById('filterSlider');
+    const audioEl = document.getElementById('audioEl');
 
     function setIcon(playing) {
       btnIcon.innerHTML = playing
@@ -153,29 +152,17 @@
       playBtn.setAttribute('aria-label', playing ? 'Pause ocean audio' : 'Play ocean audio');
     }
 
-    async function initAudio() {
-      const res = await fetch(AUDIO_SRC);
-      buffer = await audioCtx.decodeAudioData(await res.arrayBuffer());
+    function initAudio() {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      sourceNode = audioCtx.createMediaElementSource(audioEl);
       filterNode = audioCtx.createBiquadFilter();
       filterNode.type = 'lowpass';
       filterNode.Q.value = FILTER_Q;
+      sourceNode.connect(audioCtx.destination);
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({ title: 'Ocean' });
       }
       isInitialized = true;
-    }
-
-    function startSource(offset) {
-      if (sourceNode) {
-        sourceNode.disconnect();
-        sourceNode.stop();
-      }
-      sourceNode = audioCtx.createBufferSource();
-      sourceNode.buffer = buffer;
-      sourceNode.loop = true;
-      applyFilter(parseFloat(filterSlider.value));
-      sourceNode.start(0, offset % buffer.duration);
-      startTime = audioCtx.currentTime - (offset % buffer.duration);
     }
 
     function applyFilter(val) {
@@ -192,23 +179,17 @@
       }
     }
 
-    playBtn.addEventListener('click', async () => {
+    playBtn.addEventListener('click', () => {
       if (!isInitialized) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        await audioCtx.resume();
-        await initAudio();
-        startSource(0);
-        isPlaying = true;
-        setIcon(true);
-        return;
+        initAudio();
       }
+      audioCtx.resume();
       if (isPlaying) {
-        pauseOffset = (audioCtx.currentTime - startTime) % buffer.duration;
-        sourceNode.stop();
+        audioEl.pause();
         isPlaying = false;
         setIcon(false);
       } else {
-        startSource(pauseOffset);
+        audioEl.play();
         isPlaying = true;
         setIcon(true);
       }
