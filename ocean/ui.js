@@ -109,8 +109,11 @@ function initSlider() {
   setUnit();
   updateSliderUI(0);
 
+  // Expose UI functions for audio engine
   window.updatePlayIcon = updatePlayIcon;
-  window.resetToneSlewTimer = function () {
-    // This will be overridden by audio.js
-  };
+
+  // Placeholder - will be properly overridden by audio.js
+  if (typeof window.resetToneSlewTimer !== "function") {
+    window.resetToneSlewTimer = function () {};
+  }
 }
