@@ -77,6 +77,7 @@
     const FILTER_Q = 0.1;
     const FADE_MS = 200;
     const FADE_SEC = FADE_MS / 1000;
+    const PRE_FADE_DELAY_MS = 500;   // generous wait so iOS audio pipeline can stabilize
 
     let audioCtx, filterNode, gainNode;
     let isPlaying = false;
@@ -134,7 +135,7 @@
       }
 
       if (isPlaying) {
-        // Fade out
+        // Fade out (already works well)
         const now = audioCtx.currentTime;
         gainNode.gain.cancelScheduledValues(now);
         gainNode.gain.setValueAtTime(gainNode.gain.value, now);
@@ -154,22 +155,23 @@
         await audioCtx.resume();
         audioEl.play().catch(() => {});
 
-        // Fixed safe delay — guarantees audio is flowing before we start the ramp
-        // (this is the most reliable way on stubborn iOS WebKit)
+        // Wait a full half second before starting the fade-in.
+        // This gives the iOS audio buffer + Web Audio graph time to fully load and stabilize.
         setTimeout(() => {
           if (!gainNode || !audioCtx || !isPlaying) return;
+
           const now = audioCtx.currentTime;
           gainNode.gain.cancelScheduledValues(now);
           gainNode.gain.setValueAtTime(0, now);
           gainNode.gain.linearRampToValueAtTime(1, now + FADE_SEC);
-        }, 300);
+        }, PRE_FADE_DELAY_MS);
 
         isPlaying = true;
         setIcon(true);
       }
     });
 
-    // Enable button
+    // Enable button when ready
     playBtn.disabled = true;
     playBtn.style.opacity = '0.4';
     audioEl.addEventListener('canplaythrough', () => {
@@ -178,7 +180,7 @@
     }, { once: true });
     audioEl.load();
 
-    // Slider logic (unchanged)
+    // Slider (unchanged)
     function getTrackMetrics() {
       const td = pillThumb.offsetWidth;
       const inset = (pillTrack.clientWidth - td) / 2;
