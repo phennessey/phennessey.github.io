@@ -1,8 +1,5 @@
 // ==================== UI ====================
 let sliderVal = 0;
-let targetVal = 0;
-let currentVal = 0;
-
 let isDragging = false;
 let dragRelative = false;
 let dragStartY = 0;
@@ -36,9 +33,11 @@ function valFromY(clientY) {
   return Math.max(0, Math.min(1, y / travel));
 }
 
-function resetToneSlewTimer() {
-  if (typeof window.resetToneSlewTimer === "function") {
-    window.resetToneSlewTimer();
+// Apply a tone change to the audio engine, if it's available.
+// immediate=true tracks the finger during a drag; false is the damped settle.
+function applyTone(val, immediate) {
+  if (typeof window.setTone === "function") {
+    window.setTone(val, immediate);
   }
 }
 
@@ -47,16 +46,14 @@ function onDragStart(e) {
   const clientY = e.touches ? e.touches[0].clientY : e.clientY;
   const thumbTop = parseFloat(pillThumb.style.top) || 0;
   const yInPill = clientY - pillTrack.getBoundingClientRect().top;
-
   dragRelative = yInPill >= thumbTop && yInPill <= thumbTop + pillThumb.offsetWidth;
   dragStartY = clientY;
   dragStartVal = sliderVal;
-
   if (!dragRelative) {
+    // Tap-to-jump: damped settle to the new position.
     sliderVal = valFromY(clientY);
-    targetVal = sliderVal;
     updateSliderUI(sliderVal);
-    resetToneSlewTimer();
+    applyTone(sliderVal, false);
   }
 }
 
@@ -64,20 +61,22 @@ function onDragMove(e) {
   if (!isDragging) return;
   e.preventDefault();
   const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
   if (dragRelative) {
     const { travel } = getTrackMetrics();
     sliderVal = Math.max(0, Math.min(1, dragStartVal + (clientY - dragStartY) / travel));
   } else {
     sliderVal = valFromY(clientY);
   }
-  targetVal = sliderVal;
   updateSliderUI(sliderVal);
-  resetToneSlewTimer();
+  // Track the finger with the short time constant.
+  applyTone(sliderVal, true);
 }
 
 function onDragEnd() {
+  if (!isDragging) return;
   isDragging = false;
+  // Settle smoothly to the final position on release.
+  applyTone(sliderVal, false);
 }
 
 function updatePlayIcon(playing) {
@@ -96,18 +95,13 @@ function setUnit() {
 function initSlider() {
   pillTrack.addEventListener("mousedown", onDragStart);
   pillTrack.addEventListener("touchstart", onDragStart, { passive: true });
-
   window.addEventListener("mousemove", onDragMove);
   window.addEventListener("touchmove", onDragMove, { passive: false });
-
   window.addEventListener("mouseup", onDragEnd);
   window.addEventListener("touchend", onDragEnd);
-
   if (window.visualViewport) window.visualViewport.addEventListener("resize", setUnit);
   window.addEventListener("resize", setUnit);
-
   setUnit();
   updateSliderUI(0);
-
   window.updatePlayIcon = updatePlayIcon;
 }
