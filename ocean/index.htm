@@ -8,13 +8,11 @@
   <title>Ocean Waves</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     html, body {
       width: 100%;
       height: 100%;
       overflow: hidden;
     }
-
     body {
       display: flex;
       align-items: center;
@@ -23,28 +21,25 @@
       font-family: system-ui, sans-serif;
       color: #e8f4f8;
     }
-
     :root {
       --unit: 0px;
-      --pill-w:    calc(43 * var(--unit));
-      --pill-h:    calc(160 * var(--unit));
-      --btn-sz:    calc(43 * var(--unit));
-      --gap:       calc(6 * var(--unit));
-      --border:    calc(1.5 * var(--unit));
-      --inset:     calc(1.5 * var(--unit));
-      --thumb-d:   calc(var(--pill-w) - var(--border) * 2 - var(--inset) * 2);
-      --icon-sz:   calc(17 * var(--unit));
+      --pill-w: calc(43 * var(--unit));
+      --pill-h: calc(160 * var(--unit));
+      --btn-sz: calc(43 * var(--unit));
+      --gap: calc(6 * var(--unit));
+      --border: calc(1.5 * var(--unit));
+      --inset: calc(1.5 * var(--unit));
+      --thumb-d: calc(var(--pill-w) - var(--border) * 2 - var(--inset) * 2);
+      --icon-sz: calc(17 * var(--unit));
       --font-tone: calc(4.5 * var(--unit));
-      --font-val:  calc(5.5 * var(--unit));
+      --font-val: calc(5.5 * var(--unit));
     }
-
     .player-wrap {
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: var(--gap);
     }
-
     .play-btn {
       width: var(--btn-sz);
       height: var(--btn-sz);
@@ -59,16 +54,13 @@
       justify-content: center;
       transition: background 0.2s, opacity 0.3s;
     }
-
     .play-btn:hover { background: rgba(255,255,255,0.12); }
-
     .slider-wrap {
       display: flex;
       flex-direction: column;
       align-items: center;
       width: var(--pill-w);
     }
-
     .pill-track {
       position: relative;
       width: var(--pill-w);
@@ -81,7 +73,6 @@
       -webkit-transform: translateZ(0);
       transform: translateZ(0);
     }
-
     .pill-fill {
       position: absolute;
       bottom: var(--inset);
@@ -91,7 +82,6 @@
       background: rgba(255,255,255,0.09);
       pointer-events: none;
     }
-
     .pill-thumb {
       position: absolute;
       left: 50%;
@@ -107,7 +97,6 @@
       justify-content: center;
       gap: var(--unit);
     }
-
     .slider-label {
       font-size: var(--font-tone);
       font-weight: 700;
@@ -118,7 +107,6 @@
       user-select: none;
       -webkit-user-select: none;
     }
-
     .slider-value {
       font-size: var(--font-val);
       font-weight: 700;
@@ -157,43 +145,46 @@
     const MAX_CUTOFF = 20000;
     const EXPO       = 2;
     const FILTER_Q   = 0.1;
-    const FADE_MS    = 120;
-    const FADE_SEC   = FADE_MS / 1000;
+    const FADE_MS    = 200;           // smooth on mobile
 
     // --- State ---
     let audioCtx, filterNode, gainNode;
-    let isPlaying     = false;
+    let isPlaying = false;
     let isInitialized = false;
-    let sliderVal     = 0;
-    let fadePending   = null;
-    let isDragging    = false;
-    let dragRelative  = false;
-    let dragStartY    = 0;
-    let dragStartVal  = 0;
+    let sliderVal = 0;
+    let isDragging = false;
+    let dragRelative = false;
+    let dragStartY = 0;
+    let dragStartVal = 0;
+    let volumeFadeInterval = null;
 
     // --- Elements ---
-    const audioEl     = document.getElementById('audioEl');
-    const playBtn     = document.getElementById('playBtn');
-    const btnIcon     = document.getElementById('btnIcon');
-    const pillTrack   = document.getElementById('pillTrack');
-    const pillFill    = document.getElementById('pillFill');
-    const pillThumb   = document.getElementById('pillThumb');
+    const audioEl = document.getElementById('audioEl');
+    const playBtn = document.getElementById('playBtn');
+    const btnIcon = document.getElementById('btnIcon');
+    const pillTrack = document.getElementById('pillTrack');
+    const pillFill = document.getElementById('pillFill');
+    const pillThumb = document.getElementById('pillThumb');
     const sliderValue = document.getElementById('sliderValue');
 
     // --- Audio ---
     function initAudio() {
-      audioCtx   = new (window.AudioContext || window.webkitAudioContext)();
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       filterNode = audioCtx.createBiquadFilter();
       filterNode.type = 'lowpass';
       filterNode.Q.value = FILTER_Q;
-      gainNode   = audioCtx.createGain();
-      gainNode.gain.value = 0;
+
+      gainNode = audioCtx.createGain();
+      gainNode.gain.value = 0.95;   // master gain (volume fade is handled via audioEl.volume)
+
       audioCtx.createMediaElementSource(audioEl)
         .connect(filterNode)
         .connect(gainNode)
         .connect(audioCtx.destination);
-      if ('mediaSession' in navigator)
+
+      if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({ title: 'Ocean Waves' });
+      }
       isInitialized = true;
     }
 
@@ -203,19 +194,33 @@
       filterNode.frequency.value = MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
     }
 
-    function cancelFade() {
-      if (fadePending) { clearTimeout(fadePending); fadePending = null; }
-      if (gainNode && audioCtx) {
-        const t = audioCtx.currentTime;
-        gainNode.gain.cancelScheduledValues(t);
-        gainNode.gain.setValueAtTime(gainNode.gain.value, t);
-      }
-    }
-
     function setIcon(playing) {
       btnIcon.innerHTML = playing
         ? '<rect x="6" y="4" width="4" height="15"/><rect x="14" y="4" width="4" height="15"/>'
         : '<polygon points="5,3 19,12 5,21" transform="translate(1,0)"/>';
+    }
+
+    // JS-driven volume fade (reliable smooth start/stop on iOS)
+    function fadeVolume(target, durationMs, onComplete) {
+      if (volumeFadeInterval) {
+        clearInterval(volumeFadeInterval);
+        volumeFadeInterval = null;
+      }
+      const startVol = audioEl.volume;
+      const startTime = performance.now();
+
+      volumeFadeInterval = setInterval(() => {
+        const elapsed = performance.now() - startTime;
+        const progress = Math.min(elapsed / durationMs, 1);
+        audioEl.volume = startVol + (target - startVol) * progress;
+
+        if (progress >= 1) {
+          clearInterval(volumeFadeInterval);
+          volumeFadeInterval = null;
+          audioEl.volume = target;
+          if (onComplete) onComplete();
+        }
+      }, 16);
     }
 
     playBtn.addEventListener('click', async () => {
@@ -225,61 +230,31 @@
       }
 
       if (isPlaying) {
-        cancelFade();
-        const now = audioCtx.currentTime;
-        gainNode.gain.setValueAtTime(gainNode.gain.value, now);
-        gainNode.gain.linearRampToValueAtTime(0, now + FADE_SEC);
-        fadePending = setTimeout(() => {
-          fadePending = null;
-          if (gainNode) {
-            gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
-            gainNode.gain.value = 0;
-          }
+        fadeVolume(0, FADE_MS, () => {
           audioEl.pause();
-        }, FADE_MS + 10);
+        });
         isPlaying = false;
         setIcon(false);
       } else {
-        cancelFade();
         applyFilter(sliderVal);
-      
-        const t0 = audioCtx.currentTime;
-        gainNode.gain.setValueAtTime(0, t0);
+        audioEl.volume = 0;
+
         await audioCtx.resume();
-      
-        audioEl.play().catch(err => console.warn('play() failed:', err));
-      
-        // Wait until audio is *actually* flowing before starting the fade
-        let fadeStarted = false;
-      
-        const startFade = () => {
-          if (fadeStarted || !gainNode || !audioCtx) return;
-          fadeStarted = true;
-          audioEl.removeEventListener('timeupdate', onTimeUpdate);
-      
-          const now = audioCtx.currentTime;
-          gainNode.gain.cancelScheduledValues(now);
-          gainNode.gain.setValueAtTime(0, now);
-          gainNode.gain.linearRampToValueAtTime(1, now + FADE_SEC);
-        };
-      
-        const onTimeUpdate = () => {
-          if (audioEl.currentTime > 0.005) startFade();
-        };
-      
-        audioEl.addEventListener('timeupdate', onTimeUpdate);
-      
-        // Safety net
-        setTimeout(() => {
-          if (!fadeStarted) startFade();
-        }, 250);
-      
+
+        audioEl.play().then(() => {
+          fadeVolume(1, FADE_MS);
+        }).catch(err => {
+          console.warn('play() failed:', err);
+          audioEl.play().catch(() => {});
+          fadeVolume(1, FADE_MS);
+        });
+
         isPlaying = true;
         setIcon(true);
       }
     });
 
-    // Disable button until audio is ready
+    // Enable button when ready
     playBtn.disabled = true;
     playBtn.style.opacity = '0.4';
     audioEl.addEventListener('canplaythrough', () => {
@@ -290,8 +265,8 @@
 
     // --- Slider ---
     function getTrackMetrics() {
-      const td     = pillThumb.offsetWidth;
-      const inset  = (pillTrack.clientWidth - td) / 2;
+      const td = pillThumb.offsetWidth;
+      const inset = (pillTrack.clientWidth - td) / 2;
       const travel = pillTrack.clientHeight - inset * 2 - td;
       return { td, inset, travel };
     }
@@ -311,13 +286,13 @@
     }
 
     function onDragStart(e) {
-      isDragging    = true;
+      isDragging = true;
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
       const thumbTop = parseFloat(pillThumb.style.top) || 0;
-      const yInPill  = clientY - pillTrack.getBoundingClientRect().top;
-      dragRelative   = yInPill >= thumbTop && yInPill <= thumbTop + pillThumb.offsetWidth;
-      dragStartY     = clientY;
-      dragStartVal   = sliderVal;
+      const yInPill = clientY - pillTrack.getBoundingClientRect().top;
+      dragRelative = yInPill >= thumbTop && yInPill <= thumbTop + pillThumb.offsetWidth;
+      dragStartY = clientY;
+      dragStartVal = sliderVal;
       if (!dragRelative) {
         sliderVal = valFromY(clientY);
         updateSliderUI(sliderVal);
