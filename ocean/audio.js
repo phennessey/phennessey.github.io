@@ -18,7 +18,7 @@ const PRE_FADE_DELAY_MS = 500;                // delay before audible start
 // elements here) start this many seconds into the loop, so no two
 // crossfading neighbors play the same moment of the source and there's no
 // comb-filtering / flange between them.
-const STAGGER_SEC = 1;
+const STAGGER_SEC = 0.5;
 
 let players = [];        // the N <audio> elements, index 0 = brightest
 let masterGain = 0;      // 0..1 overall fade applied on top of the blend
