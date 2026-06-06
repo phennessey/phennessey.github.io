@@ -15,13 +15,25 @@ function getTrackMetrics() {
   const travel = pillTrack.clientHeight - inset * 2 - td;
   return { td, inset, travel };
 }
+// Number of discrete slider stops = number of files. Falls back to 6.
+function numStops() {
+  return (typeof window.NUM_FILES === "number" && window.NUM_FILES > 0)
+    ? window.NUM_FILES : 6;
+}
+// Snap a 0..1 value to the nearest of N evenly-spaced stops.
+function snapVal(val) {
+  const n = numStops();
+  return Math.round(val * (n - 1)) / (n - 1);
+}
 function updateSliderUI(val) {
   const { td, inset, travel } = getTrackMetrics();
   const thumbTop = inset + val * travel;
   pillThumb.style.top = thumbTop + "px";
   pillFill.style.height =
     Math.max(0, pillTrack.clientHeight - (thumbTop + td / 2) - inset) + "px";
-  sliderValue.textContent = Math.round((1 - val) * 100);
+  // Show the file index: brightest = N-1 at the top, darkest = 0 at bottom.
+  const n = numStops();
+  sliderValue.textContent = Math.round((1 - val) * (n - 1));
 }
 function valFromY(clientY) {
   const { td, inset, travel } = getTrackMetrics();
@@ -44,8 +56,8 @@ function onDragStart(e) {
   dragStartY = clientY;
   dragStartVal = sliderVal;
   if (!dragRelative) {
-    // Tap-to-jump: damped settle to the new position.
-    sliderVal = valFromY(clientY);
+    // Tap-to-jump: snap to the nearest stop.
+    sliderVal = snapVal(valFromY(clientY));
     updateSliderUI(sliderVal);
     applyTone(sliderVal, false);
   }
@@ -60,8 +72,9 @@ function onDragMove(e) {
   } else {
     sliderVal = valFromY(clientY);
   }
+  sliderVal = snapVal(sliderVal);
   updateSliderUI(sliderVal);
-  // Track the finger with the short time constant.
+  // Track the finger; snapping keeps it on discrete stops.
   applyTone(sliderVal, true);
 }
 function onDragEnd() {
