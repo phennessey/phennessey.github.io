@@ -242,20 +242,21 @@
       } else {
         cancelFade();
         applyFilter(sliderVal);
+      
         const t0 = audioCtx.currentTime;
         gainNode.gain.setValueAtTime(0, t0);
         await audioCtx.resume();
-        audioEl.play().then(() => {
-          if (!gainNode || !audioCtx) return;
-          const now = audioCtx.currentTime;
-          gainNode.gain.cancelScheduledValues(now);
-          gainNode.gain.setValueAtTime(0, now);
-          gainNode.gain.linearRampToValueAtTime(1, now + FADE_SEC);
-        }).catch(err => {
+      
+        audioEl.play().catch(err => {
           console.warn('Playback start failed:', err);
-          isPlaying = false;
-          setIcon(false);
         });
+      
+        // Schedule ramp 15 ms ahead — most reliable pattern on iOS WebKit
+        const rampStart = audioCtx.currentTime + 0.015;
+        gainNode.gain.cancelScheduledValues(rampStart);
+        gainNode.gain.setValueAtTime(0, rampStart);
+        gainNode.gain.linearRampToValueAtTime(1, rampStart + FADE_SEC);
+      
         isPlaying = true;
         setIcon(true);
       }
