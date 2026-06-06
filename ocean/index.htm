@@ -77,12 +77,16 @@
     const FILTER_Q = 0.1;
     const FADE_MS = 200;
     const FADE_SEC = FADE_MS / 1000;
-    const PRE_FADE_DELAY_MS = 500;   // generous wait so iOS audio pipeline can stabilize
+    const PRE_FADE_DELAY_MS = 500;
+    const TONE_POLL_INTERVAL_MS = 250;     // poll every 0.25s
+    const TONE_RAMP_TIME_SEC = 0.18;       // smooth 180ms ramp between polled values
 
     let audioCtx, filterNode, gainNode;
     let isPlaying = false;
     let isInitialized = false;
     let sliderVal = 0;
+    let lastAppliedSliderVal = 0;
+    let tonePollInterval = null;
     let isDragging = false;
     let dragRelative = false;
     let dragStartY = 0;
@@ -114,12 +118,35 @@
         navigator.mediaSession.metadata = new MediaMetadata({ title: 'Ocean Waves' });
       }
       isInitialized = true;
+
+      // Start polling the slider for smooth tone changes
+      startTonePolling();
+    }
+
+    function startTonePolling() {
+      if (tonePollInterval) clearInterval(tonePollInterval);
+
+      tonePollInterval = setInterval(() => {
+        if (!filterNode || !audioCtx || sliderVal === lastAppliedSliderVal) return;
+
+        const curved = Math.pow(sliderVal, 1 / EXPO);
+        const targetFreq = MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
+
+        const now = audioCtx.currentTime;
+        filterNode.frequency.cancelScheduledValues(now);
+        filterNode.frequency.linearRampToValueAtTime(targetFreq, now + TONE_RAMP_TIME_SEC);
+
+        lastAppliedSliderVal = sliderVal;
+      }, TONE_POLL_INTERVAL_MS);
     }
 
     function applyFilter(val) {
-      if (!filterNode) return;
+      // Kept for initial apply on play, but polling now handles ongoing changes
+      if (!filterNode || !audioCtx) return;
       const curved = Math.pow(val, 1 / EXPO);
-      filterNode.frequency.value = MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
+      const freq = MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
+      filterNode.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      lastAppliedSliderVal = val;
     }
 
     function setIcon(playing) {
@@ -135,7 +162,6 @@
       }
 
       if (isPlaying) {
-        // Fade out (already works well)
         const now = audioCtx.currentTime;
         gainNode.gain.cancelScheduledValues(now);
         gainNode.gain.setValueAtTime(gainNode.gain.value, now);
@@ -155,11 +181,8 @@
         await audioCtx.resume();
         audioEl.play().catch(() => {});
 
-        // Wait a full half second before starting the fade-in.
-        // This gives the iOS audio buffer + Web Audio graph time to fully load and stabilize.
         setTimeout(() => {
           if (!gainNode || !audioCtx || !isPlaying) return;
-
           const now = audioCtx.currentTime;
           gainNode.gain.cancelScheduledValues(now);
           gainNode.gain.setValueAtTime(0, now);
@@ -171,7 +194,7 @@
       }
     });
 
-    // Enable button when ready
+    // Enable button
     playBtn.disabled = true;
     playBtn.style.opacity = '0.4';
     audioEl.addEventListener('canplaythrough', () => {
@@ -180,7 +203,7 @@
     }, { once: true });
     audioEl.load();
 
-    // Slider (unchanged)
+    // === Slider: live visuals, polled + ramped filter changes ===
     function getTrackMetrics() {
       const td = pillThumb.offsetWidth;
       const inset = (pillTrack.clientWidth - td) / 2;
@@ -210,10 +233,10 @@
       dragRelative = yInPill >= thumbTop && yInPill <= thumbTop + pillThumb.offsetWidth;
       dragStartY = clientY;
       dragStartVal = sliderVal;
+
       if (!dragRelative) {
         sliderVal = valFromY(clientY);
         updateSliderUI(sliderVal);
-        applyFilter(sliderVal);
       }
     }
 
@@ -221,6 +244,7 @@
       if (!isDragging) return;
       e.preventDefault();
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
       if (dragRelative) {
         const { travel } = getTrackMetrics();
         sliderVal = Math.max(0, Math.min(1, dragStartVal + (clientY - dragStartY) / travel));
@@ -228,9 +252,21 @@
         sliderVal = valFromY(clientY);
       }
       updateSliderUI(sliderVal);
-      applyFilter(sliderVal);
+      // No direct filter call — polling + ramp handles it smoothly
     }
-    function onDragEnd() { isDragging = false; }
+
+    function onDragEnd() {
+      isDragging = false;
+      // Optional: force an immediate ramp on release for snappier feel
+      if (sliderVal !== lastAppliedSliderVal && filterNode && audioCtx) {
+        const curved = Math.pow(sliderVal, 1 / EXPO);
+        const targetFreq = MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
+        const now = audioCtx.currentTime;
+        filterNode.frequency.cancelScheduledValues(now);
+        filterNode.frequency.linearRampToValueAtTime(targetFreq, now + TONE_RAMP_TIME_SEC);
+        lastAppliedSliderVal = sliderVal;
+      }
+    }
 
     pillTrack.addEventListener('mousedown', onDragStart);
     pillTrack.addEventListener('touchstart', onDragStart, { passive: true });
