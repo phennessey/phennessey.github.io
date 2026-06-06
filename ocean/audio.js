@@ -8,8 +8,8 @@ const FADE_SEC = FADE_MS / 1000;
 const PRE_FADE_DELAY_MS = 500;
 
 const MAX_SPEED = 1.0;
-const TONE_UPDATE_INTERVAL = 55;     // Much more frequent updates (~18 times per second)
-const TONE_RAMP_MS = 160;            // Slightly shorter ramps for smoother blending
+const TONE_UPDATE_INTERVAL = 10;
+const TONE_RAMP_MS = 160;
 
 let audioCtx = null;
 let filterNode = null;
