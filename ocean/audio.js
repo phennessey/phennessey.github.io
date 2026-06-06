@@ -1,27 +1,25 @@
-// ==================== AUDIO ENGINE (crossfade, no AudioContext) ====================
+// ==================== AUDIO ENGINE (single-file, no AudioContext) ====================
 //
-// Plays N pre-filtered ocean loops as bare <audio> elements and equal-power
-// crossfades between the two adjacent to the slider position. No AudioContext
-// anywhere, so playback survives screen-off / backgrounding.
+// Plays N pre-filtered ocean loops as bare <audio> elements. Only ONE element
+// plays at a time (iOS allows only one simultaneous media element), so the
+// slider snaps to N discrete positions and switching position swaps which
+// single file is playing. No AudioContext anywhere, so playback survives
+// screen-off / backgrounding.
 //
 // Files are expected at FILE_PATTERN with two-digit labels, brightest first:
 //   ocean_05.m4a (brightest) ... ocean_00.m4a (darkest)   when NUM_FILES = 6
 
-const NUM_FILES = 6;                         // how many loops to blend across
+const NUM_FILES = 6;                         // how many loops / slider stops
+window.NUM_FILES = NUM_FILES;
 const FILE_PATTERN = (label) => `ocean_${label}.m4a`;
 
 const FADE_MS = 200;                          // play/stop master fade
 const FADE_STEP_MS = 16;                      // master fade tick (~60fps)
 const PRE_FADE_DELAY_MS = 500;                // delay before audible start
 
-// Decorrelation offset: odd-labeled files (01, 03, 05 -> the odd-index
-// elements here) start this many seconds into the loop, so no two
-// crossfading neighbors play the same moment of the source and there's no
-// comb-filtering / flange between them.
-const STAGGER_SEC = 0.5;
-
 let players = [];        // the N <audio> elements, index 0 = brightest
-let masterGain = 0;      // 0..1 overall fade applied on top of the blend
+let activeIndex = 0;     // which file is currently selected
+let masterGain = 0;      // 0..1 fade applied to the active element
 let isPlaying = false;
 let isUnlocked = false;
 let playBtn = null;
@@ -33,27 +31,36 @@ function labelForIndex(i) {
   return String(n).padStart(2, "0");
 }
 
-// ---- equal-power blend --------------------------------------------------
-// Map sliderVal (0..1) onto the active pair and per-element volumes.
+// ---- slider -> discrete file index --------------------------------------
 // sliderVal 0 = brightest (index 0), sliderVal 1 = darkest (last index).
-function applyBlend() {
-  if (players.length === 0) return;
+function indexFromVal(val) {
+  const idx = Math.round(val * (NUM_FILES - 1));
+  return Math.max(0, Math.min(NUM_FILES - 1, idx));
+}
 
-  // Position along the N-1 crossfade zones.
-  const pos = sliderVal * (NUM_FILES - 1);
-  const lower = Math.floor(pos);
-  const upper = Math.min(lower + 1, NUM_FILES - 1);
-  const t = pos - lower;                      // 0..1 within the zone
-
-  // Equal-power crossfade gains.
-  const gLower = Math.cos(t * Math.PI / 2);
-  const gUpper = Math.sin(t * Math.PI / 2);
-
+// Set volumes so only the active element is audible (at masterGain).
+function applyActive() {
   for (let i = 0; i < players.length; i++) {
-    let v = 0;
-    if (i === lower) v = gLower;
-    if (i === upper) v = (lower === upper) ? 1 : gUpper;
-    players[i].volume = v * masterGain;
+    players[i].volume = (i === activeIndex) ? masterGain : 0;
+  }
+}
+
+// Switch which single file is playing. The new one is started at the old
+// one's loop position so the ambient texture doesn't jump, the old one is
+// paused. Only relevant while playing.
+function selectIndex(idx) {
+  if (idx === activeIndex) return;
+  const prev = players[activeIndex];
+  const next = players[idx];
+  activeIndex = idx;
+
+  if (isPlaying) {
+    try { next.currentTime = prev.currentTime % (next.duration || 1e9); } catch (e) {}
+    next.play().catch(() => {});
+    applyActive();
+    prev.pause();
+  } else {
+    applyActive();
   }
 }
 
@@ -73,15 +80,14 @@ function fadeMaster(to, ms, done) {
       fadeTimer = null;
       if (done) done();
     }
-    applyBlend();
+    applyActive();
   }, FADE_STEP_MS);
 }
 
 // ---- the slider entry point (called by ui.js) ---------------------------
-// immediate is unused here (no glide needed; volume tracks the slider
-// directly), kept for signature compatibility with the UI.
+// immediate is unused (snapping is instant); kept for signature compatibility.
 window.setTone = function (val, immediate) {
-  applyBlend();
+  selectIndex(indexFromVal(val));
 };
 
 // ---- build + preload ----------------------------------------------------
@@ -97,9 +103,8 @@ function buildPlayers() {
   }
 }
 
-// iOS only lets multiple media elements play after each is started by a user
-// gesture. On the first tap we briefly play+pause all of them to unlock,
-// then control freely afterward.
+// iOS requires a user gesture to allow a media element to play. We unlock all
+// of them on the first tap (play+pause), then only one plays at a time after.
 async function unlockAll() {
   if (isUnlocked) return;
   await Promise.all(players.map(async (a) => {
@@ -120,10 +125,8 @@ function setupPlayButton() {
 
   buildPlayers();
 
-  // Enable the button as soon as we can plausibly start. We only need one
-  // element ready to begin (the rest keep buffering), and some browsers
-  // don't fire canplaythrough reliably for every element, so we also listen
-  // for canplay and add a timeout safety net so the button is never stuck.
+  // Enable as soon as one element is ready; timeout safety net so the button
+  // is never stuck if an event doesn't fire.
   let enabled = false;
   function enable() {
     if (enabled) return;
@@ -131,36 +134,21 @@ function setupPlayButton() {
     playBtn.disabled = false;
     playBtn.style.opacity = "1";
   }
-
   players.forEach((a) => {
     a.addEventListener("canplaythrough", enable, { once: true });
     a.addEventListener("canplay", enable, { once: true });
     a.addEventListener("loadeddata", enable, { once: true });
     a.load();
   });
-
-  // Safety net: enable after a short wait regardless, so a slow or missing
-  // event can't leave the button permanently disabled.
   setTimeout(enable, 3000);
 
   playBtn.addEventListener("click", async () => {
     if (!isPlaying) {
       await unlockAll();
 
-      // Start all elements playing (volumes still 0 / set by blend).
       masterGain = 0;
-      applyBlend();
-
-      // Decorrelate: offset odd-labeled files (01, 03, 05) into the loop so
-      // crossfading neighbors never play the same moment -> no flange.
-      players.forEach((a, i) => {
-        const label = parseInt(labelForIndex(i), 10);
-        if (label % 2 === 1) {
-          try { a.currentTime = STAGGER_SEC; } catch (e) { /* ignore */ }
-        }
-      });
-
-      await Promise.all(players.map((a) => a.play().catch(() => {})));
+      applyActive();
+      players[activeIndex].play().catch(() => {});
 
       isPlaying = true;
       if (typeof window.updatePlayIcon === "function") window.updatePlayIcon(true);
