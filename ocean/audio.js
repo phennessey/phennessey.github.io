@@ -15,6 +15,11 @@ const PRE_FADE_DELAY_MS = 500;
 const SWEEP_SECONDS = 1.0;
 const DRAG_SEC = 0.03;
 
+// Samples per second used to build the slider-space value curve. The curve
+// is linear in slider-space so even a coarse rate is smooth; 256/s keeps
+// arrays small while sounding continuous.
+const CURVE_SAMPLE_RATE = 256;
+
 let audioCtx = null;
 let filterNode = null;
 let gainNode = null;
@@ -28,7 +33,9 @@ let playBtn = null;
 // read filterNode.frequency.value mid-ramp (that read can lag the audio
 // thread or report a stale value right after cancelScheduledValues, which is
 // what caused the sudden jumps). We track the ramp in slider-space (linear),
-// which also keeps the slew rate uniform since frequency is exponential.
+// which is EXACT: the scheduled ramp is exponential in frequency, and
+// freqFromVal maps slider-space exponentially, so motion is linear in
+// slider-space. Equal time = equal perceived pitch change.
 // startVal -> endVal over [startTime, startTime + dur].
 let rampStartVal = 0;
 let rampEndVal = 0;
@@ -78,11 +85,32 @@ window.setTone = function (val, immediate) {
     dur = Math.max(dist * SWEEP_SECONDS, 0.001);
   }
 
-  // Anchor the new ramp at the current position, then ramp to the target.
-  // Working from fromVal (not filterNode.frequency.value) guarantees no step.
+  // Build the ramp in SLIDER-SPACE: glide the slider value linearly from
+  // fromVal to val over dur, then map each sampled point through freqFromVal.
+  // setValueCurveAtTime plays the resulting frequency samples. This makes the
+  // SLIDER VALUE glide uniformly (the control variable we actually care
+  // about), with frequency derived from it -- so up and down are symmetric
+  // and the rate is consistent. The AudioParam ramp primitives can't do this
+  // because they interpolate frequency, not the slider value.
+  const steps = Math.max(2, Math.ceil(dur * CURVE_SAMPLE_RATE));
+  const curve = new Float32Array(steps);
+  for (let i = 0; i < steps; i++) {
+    const t = i / (steps - 1);              // 0..1 along the ramp
+    const v = fromVal + (val - fromVal) * t; // linear in slider-space
+    curve[i] = freqFromVal(v);
+  }
+
   filterNode.frequency.cancelScheduledValues(now);
-  filterNode.frequency.setValueAtTime(freqFromVal(fromVal), now);
-  filterNode.frequency.linearRampToValueAtTime(freqFromVal(val), now + dur);
+  // setValueCurveAtTime can throw if a prior curve is still running and
+  // overlaps. Cancelling then anchoring at the current value clears the
+  // schedule so the new curve starts clean on rapid interruption.
+  try {
+    filterNode.frequency.setValueCurveAtTime(curve, now, dur);
+  } catch (e) {
+    filterNode.frequency.cancelScheduledValues(now);
+    filterNode.frequency.setValueAtTime(curve[0], now);
+    filterNode.frequency.setValueCurveAtTime(curve, now, dur);
+  }
 
   rampStartVal = fromVal;
   rampEndVal = val;
