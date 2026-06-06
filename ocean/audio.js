@@ -17,8 +17,6 @@ let gainNode = null;
 let isPlaying = false;
 let isInitialized = false;
 
-let targetVal = 0;
-let currentVal = 0;
 let lastAppliedVal = -1;
 let lastSlewTime = performance.now();
 let lastUpdateTime = 0;
@@ -99,7 +97,6 @@ function startToneSlew() {
   toneLoop = requestAnimationFrame(toneSlewLoop);
 }
 
-// Expose for ui.js
 window.resetToneSlewTimer = function () {
   lastSlewTime = performance.now();
 };
