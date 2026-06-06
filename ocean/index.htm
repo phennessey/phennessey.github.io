@@ -57,7 +57,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: background 0.2s;
+      transition: background 0.2s, opacity 0.3s;
     }
 
     .play-btn:hover { background: rgba(255,255,255,0.12); }
@@ -157,19 +157,19 @@
     const MAX_CUTOFF = 20000;
     const EXPO       = 2;
     const FILTER_Q   = 0.1;
-    const FADE_MS    = 100;
-    const FADE_TC    = FADE_MS / 6000;
+    const FADE_MS    = 120;
+    const FADE_SEC   = FADE_MS / 1000;
 
     // --- State ---
     let audioCtx, filterNode, gainNode;
-    let isPlaying    = false;
+    let isPlaying     = false;
     let isInitialized = false;
-    let sliderVal    = 0;
-    let fadePending  = null;
-    let isDragging   = false;
-    let dragRelative = false;
-    let dragStartY   = 0;
-    let dragStartVal = 0;
+    let sliderVal     = 0;
+    let fadePending   = null;
+    let isDragging    = false;
+    let dragRelative  = false;
+    let dragStartY    = 0;
+    let dragStartVal  = 0;
 
     // --- Elements ---
     const audioEl     = document.getElementById('audioEl');
@@ -205,8 +205,11 @@
 
     function cancelFade() {
       if (fadePending) { clearTimeout(fadePending); fadePending = null; }
-      gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
-      gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
+      if (gainNode && audioCtx) {
+        const t = audioCtx.currentTime;
+        gainNode.gain.cancelScheduledValues(t);
+        gainNode.gain.setValueAtTime(gainNode.gain.value, t);
+      }
     }
 
     function setIcon(playing) {
@@ -223,27 +226,36 @@
 
       if (isPlaying) {
         cancelFade();
-        gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
-        gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, FADE_TC);
+        const now = audioCtx.currentTime;
+        gainNode.gain.setValueAtTime(gainNode.gain.value, now);
+        gainNode.gain.linearRampToValueAtTime(0, now + FADE_SEC);
         fadePending = setTimeout(() => {
           fadePending = null;
-          gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
-          gainNode.gain.value = 0;
+          if (gainNode) {
+            gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+            gainNode.gain.value = 0;
+          }
           audioEl.pause();
-        }, FADE_MS);
+        }, FADE_MS + 10);
         isPlaying = false;
         setIcon(false);
       } else {
         cancelFade();
         applyFilter(sliderVal);
-        gainNode.gain.setValueAtTime(0, 0);
-        audioEl.addEventListener('playing', () => {
-          const now = audioCtx.currentTime;
-          gainNode.gain.setValueAtTime(0, now);
-          gainNode.gain.setTargetAtTime(1, now, FADE_TC);
-        }, { once: true });
+        const t0 = audioCtx.currentTime;
+        gainNode.gain.setValueAtTime(0, t0);
         await audioCtx.resume();
-        audioEl.play();
+        audioEl.play().then(() => {
+          if (!gainNode || !audioCtx) return;
+          const now = audioCtx.currentTime;
+          gainNode.gain.cancelScheduledValues(now);
+          gainNode.gain.setValueAtTime(0, now);
+          gainNode.gain.linearRampToValueAtTime(1, now + FADE_SEC);
+        }).catch(err => {
+          console.warn('Playback start failed:', err);
+          isPlaying = false;
+          setIcon(false);
+        });
         isPlaying = true;
         setIcon(true);
       }
@@ -256,8 +268,6 @@
       playBtn.disabled = false;
       playBtn.style.opacity = '1';
     }, { once: true });
-
-    // On iOS, load is deferred until a gesture — trigger it early
     audioEl.load();
 
     // --- Slider ---
@@ -283,8 +293,8 @@
     }
 
     function onDragStart(e) {
-      isDragging = true;
-      const clientY  = e.touches ? e.touches[0].clientY : e.clientY;
+      isDragging    = true;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
       const thumbTop = parseFloat(pillThumb.style.top) || 0;
       const yInPill  = clientY - pillTrack.getBoundingClientRect().top;
       dragRelative   = yInPill >= thumbTop && yInPill <= thumbTop + pillThumb.offsetWidth;
@@ -326,7 +336,6 @@
       document.documentElement.style.setProperty('--unit', (h * 0.86 / 209) + 'px');
       updateSliderUI(sliderVal);
     }
-
     if (window.visualViewport) window.visualViewport.addEventListener('resize', setUnit);
     window.addEventListener('resize', setUnit);
     setUnit();
