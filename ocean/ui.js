@@ -90,9 +90,18 @@ function updatePlayIcon(playing) {
     : '<polygon points="5,3 19,12 5,21" transform="translate(1,0)"/>';
 }
 function setUnit() {
+  // Disable the detent transition during layout changes so the thumb doesn't
+  // visibly slide when the unit/size recalculates (load, rotate, resize).
+  pillThumb.style.transition = "none";
+  pillFill.style.transition = "none";
   const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
   document.documentElement.style.setProperty("--unit", (h * 0.86) / 209 + "px");
   updateSliderUI(sliderVal);
+  // Re-enable on the next frame so subsequent moves animate.
+  requestAnimationFrame(() => {
+    pillThumb.style.transition = "";
+    pillFill.style.transition = "";
+  });
 }
 function initSlider() {
   pillTrack.addEventListener("mousedown", onDragStart);
