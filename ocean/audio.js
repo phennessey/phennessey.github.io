@@ -24,46 +24,70 @@ let isInitialized = false;
 let audioEl = null;
 let playBtn = null;
 
+// Analytic model of the tone ramp currently in flight, so we never have to
+// read filterNode.frequency.value mid-ramp (that read can lag the audio
+// thread or report a stale value right after cancelScheduledValues, which is
+// what caused the sudden jumps). We track the ramp in slider-space (linear),
+// which also keeps the slew rate uniform since frequency is exponential.
+// startVal -> endVal over [startTime, startTime + dur].
+let rampStartVal = 0;
+let rampEndVal = 0;
+let rampStartTime = 0;
+let rampDur = 0;
+
+// Where the in-flight ramp is right now, in slider-space (0..1).
+function currentRampVal(now) {
+  if (rampDur <= 0) return rampEndVal;
+  const t = (now - rampStartTime) / rampDur;
+  if (t <= 0) return rampStartVal;
+  if (t >= 1) return rampEndVal;
+  return rampStartVal + (rampEndVal - rampStartVal) * t;
+}
+
+// Mark the tone as settled (no ramp in flight) at a given slider value.
+function settleRampAt(val) {
+  rampStartVal = val;
+  rampEndVal = val;
+  rampDur = 0;
+}
+
 function freqFromVal(val) {
   const curved = Math.pow(val, 1 / EXPO);
   return MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
 }
 
-// Inverse of freqFromVal: recover the slider value (0..1) from a frequency.
-// Used to measure how far the tone must actually travel from where it is
-// right now, so an interrupted slew is re-scaled to the real remaining
-// distance rather than the distance from the previous target.
-function valFromFreq(freq) {
-  const f = Math.min(MAX_CUTOFF, Math.max(MIN_CUTOFF, freq));
-  const curved = Math.log(f / MAX_CUTOFF) / Math.log(MIN_CUTOFF / MAX_CUTOFF);
-  return Math.pow(curved, EXPO);
-}
-
 // Single entry point for tone changes. immediate=true tracks the slider
 // during an active drag with a short fixed ramp (responsive finger-follow).
-// immediate=false (tap-jump and release) uses a linear ramp whose duration
-// scales with the distance moved, so a full 0<->1 sweep always takes
-// SWEEP_SECONDS and can never glide instantly.
+// immediate=false (tap-jump and release) uses a ramp whose duration scales
+// with distance, so a full 0<->1 sweep always takes SWEEP_SECONDS and can
+// never glide instantly. Both redirect cleanly mid-slew with no step,
+// because the new ramp is anchored at the in-flight ramp's exact current
+// position computed analytically (not read from the AudioParam).
 window.setTone = function (val, immediate) {
   if (!filterNode || !audioCtx) return;
-  const freq = freqFromVal(val);
   const now = audioCtx.currentTime;
-  const cur = filterNode.frequency.value;
+
+  // Where the tone actually is this instant, in slider-space.
+  const fromVal = currentRampVal(now);
 
   let dur;
   if (immediate) {
     dur = DRAG_SEC;
   } else {
-    // Measure distance from where the tone ACTUALLY is right now (not the
-    // previous target), so interrupting a slew mid-flight redirects at the
-    // same constant rate instead of mis-scaling the duration.
-    const dist = Math.abs(val - valFromFreq(cur));
+    const dist = Math.abs(val - fromVal);
     dur = Math.max(dist * SWEEP_SECONDS, 0.001);
   }
 
+  // Anchor the new ramp at the current position, then ramp to the target.
+  // Working from fromVal (not filterNode.frequency.value) guarantees no step.
   filterNode.frequency.cancelScheduledValues(now);
-  filterNode.frequency.setValueAtTime(cur, now); // anchor the ramp start
-  filterNode.frequency.linearRampToValueAtTime(freq, now + dur);
+  filterNode.frequency.setValueAtTime(freqFromVal(fromVal), now);
+  filterNode.frequency.linearRampToValueAtTime(freqFromVal(val), now + dur);
+
+  rampStartVal = fromVal;
+  rampEndVal = val;
+  rampStartTime = now;
+  rampDur = dur;
 };
 
 function initAudio() {
@@ -86,6 +110,7 @@ function initAudio() {
 
   // Initialize the filter to the slider's current position with no glide.
   filterNode.frequency.setValueAtTime(freqFromVal(sliderVal), audioCtx.currentTime);
+  settleRampAt(sliderVal);
 
   if ("mediaSession" in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({ title: "Ocean Waves" });
@@ -123,6 +148,7 @@ function setupPlayButton() {
       // Snap filter to the current slider position with no glide.
       filterNode.frequency.cancelScheduledValues(audioCtx.currentTime);
       filterNode.frequency.setValueAtTime(freqFromVal(sliderVal), audioCtx.currentTime);
+      settleRampAt(sliderVal);
 
       gainNode.gain.value = 0;
       await audioCtx.resume();
