@@ -249,6 +249,17 @@
       }
     });
 
+    // Disable button until audio is ready
+    playBtn.disabled = true;
+    playBtn.style.opacity = '0.4';
+    audioEl.addEventListener('canplaythrough', () => {
+      playBtn.disabled = false;
+      playBtn.style.opacity = '1';
+    }, { once: true });
+
+    // On iOS, load is deferred until a gesture — trigger it early
+    audioEl.load();
+
     // --- Slider ---
     function getTrackMetrics() {
       const td     = pillThumb.offsetWidth;
