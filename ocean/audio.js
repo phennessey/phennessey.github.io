@@ -99,7 +99,7 @@ function startToneSlew() {
   toneLoop = requestAnimationFrame(toneSlewLoop);
 }
 
-// === Expose this for ui.js ===
+// Expose for ui.js
 window.resetToneSlewTimer = function () {
   lastSlewTime = performance.now();
 };
