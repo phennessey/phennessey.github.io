@@ -14,6 +14,12 @@ const FADE_MS = 200;                          // play/stop master fade
 const FADE_STEP_MS = 16;                      // master fade tick (~60fps)
 const PRE_FADE_DELAY_MS = 500;                // delay before audible start
 
+// Decorrelation offset: odd-labeled files (01, 03, 05 -> the odd-index
+// elements here) start this many seconds into the loop, so no two
+// crossfading neighbors play the same moment of the source and there's no
+// comb-filtering / flange between them.
+const STAGGER_SEC = 1;
+
 let players = [];        // the N <audio> elements, index 0 = brightest
 let masterGain = 0;      // 0..1 overall fade applied on top of the blend
 let isPlaying = false;
@@ -144,6 +150,16 @@ function setupPlayButton() {
       // Start all elements playing (volumes still 0 / set by blend).
       masterGain = 0;
       applyBlend();
+
+      // Decorrelate: offset odd-labeled files (01, 03, 05) into the loop so
+      // crossfading neighbors never play the same moment -> no flange.
+      players.forEach((a, i) => {
+        const label = parseInt(labelForIndex(i), 10);
+        if (label % 2 === 1) {
+          try { a.currentTime = STAGGER_SEC; } catch (e) { /* ignore */ }
+        }
+      });
+
       await Promise.all(players.map((a) => a.play().catch(() => {})));
 
       isPlaying = true;
