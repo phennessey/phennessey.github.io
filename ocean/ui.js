@@ -4,20 +4,17 @@ let isDragging = false;
 let dragRelative = false;
 let dragStartY = 0;
 let dragStartVal = 0;
-
 const pillTrack = document.getElementById("pillTrack");
 const pillFill = document.getElementById("pillFill");
 const pillThumb = document.getElementById("pillThumb");
 const sliderValue = document.getElementById("sliderValue");
 const btnIcon = document.getElementById("btnIcon");
-
 function getTrackMetrics() {
   const td = pillThumb.offsetWidth;
   const inset = (pillTrack.clientWidth - td) / 2;
   const travel = pillTrack.clientHeight - inset * 2 - td;
   return { td, inset, travel };
 }
-
 function updateSliderUI(val) {
   const { td, inset, travel } = getTrackMetrics();
   const thumbTop = inset + val * travel;
@@ -26,13 +23,11 @@ function updateSliderUI(val) {
     Math.max(0, pillTrack.clientHeight - (thumbTop + td / 2) - inset) + "px";
   sliderValue.textContent = Math.round((1 - val) * 100);
 }
-
 function valFromY(clientY) {
   const { td, inset, travel } = getTrackMetrics();
   const y = clientY - pillTrack.getBoundingClientRect().top - inset - td / 2;
   return Math.max(0, Math.min(1, y / travel));
 }
-
 // Apply a tone change to the audio engine, if it's available.
 // immediate=true tracks the finger during a drag; false is the damped settle.
 function applyTone(val, immediate) {
@@ -40,7 +35,6 @@ function applyTone(val, immediate) {
     window.setTone(val, immediate);
   }
 }
-
 function onDragStart(e) {
   isDragging = true;
   const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -56,7 +50,6 @@ function onDragStart(e) {
     applyTone(sliderVal, false);
   }
 }
-
 function onDragMove(e) {
   if (!isDragging) return;
   e.preventDefault();
@@ -71,27 +64,23 @@ function onDragMove(e) {
   // Track the finger with the short time constant.
   applyTone(sliderVal, true);
 }
-
 function onDragEnd() {
   if (!isDragging) return;
   isDragging = false;
   // Settle smoothly to the final position on release.
   applyTone(sliderVal, false);
 }
-
 function updatePlayIcon(playing) {
   if (!btnIcon) return;
   btnIcon.innerHTML = playing
     ? '<rect x="6" y="4" width="4" height="15"/><rect x="14" y="4" width="4" height="15"/>'
     : '<polygon points="5,3 19,12 5,21" transform="translate(1,0)"/>';
 }
-
 function setUnit() {
   const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
   document.documentElement.style.setProperty("--unit", (h * 0.86) / 209 + "px");
   updateSliderUI(sliderVal);
 }
-
 function initSlider() {
   pillTrack.addEventListener("mousedown", onDragStart);
   pillTrack.addEventListener("touchstart", onDragStart, { passive: true });
