@@ -99,6 +99,11 @@ function startToneSlew() {
   toneLoop = requestAnimationFrame(toneSlewLoop);
 }
 
+// === Expose this for ui.js ===
+window.resetToneSlewTimer = function () {
+  lastSlewTime = performance.now();
+};
+
 function setupPlayButton() {
   if (!playBtn || !audioEl) return;
 
