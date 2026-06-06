@@ -52,6 +52,9 @@ body {
 .play-btn:hover {
   background: rgba(255, 255, 255, 0.12);
 }
+.play-btn:focus {
+  outline: none;
+}
 .slider-wrap {
   display: flex;
   flex-direction: column;
