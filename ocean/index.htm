@@ -10,6 +10,7 @@
 </head>
 <body>
   <audio id="audioEl" src="ocean.mp3" loop preload="auto"></audio>
+
   <div class="player-wrap">
     <button class="play-btn" id="playBtn" aria-label="Play">
       <svg id="btnIcon" viewBox="0 0 24 24" fill="currentColor"
@@ -17,6 +18,7 @@
         <polygon points="5,3 19,12 5,21" transform="translate(1,0)"/>
       </svg>
     </button>
+
     <div class="slider-wrap">
       <div class="pill-track" id="pillTrack">
         <div class="pill-fill" id="pillFill"></div>
@@ -27,8 +29,10 @@
       </div>
     </div>
   </div>
-  <script src="audio.js"></script>
+
   <script src="ui.js"></script>
+  <script src="audio.js"></script>
+
   <script>
     document.addEventListener("DOMContentLoaded", () => {
       initSlider();
