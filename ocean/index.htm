@@ -28,5 +28,16 @@
     </div>
   </div>
   <script src="audio.js"></script>
+  <script src="slider.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      initSlider();
+      initAudioEngine({
+        audioEl: document.getElementById("audioEl"),
+        playBtn: document.getElementById("playBtn"),
+        btnIcon: document.getElementById("btnIcon")
+      });
+    });
+  </script>
 </body>
 </html>
