@@ -46,15 +46,16 @@ function applyActive() {
   }
 }
 
-// Switch which single file is playing with NO overlap: fade the current one
-// out, pause it, then start the next and fade it in. Each ramp is SWITCH_MS.
-// Only one element is ever audible (and only one plays at a time), so this
-// stays within iOS's single-element limit.
+// Switch which file is audible. All elements stay PLAYING (muted) the whole
+// time, so none ever goes cold -- switching just fades volume from the old to
+// the new with no overlap (old to 0, then new up). Because every element is
+// already warm, the switch has no decode/buffer delay. Only one is ever
+// audible. NOTE: this keeps all N elements playing at once; if iOS refuses
+// that, it will silence some and we fall back to the slower model.
 let switchTimer = null;
 function selectIndex(idx) {
   if (idx === activeIndex) return;
-  const prev = players[activeIndex];
-  const next = players[idx];
+  const prevIdx = activeIndex;
   activeIndex = idx;
 
   if (!isPlaying) {
@@ -62,34 +63,30 @@ function selectIndex(idx) {
     return;
   }
 
+  const prev = players[prevIdx];
+  const next = players[idx];
+
   if (switchTimer) clearInterval(switchTimer);
 
-  // Pause any leftover element from an interrupted switch.
+  // Make sure everything except the two involved is silent (but still
+  // playing, so it stays warm).
   for (let i = 0; i < players.length; i++) {
-    if (players[i] !== prev && players[i] !== next) {
-      players[i].pause();
-      players[i].volume = 0;
-    }
+    if (i !== prevIdx && i !== idx) players[i].volume = 0;
   }
 
   const steps = Math.max(1, Math.round(SWITCH_MS / FADE_STEP_MS));
-  const startGain = prev.volume;             // fade out from wherever it is
-  let phase = "out";                          // "out" then "in"
+  const startGain = prev.volume;
+  let phase = "out";
   let k = 0;
 
   switchTimer = setInterval(() => {
     k++;
-    const t = k / steps;                      // 0..1 within the current phase
-
+    const t = k / steps;
     if (phase === "out") {
       prev.volume = startGain * (1 - t);
       if (k >= steps) {
-        prev.volume = 0;
-        prev.pause();
-        // Begin fade-in: start next at the old loop position, volume 0.
-        try { next.currentTime = prev.currentTime % (next.duration || 1e9); } catch (e) {}
+        prev.volume = 0;            // muted but STILL PLAYING (stays warm)
         next.volume = 0;
-        next.play().catch(() => {});
         phase = "in";
         k = 0;
       }
@@ -145,16 +142,22 @@ function buildPlayers() {
 }
 
 // iOS requires a user gesture to allow a media element to play. We unlock all
-// of them on the first tap (play+pause), then only one plays at a time after.
+// of them on the first tap by briefly playing each one, but MUTED, so the
+// unlock is silent (otherwise iOS plays an audible cascade of all six).
+// Sequential rather than parallel so they don't pile up audibly.
 async function unlockAll() {
   if (isUnlocked) return;
-  await Promise.all(players.map(async (a) => {
+  for (const a of players) {
     try {
+      a.muted = true;
       await a.play();
       a.pause();
       a.currentTime = 0;
-    } catch (e) { /* ignore */ }
-  }));
+      a.muted = false;
+    } catch (e) {
+      a.muted = false;
+    }
+  }
   isUnlocked = true;
 }
 
@@ -188,8 +191,13 @@ function setupPlayButton() {
       await unlockAll();
 
       masterGain = 0;
+      // Start ALL elements playing at volume 0 so every file stays warm and
+      // switching has no cold-start delay. Only the active one will be faded
+      // up. (If iOS refuses simultaneous playback, the inactive ones simply
+      // won't sound -- but the active one still plays.)
+      players.forEach((a) => { a.volume = 0; });
+      await Promise.all(players.map((a) => a.play().catch(() => {})));
       applyActive();
-      players[activeIndex].play().catch(() => {});
 
       isPlaying = true;
       if (typeof window.updatePlayIcon === "function") window.updatePlayIcon(true);
