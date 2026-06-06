@@ -79,18 +79,18 @@
     const FADE_SEC = FADE_MS / 1000;
     const PRE_FADE_DELAY_MS = 500;
 
-    // === Spring-loaded / rate-limited tone settings ===
-    const MAX_SPEED = 0.65;                    // max change per second (0.65 = 65% of range per second)
-    const TONE_UPDATE_INTERVAL = 140;          // only touch AudioParam every 140ms (~7 times/sec)
-    const TONE_RAMP_MS = 240;                  // long smooth ramps
+    // === Very strong inertia settings ===
+    const MAX_SPEED = 1.0;                    // Max 1.0 = full range (0→1) takes 1 second
+    const TONE_UPDATE_INTERVAL = 120;         // Update filter ~8 times per second max
+    const TONE_RAMP_MS = 280;                 // Long smooth ramps
 
     let audioCtx, filterNode, gainNode;
     let isPlaying = false;
     let isInitialized = false;
 
-    let sliderVal = 0;          // visual slider position
-    let targetVal = 0;          // where the slider currently is
-    let currentVal = 0;         // actual damped value (always lags)
+    let sliderVal = 0;          // visual position
+    let targetVal = 0;          // where slider currently is
+    let currentVal = 0;         // rate-limited value (this is what the filter follows)
     let lastAppliedVal = -1;
     let lastUpdateTime = 0;
 
@@ -129,21 +129,21 @@
       if (!filterNode || !audioCtx) return;
 
       const now = performance.now();
-      const dt = (now - lastUpdateTime) / 1000; // seconds since last frame
+      const dt = (now - lastUpdateTime) / 1000;
 
-      // Rate-limited movement toward target (max speed)
+      // === Strict rate limiting (max speed) ===
       const diff = targetVal - currentVal;
-      if (Math.abs(diff) > 0.0001) {
-        const maxMove = MAX_SPEED * dt;
-        const move = Math.sign(diff) * Math.min(Math.abs(diff), maxMove);
+      if (Math.abs(diff) > 0.0005) {
+        const maxMoveThisFrame = MAX_SPEED * dt;
+        const move = Math.sign(diff) * Math.min(Math.abs(diff), maxMoveThisFrame);
         currentVal += move;
       } else {
         currentVal = targetVal;
       }
 
-      // Only update the actual filter at a safe low rate with long ramps
+      // Only touch the AudioParam at a safe low rate with long ramps
       if (now - lastUpdateTime > TONE_UPDATE_INTERVAL &&
-          Math.abs(currentVal - lastAppliedVal) > 0.004) {
+          Math.abs(currentVal - lastAppliedVal) > 0.003) {
 
         const curved = Math.pow(currentVal, 1 / EXPO);
         const targetFreq = MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
@@ -229,7 +229,7 @@
     }, { once: true });
     audioEl.load();
 
-    // === Slider (sets target instantly, tone follows with rate limit) ===
+    // === Slider ===
     function getTrackMetrics() {
       const td = pillThumb.offsetWidth;
       const inset = (pillTrack.clientWidth - td) / 2;
