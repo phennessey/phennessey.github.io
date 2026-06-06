@@ -16,6 +16,7 @@ const FILE_PATTERN = (label) => `ocean_${label}.m4a`;
 const FADE_MS = 200;                          // play/stop master fade
 const FADE_STEP_MS = 16;                      // master fade tick (~60fps)
 const PRE_FADE_DELAY_MS = 500;                // delay before audible start
+const SWITCH_MS = 100;                        // fade-out/fade-in ramp when switching files
 
 let players = [];        // the N <audio> elements, index 0 = brightest
 let activeIndex = 0;     // which file is currently selected
@@ -45,23 +46,63 @@ function applyActive() {
   }
 }
 
-// Switch which single file is playing. The new one is started at the old
-// one's loop position so the ambient texture doesn't jump, the old one is
-// paused. Only relevant while playing.
+// Switch which single file is playing with NO overlap: fade the current one
+// out, pause it, then start the next and fade it in. Each ramp is SWITCH_MS.
+// Only one element is ever audible (and only one plays at a time), so this
+// stays within iOS's single-element limit.
+let switchTimer = null;
 function selectIndex(idx) {
   if (idx === activeIndex) return;
   const prev = players[activeIndex];
   const next = players[idx];
   activeIndex = idx;
 
-  if (isPlaying) {
-    try { next.currentTime = prev.currentTime % (next.duration || 1e9); } catch (e) {}
-    next.play().catch(() => {});
+  if (!isPlaying) {
     applyActive();
-    prev.pause();
-  } else {
-    applyActive();
+    return;
   }
+
+  if (switchTimer) clearInterval(switchTimer);
+
+  // Pause any leftover element from an interrupted switch.
+  for (let i = 0; i < players.length; i++) {
+    if (players[i] !== prev && players[i] !== next) {
+      players[i].pause();
+      players[i].volume = 0;
+    }
+  }
+
+  const steps = Math.max(1, Math.round(SWITCH_MS / FADE_STEP_MS));
+  const startGain = prev.volume;             // fade out from wherever it is
+  let phase = "out";                          // "out" then "in"
+  let k = 0;
+
+  switchTimer = setInterval(() => {
+    k++;
+    const t = k / steps;                      // 0..1 within the current phase
+
+    if (phase === "out") {
+      prev.volume = startGain * (1 - t);
+      if (k >= steps) {
+        prev.volume = 0;
+        prev.pause();
+        // Begin fade-in: start next at the old loop position, volume 0.
+        try { next.currentTime = prev.currentTime % (next.duration || 1e9); } catch (e) {}
+        next.volume = 0;
+        next.play().catch(() => {});
+        phase = "in";
+        k = 0;
+      }
+    } else {
+      next.volume = masterGain * t;
+      if (k >= steps) {
+        next.volume = masterGain;
+        clearInterval(switchTimer);
+        switchTimer = null;
+        applyActive();
+      }
+    }
+  }, FADE_STEP_MS);
 }
 
 // ---- master fade (play/stop) -------------------------------------------
