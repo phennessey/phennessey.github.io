@@ -24,13 +24,19 @@ let isInitialized = false;
 let audioEl = null;
 let playBtn = null;
 
-// The slider value the tone was last aimed at, used to measure how far a
-// new move travels so the ramp duration can scale with distance.
-let lastToneVal = 0;
-
 function freqFromVal(val) {
   const curved = Math.pow(val, 1 / EXPO);
   return MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
+}
+
+// Inverse of freqFromVal: recover the slider value (0..1) from a frequency.
+// Used to measure how far the tone must actually travel from where it is
+// right now, so an interrupted slew is re-scaled to the real remaining
+// distance rather than the distance from the previous target.
+function valFromFreq(freq) {
+  const f = Math.min(MAX_CUTOFF, Math.max(MIN_CUTOFF, freq));
+  const curved = Math.log(f / MAX_CUTOFF) / Math.log(MIN_CUTOFF / MAX_CUTOFF);
+  return Math.pow(curved, EXPO);
 }
 
 // Single entry point for tone changes. immediate=true tracks the slider
@@ -48,14 +54,16 @@ window.setTone = function (val, immediate) {
   if (immediate) {
     dur = DRAG_SEC;
   } else {
-    const dist = Math.abs(val - lastToneVal);
+    // Measure distance from where the tone ACTUALLY is right now (not the
+    // previous target), so interrupting a slew mid-flight redirects at the
+    // same constant rate instead of mis-scaling the duration.
+    const dist = Math.abs(val - valFromFreq(cur));
     dur = Math.max(dist * SWEEP_SECONDS, 0.001);
   }
 
   filterNode.frequency.cancelScheduledValues(now);
   filterNode.frequency.setValueAtTime(cur, now); // anchor the ramp start
   filterNode.frequency.linearRampToValueAtTime(freq, now + dur);
-  lastToneVal = val;
 };
 
 function initAudio() {
@@ -78,7 +86,6 @@ function initAudio() {
 
   // Initialize the filter to the slider's current position with no glide.
   filterNode.frequency.setValueAtTime(freqFromVal(sliderVal), audioCtx.currentTime);
-  lastToneVal = sliderVal;
 
   if ("mediaSession" in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({ title: "Ocean Waves" });
@@ -116,7 +123,6 @@ function setupPlayButton() {
       // Snap filter to the current slider position with no glide.
       filterNode.frequency.cancelScheduledValues(audioCtx.currentTime);
       filterNode.frequency.setValueAtTime(freqFromVal(sliderVal), audioCtx.currentTime);
-      lastToneVal = sliderVal;
 
       gainNode.gain.value = 0;
       await audioCtx.resume();
