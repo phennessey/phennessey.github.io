@@ -79,26 +79,23 @@
     const FADE_SEC = FADE_MS / 1000;
     const PRE_FADE_DELAY_MS = 500;
 
-    // Very conservative spring-loaded tone settings
-    const TONE_LERP = 0.09;                    // spring strength (lower = slower/more damped)
-    const TONE_MIN_UPDATE_INTERVAL = 130;      // minimum 130ms between AudioParam touches (~7-8/sec max)
-    const TONE_RAMP_DURATION = 220;            // long smooth ramps
+    // === Spring-loaded / rate-limited tone settings ===
+    const MAX_SPEED = 0.65;                    // max change per second (0.65 = 65% of range per second)
+    const TONE_UPDATE_INTERVAL = 140;          // only touch AudioParam every 140ms (~7 times/sec)
+    const TONE_RAMP_MS = 240;                  // long smooth ramps
 
     let audioCtx, filterNode, gainNode;
     let isPlaying = false;
     let isInitialized = false;
 
-    let sliderVal = 0;          // visual position
-    let targetVal = 0;          // where user wants it
-    let currentVal = 0;         // eased "spring" value
+    let sliderVal = 0;          // visual slider position
+    let targetVal = 0;          // where the slider currently is
+    let currentVal = 0;         // actual damped value (always lags)
     let lastAppliedVal = -1;
     let lastUpdateTime = 0;
-    let toneLoop = null;
 
+    let toneLoop = null;
     let isDragging = false;
-    let dragRelative = false;
-    let dragStartY = 0;
-    let dragStartVal = 0;
 
     const audioEl = document.getElementById('audioEl');
     const playBtn = document.getElementById('playBtn');
@@ -128,44 +125,47 @@
       isInitialized = true;
     }
 
-    function toneSpringLoop() {
+    function toneSlewLoop() {
       if (!filterNode || !audioCtx) return;
 
-      // Spring easing
+      const now = performance.now();
+      const dt = (now - lastUpdateTime) / 1000; // seconds since last frame
+
+      // Rate-limited movement toward target (max speed)
       const diff = targetVal - currentVal;
-      if (Math.abs(diff) > 0.0005) {
-        currentVal += diff * TONE_LERP;
+      if (Math.abs(diff) > 0.0001) {
+        const maxMove = MAX_SPEED * dt;
+        const move = Math.sign(diff) * Math.min(Math.abs(diff), maxMove);
+        currentVal += move;
       } else {
         currentVal = targetVal;
       }
 
-      const now = performance.now();
-
-      // Only touch the audio engine at a safe low rate
-      if (now - lastUpdateTime > TONE_MIN_UPDATE_INTERVAL &&
-          Math.abs(currentVal - lastAppliedVal) > 0.003) {
+      // Only update the actual filter at a safe low rate with long ramps
+      if (now - lastUpdateTime > TONE_UPDATE_INTERVAL &&
+          Math.abs(currentVal - lastAppliedVal) > 0.004) {
 
         const curved = Math.pow(currentVal, 1 / EXPO);
         const targetFreq = MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
 
-        const audioTime = audioCtx.currentTime;
-        filterNode.frequency.cancelScheduledValues(audioTime);
+        const audioNow = audioCtx.currentTime;
+        filterNode.frequency.cancelScheduledValues(audioNow);
         filterNode.frequency.linearRampToValueAtTime(
           targetFreq,
-          audioTime + (TONE_RAMP_DURATION / 1000)
+          audioNow + (TONE_RAMP_MS / 1000)
         );
 
         lastAppliedVal = currentVal;
         lastUpdateTime = now;
       }
 
-      toneLoop = requestAnimationFrame(toneSpringLoop);
+      toneLoop = requestAnimationFrame(toneSlewLoop);
     }
 
-    function startToneSpring() {
+    function startToneSlew() {
       if (toneLoop) cancelAnimationFrame(toneLoop);
       lastUpdateTime = performance.now();
-      toneLoop = requestAnimationFrame(toneSpringLoop);
+      toneLoop = requestAnimationFrame(toneSlewLoop);
     }
 
     function setIcon(playing) {
@@ -194,7 +194,6 @@
         isPlaying = false;
         setIcon(false);
       } else {
-        // Initialize spring at current slider position
         targetVal = sliderVal;
         currentVal = sliderVal;
         lastAppliedVal = sliderVal;
@@ -217,7 +216,7 @@
 
         isPlaying = true;
         setIcon(true);
-        startToneSpring();
+        startToneSlew();
       }
     });
 
@@ -230,7 +229,7 @@
     }, { once: true });
     audioEl.load();
 
-    // === Slider (only sets target — tone follows via spring) ===
+    // === Slider (sets target instantly, tone follows with rate limit) ===
     function getTrackMetrics() {
       const td = pillThumb.offsetWidth;
       const inset = (pillTrack.clientWidth - td) / 2;
