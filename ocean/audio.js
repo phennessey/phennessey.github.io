@@ -7,12 +7,13 @@ const FADE_MS = 200;
 const FADE_SEC = FADE_MS / 1000;
 const PRE_FADE_DELAY_MS = 500;
 
-// Time constants for setTargetAtTime (seconds). One time constant reaches
-// ~63% of the way to target; the param is effectively settled after ~4 of
-// them. DRAG is short so the filter tracks the finger; RELEASE is the
-// damped settle used on tap-jump and on release.
-const TONE_TC_DRAG = 0.02;
-const TONE_TC_RELEASE = 0.25;
+// Seconds for a FULL 0->1 (or 1->0) tone sweep on a tap-jump or release.
+// The ramp duration scales with the slider distance moved, so a half sweep
+// takes half this, and a full sweep is guaranteed to take this long (never
+// instant). DRAG_SEC is a short ramp used while the finger is moving so the
+// filter tracks responsively rather than gliding.
+const SWEEP_SECONDS = 1.0;
+const DRAG_SEC = 0.03;
 
 let audioCtx = null;
 let filterNode = null;
@@ -23,21 +24,38 @@ let isInitialized = false;
 let audioEl = null;
 let playBtn = null;
 
+// The slider value the tone was last aimed at, used to measure how far a
+// new move travels so the ramp duration can scale with distance.
+let lastToneVal = 0;
+
 function freqFromVal(val) {
   const curved = Math.pow(val, 1 / EXPO);
   return MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
 }
 
 // Single entry point for tone changes. immediate=true tracks the slider
-// during an active drag (short time constant); immediate=false applies the
-// damped settle on tap-jump and on release.
+// during an active drag with a short fixed ramp (responsive finger-follow).
+// immediate=false (tap-jump and release) uses a linear ramp whose duration
+// scales with the distance moved, so a full 0<->1 sweep always takes
+// SWEEP_SECONDS and can never glide instantly.
 window.setTone = function (val, immediate) {
   if (!filterNode || !audioCtx) return;
   const freq = freqFromVal(val);
   const now = audioCtx.currentTime;
-  const tc = immediate ? TONE_TC_DRAG : TONE_TC_RELEASE;
+  const cur = filterNode.frequency.value;
+
+  let dur;
+  if (immediate) {
+    dur = DRAG_SEC;
+  } else {
+    const dist = Math.abs(val - lastToneVal);
+    dur = Math.max(dist * SWEEP_SECONDS, 0.001);
+  }
+
   filterNode.frequency.cancelScheduledValues(now);
-  filterNode.frequency.setTargetAtTime(freq, now, tc);
+  filterNode.frequency.setValueAtTime(cur, now); // anchor the ramp start
+  filterNode.frequency.linearRampToValueAtTime(freq, now + dur);
+  lastToneVal = val;
 };
 
 function initAudio() {
@@ -60,6 +78,7 @@ function initAudio() {
 
   // Initialize the filter to the slider's current position with no glide.
   filterNode.frequency.setValueAtTime(freqFromVal(sliderVal), audioCtx.currentTime);
+  lastToneVal = sliderVal;
 
   if ("mediaSession" in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({ title: "Ocean Waves" });
@@ -97,6 +116,7 @@ function setupPlayButton() {
       // Snap filter to the current slider position with no glide.
       filterNode.frequency.cancelScheduledValues(audioCtx.currentTime);
       filterNode.frequency.setValueAtTime(freqFromVal(sliderVal), audioCtx.currentTime);
+      lastToneVal = sliderVal;
 
       gainNode.gain.value = 0;
       await audioCtx.resume();
