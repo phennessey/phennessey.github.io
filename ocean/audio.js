@@ -77,6 +77,14 @@ function toneSlewLoop() {
     filterNode.frequency.linearRampToValueAtTime(targetFreq, audioNow + TONE_RAMP_MS / 1000);
     lastAppliedVal = currentVal;
     lastUpdateTime = now;
+
+    console.log(
+      "[tone] curr=" + currentVal.toFixed(4) +
+      " target=" + targetVal.toFixed(4) +
+      " targetFreq=" + targetFreq.toFixed(1) +
+      " actualFreq=" + filterNode.frequency.value.toFixed(1) +
+      " reached=" + reachedTarget
+    );
   }
 
   lastSlewTime = now;
