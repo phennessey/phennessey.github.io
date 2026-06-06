@@ -65,9 +65,10 @@ function toneSlewLoop() {
     currentVal = targetVal;
   }
 
+  const reachedTarget = currentVal === targetVal;
   if (
     now - lastUpdateTime > TONE_UPDATE_INTERVAL &&
-    Math.abs(currentVal - lastAppliedVal) > 0.003
+    (Math.abs(currentVal - lastAppliedVal) > 0.003 || reachedTarget)
   ) {
     const curved = Math.pow(currentVal, 1 / EXPO);
     const targetFreq = MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
