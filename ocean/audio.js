@@ -7,9 +7,12 @@ const FADE_MS = 200;
 const FADE_SEC = FADE_MS / 1000;
 const PRE_FADE_DELAY_MS = 500;
 
-const MAX_SPEED = 1.0;
-const TONE_UPDATE_INTERVAL = 10;
-const TONE_RAMP_MS = 160;
+// Time constants for setTargetAtTime (seconds). One time constant reaches
+// ~63% of the way to target; the param is effectively settled after ~4 of
+// them. DRAG is short so the filter tracks the finger; RELEASE is the
+// damped settle used on tap-jump and on release.
+const TONE_TC_DRAG = 0.02;
+const TONE_TC_RELEASE = 0.25;
 
 let audioCtx = null;
 let filterNode = null;
@@ -17,13 +20,25 @@ let gainNode = null;
 let isPlaying = false;
 let isInitialized = false;
 
-let lastAppliedVal = -1;
-let lastSlewTime = performance.now();
-let lastUpdateTime = 0;
-let toneLoop = null;
-
 let audioEl = null;
 let playBtn = null;
+
+function freqFromVal(val) {
+  const curved = Math.pow(val, 1 / EXPO);
+  return MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
+}
+
+// Single entry point for tone changes. immediate=true tracks the slider
+// during an active drag (short time constant); immediate=false applies the
+// damped settle on tap-jump and on release.
+window.setTone = function (val, immediate) {
+  if (!filterNode || !audioCtx) return;
+  const freq = freqFromVal(val);
+  const now = audioCtx.currentTime;
+  const tc = immediate ? TONE_TC_DRAG : TONE_TC_RELEASE;
+  filterNode.frequency.cancelScheduledValues(now);
+  filterNode.frequency.setTargetAtTime(freq, now, tc);
+};
 
 function initAudio() {
   if (isInitialized) return;
@@ -43,64 +58,15 @@ function initAudio() {
     .connect(gainNode)
     .connect(audioCtx.destination);
 
+  // Initialize the filter to the slider's current position with no glide.
+  filterNode.frequency.setValueAtTime(freqFromVal(sliderVal), audioCtx.currentTime);
+
   if ("mediaSession" in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({ title: "Ocean Waves" });
   }
 
   isInitialized = true;
 }
-
-function toneSlewLoop() {
-  if (!filterNode || !audioCtx) return;
-
-  const now = performance.now();
-  let dt = (now - lastSlewTime) / 1000;
-  if (dt > 0.5) dt = 0.016;
-
-  const diff = targetVal - currentVal;
-  if (Math.abs(diff) > 0.0008) {
-    const maxMove = MAX_SPEED * dt;
-    currentVal += Math.sign(diff) * Math.min(Math.abs(diff), maxMove);
-  } else {
-    currentVal = targetVal;
-  }
-
-  const reachedTarget = currentVal === targetVal;
-  if (
-    now - lastUpdateTime > TONE_UPDATE_INTERVAL &&
-    (Math.abs(currentVal - lastAppliedVal) > 0.003 || reachedTarget)
-  ) {
-    const curved = Math.pow(currentVal, 1 / EXPO);
-    const targetFreq = MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
-    const audioNow = audioCtx.currentTime;
-    filterNode.frequency.cancelScheduledValues(audioNow);
-    filterNode.frequency.linearRampToValueAtTime(targetFreq, audioNow + TONE_RAMP_MS / 1000);
-    lastAppliedVal = currentVal;
-    lastUpdateTime = now;
-
-    console.log(
-      "[tone] curr=" + currentVal.toFixed(4) +
-      " target=" + targetVal.toFixed(4) +
-      " targetFreq=" + targetFreq.toFixed(1) +
-      " actualFreq=" + filterNode.frequency.value.toFixed(1) +
-      " reached=" + reachedTarget
-    );
-  }
-
-  lastSlewTime = now;
-  toneLoop = requestAnimationFrame(toneSlewLoop);
-}
-
-function startToneSlew() {
-  if (toneLoop) cancelAnimationFrame(toneLoop);
-  lastSlewTime = performance.now();
-  lastUpdateTime = performance.now();
-  toneLoop = requestAnimationFrame(toneSlewLoop);
-}
-
-window.resetToneSlewTimer = function () {
-  lastSlewTime = performance.now();
-};
 
 function setupPlayButton() {
   if (!playBtn || !audioEl) return;
@@ -128,11 +94,9 @@ function setupPlayButton() {
         window.updatePlayIcon(false);
       }
     } else {
-      // Set filter to current slider position immediately
-      const curved = Math.pow(currentVal, 1 / EXPO);
-      const freq = MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
-      filterNode.frequency.setValueAtTime(freq, audioCtx.currentTime);
-      lastAppliedVal = currentVal;
+      // Snap filter to the current slider position with no glide.
+      filterNode.frequency.cancelScheduledValues(audioCtx.currentTime);
+      filterNode.frequency.setValueAtTime(freqFromVal(sliderVal), audioCtx.currentTime);
 
       gainNode.gain.value = 0;
       await audioCtx.resume();
@@ -144,14 +108,13 @@ function setupPlayButton() {
         window.updatePlayIcon(true);
       }
 
-      // Start gain ramp and tone slew together after pre-fade delay
+      // Fade gain in after the pre-fade delay.
       setTimeout(() => {
         if (!gainNode || !audioCtx || !isPlaying) return;
         const now = audioCtx.currentTime;
         gainNode.gain.cancelScheduledValues(now);
         gainNode.gain.setValueAtTime(0, now);
         gainNode.gain.linearRampToValueAtTime(1, now + FADE_SEC);
-        startToneSlew();
       }, PRE_FADE_DELAY_MS);
     }
   });
