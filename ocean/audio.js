@@ -1,4 +1,4 @@
-// ==================== AUDIO ENGINE (NO UI) ====================
+// ==================== AUDIO ENGINE ====================
 const MIN_CUTOFF = 200;
 const MAX_CUTOFF = 20000;
 const EXPO = 2;
@@ -20,7 +20,7 @@ let isInitialized = false;
 let targetVal = 0;
 let currentVal = 0;
 let lastAppliedVal = -1;
-let lastSlewTime = 0;
+let lastSlewTime = performance.now();
 let lastUpdateTime = 0;
 let toneLoop = null;
 
@@ -61,6 +61,7 @@ function toneSlewLoop() {
   if (dt > 0.5) dt = 0.016;
 
   const diff = targetVal - currentVal;
+
   if (Math.abs(diff) > 0.0008) {
     const maxMove = MAX_SPEED * dt;
     const move = Math.sign(diff) * Math.min(Math.abs(diff), maxMove);
@@ -120,7 +121,6 @@ function setupPlayButton() {
 
       isPlaying = false;
 
-      // Tell UI to update icon (if available)
       if (typeof window.updatePlayIcon === "function") {
         window.updatePlayIcon(false);
       }
