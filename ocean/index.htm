@@ -249,26 +249,30 @@
       
         audioEl.play().catch(err => console.warn('play() failed:', err));
       
-        // Best timing: ramp starts exactly when audio really begins
-        audioEl.addEventListener('playing', () => {
-          if (!gainNode || !audioCtx) return;
+        // Wait until audio is *actually* flowing before starting the fade
+        let fadeStarted = false;
+      
+        const startFade = () => {
+          if (fadeStarted || !gainNode || !audioCtx) return;
+          fadeStarted = true;
+          audioEl.removeEventListener('timeupdate', onTimeUpdate);
+      
           const now = audioCtx.currentTime;
           gainNode.gain.cancelScheduledValues(now);
           gainNode.gain.setValueAtTime(0, now);
           gainNode.gain.linearRampToValueAtTime(1, now + FADE_SEC);
-        }, { once: true });
+        };
       
-        // iOS safety net — forces a smooth ramp if the event is delayed
+        const onTimeUpdate = () => {
+          if (audioEl.currentTime > 0.005) startFade();
+        };
+      
+        audioEl.addEventListener('timeupdate', onTimeUpdate);
+      
+        // Safety net
         setTimeout(() => {
-          if (!gainNode || !audioCtx || !isPlaying) return;
-          const currentGain = gainNode.gain.value;
-          if (currentGain < 0.6) {
-            const now = audioCtx.currentTime;
-            gainNode.gain.cancelScheduledValues(now);
-            gainNode.gain.setValueAtTime(currentGain, now);
-            gainNode.gain.linearRampToValueAtTime(1, now + FADE_SEC);
-          }
-        }, 90);
+          if (!fadeStarted) startFade();
+        }, 250);
       
         isPlaying = true;
         setIcon(true);
