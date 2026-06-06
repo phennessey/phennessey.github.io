@@ -36,6 +36,12 @@ function valFromY(clientY) {
   return Math.max(0, Math.min(1, y / travel));
 }
 
+function resetToneSlewTimer() {
+  if (typeof window.resetToneSlewTimer === "function") {
+    window.resetToneSlewTimer();
+  }
+}
+
 function onDragStart(e) {
   isDragging = true;
   const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -50,6 +56,7 @@ function onDragStart(e) {
     sliderVal = valFromY(clientY);
     targetVal = sliderVal;
     updateSliderUI(sliderVal);
+    resetToneSlewTimer();
   }
 }
 
@@ -66,6 +73,7 @@ function onDragMove(e) {
   }
   targetVal = sliderVal;
   updateSliderUI(sliderVal);
+  resetToneSlewTimer();
 }
 
 function onDragEnd() {
@@ -101,6 +109,8 @@ function initSlider() {
   setUnit();
   updateSliderUI(0);
 
-  // Expose icon updater for audio engine
   window.updatePlayIcon = updatePlayIcon;
+  window.resetToneSlewTimer = function () {
+    // This will be overridden by audio.js
+  };
 }
