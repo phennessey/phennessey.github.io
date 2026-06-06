@@ -114,18 +114,28 @@ function setupPlayButton() {
 
   buildPlayers();
 
-  // Enable the button once enough of the files can play through.
-  let readyCount = 0;
+  // Enable the button as soon as we can plausibly start. We only need one
+  // element ready to begin (the rest keep buffering), and some browsers
+  // don't fire canplaythrough reliably for every element, so we also listen
+  // for canplay and add a timeout safety net so the button is never stuck.
+  let enabled = false;
+  function enable() {
+    if (enabled) return;
+    enabled = true;
+    playBtn.disabled = false;
+    playBtn.style.opacity = "1";
+  }
+
   players.forEach((a) => {
-    a.addEventListener("canplaythrough", () => {
-      readyCount++;
-      if (readyCount >= players.length) {
-        playBtn.disabled = false;
-        playBtn.style.opacity = "1";
-      }
-    }, { once: true });
+    a.addEventListener("canplaythrough", enable, { once: true });
+    a.addEventListener("canplay", enable, { once: true });
+    a.addEventListener("loadeddata", enable, { once: true });
     a.load();
   });
+
+  // Safety net: enable after a short wait regardless, so a slow or missing
+  // event can't leave the button permanently disabled.
+  setTimeout(enable, 3000);
 
   playBtn.addEventListener("click", async () => {
     if (!isPlaying) {
