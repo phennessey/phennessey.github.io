@@ -100,7 +100,6 @@
       height: var(--thumb-d);
       border-radius: 50%;
       background: #667887;
-      cursor: pointer;
       pointer-events: none;
       display: flex;
       flex-direction: column;
@@ -123,7 +122,6 @@
     .slider-value {
       font-size: var(--font-val);
       font-weight: 700;
-      letter-spacing: 0;
       color: rgba(13,27,42,0.6);
       line-height: 1;
       text-align: center;
@@ -136,13 +134,12 @@
   <audio id="audioEl" src="ocean.mp3" loop preload="auto"></audio>
 
   <div class="player-wrap">
-    <button class="play-btn" id="playBtn" aria-label="Play ocean audio">
+    <button class="play-btn" id="playBtn" aria-label="Play">
       <svg id="btnIcon" viewBox="0 0 24 24" fill="currentColor"
            style="width:var(--icon-sz);height:var(--icon-sz)">
         <polygon points="5,3 19,12 5,21" transform="translate(1,0)"/>
       </svg>
     </button>
-
     <div class="slider-wrap">
       <div class="pill-track" id="pillTrack">
         <div class="pill-fill" id="pillFill"></div>
@@ -155,50 +152,46 @@
   </div>
 
   <script>
-    const MIN_CUTOFF  = 200;
-    const MAX_CUTOFF  = 20000;
-    const EXPO        = 2;
-    const FILTER_Q    = 0.1;
-    const FADE_MS     = 100;                    // fade duration in ms
-    const FADE_TC     = FADE_MS / 6000;         // derived time constant for setTargetAtTime
+    // --- Tuning ---
+    const MIN_CUTOFF = 200;
+    const MAX_CUTOFF = 20000;
+    const EXPO       = 2;
+    const FILTER_Q   = 0.1;
+    const FADE_MS    = 100;
+    const FADE_TC    = FADE_MS / 6000;
 
-    let audioCtx, sourceNode, filterNode, gainNode;
+    // --- State ---
+    let audioCtx, filterNode, gainNode;
     let isPlaying    = false;
     let isInitialized = false;
     let sliderVal    = 0;
+    let fadePending  = null;
     let isDragging   = false;
     let dragRelative = false;
     let dragStartY   = 0;
     let dragStartVal = 0;
 
+    // --- Elements ---
+    const audioEl     = document.getElementById('audioEl');
     const playBtn     = document.getElementById('playBtn');
     const btnIcon     = document.getElementById('btnIcon');
-    const audioEl     = document.getElementById('audioEl');
     const pillTrack   = document.getElementById('pillTrack');
     const pillFill    = document.getElementById('pillFill');
     const pillThumb   = document.getElementById('pillThumb');
     const sliderValue = document.getElementById('sliderValue');
 
-    function setIcon(playing) {
-      btnIcon.innerHTML = playing
-        ? '<rect x="6" y="4" width="4" height="15"/><rect x="14" y="4" width="4" height="15"/>'
-        : '<polygon points="5,3 19,12 5,21" transform="translate(1,0)"/>';
-      playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
-    }
-
+    // --- Audio ---
     function initAudio() {
       audioCtx   = new (window.AudioContext || window.webkitAudioContext)();
-      sourceNode = audioCtx.createMediaElementSource(audioEl);
       filterNode = audioCtx.createBiquadFilter();
       filterNode.type = 'lowpass';
       filterNode.Q.value = FILTER_Q;
-      filterNode.frequency.value = MAX_CUTOFF;
       gainNode   = audioCtx.createGain();
-      gainNode.gain.value = 1;
-      sourceNode.connect(filterNode);
-      filterNode.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-      applyFilter(sliderVal, true);
+      gainNode.gain.value = 0;
+      audioCtx.createMediaElementSource(audioEl)
+        .connect(filterNode)
+        .connect(gainNode)
+        .connect(audioCtx.destination);
       if ('mediaSession' in navigator)
         navigator.mediaSession.metadata = new MediaMetadata({ title: 'Ocean Waves' });
       isInitialized = true;
@@ -207,16 +200,19 @@
     function applyFilter(val) {
       if (!filterNode) return;
       const curved = Math.pow(val, 1 / EXPO);
-      const cutoff = MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
-      filterNode.frequency.value = cutoff;
+      filterNode.frequency.value = MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
     }
-
-    let fadePending = null;
 
     function cancelFade() {
       if (fadePending) { clearTimeout(fadePending); fadePending = null; }
       gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
       gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
+    }
+
+    function setIcon(playing) {
+      btnIcon.innerHTML = playing
+        ? '<rect x="6" y="4" width="4" height="15"/><rect x="14" y="4" width="4" height="15"/>'
+        : '<polygon points="5,3 19,12 5,21" transform="translate(1,0)"/>';
     }
 
     playBtn.addEventListener('click', async () => {
@@ -227,8 +223,8 @@
 
       if (isPlaying) {
         cancelFade();
-        const now = audioCtx.currentTime;
-        gainNode.gain.setTargetAtTime(0, now, FADE_TC);
+        gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
+        gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, FADE_TC);
         fadePending = setTimeout(() => {
           fadePending = null;
           gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
@@ -240,56 +236,51 @@
       } else {
         cancelFade();
         applyFilter(sliderVal);
+        gainNode.gain.setValueAtTime(0, 0);
+        audioEl.addEventListener('playing', () => {
+          const now = audioCtx.currentTime;
+          gainNode.gain.setValueAtTime(0, now);
+          gainNode.gain.setTargetAtTime(1, now, FADE_TC);
+        }, { once: true });
         await audioCtx.resume();
         audioEl.play();
-        const now = audioCtx.currentTime;
-        gainNode.gain.setValueAtTime(0, now);
-        gainNode.gain.setTargetAtTime(1, now, FADE_TC);
         isPlaying = true;
         setIcon(true);
       }
     });
 
-    function thumbD() { return pillThumb.offsetWidth; }
+    // --- Slider ---
+    function getTrackMetrics() {
+      const td     = pillThumb.offsetWidth;
+      const inset  = (pillTrack.clientWidth - td) / 2;
+      const travel = pillTrack.clientHeight - inset * 2 - td;
+      return { td, inset, travel };
+    }
 
     function updateSliderUI(val) {
-      const trackH = pillTrack.clientHeight;
-      const td = thumbD();
-      const inset = (pillTrack.clientWidth - td) / 2;
-      const travel = trackH - inset * 2 - td;
+      const { td, inset, travel } = getTrackMetrics();
       const thumbTop = inset + val * travel;
       pillThumb.style.top = thumbTop + 'px';
-      const fillHeight = trackH - (thumbTop + td / 2) - inset;
-      pillFill.style.height = Math.max(0, fillHeight) + 'px';
+      pillFill.style.height = Math.max(0, pillTrack.clientHeight - (thumbTop + td / 2) - inset) + 'px';
       sliderValue.textContent = Math.round((1 - val) * 100);
     }
 
     function valFromY(clientY) {
-      const rect = pillTrack.getBoundingClientRect();
-      const td = thumbD();
-      const inset = (pillTrack.clientWidth - td) / 2;
-      const travel = pillTrack.clientHeight - inset * 2 - td;
-      const y = (clientY - rect.top) - inset - td / 2;
+      const { td, inset, travel } = getTrackMetrics();
+      const y = (clientY - pillTrack.getBoundingClientRect().top) - inset - td / 2;
       return Math.max(0, Math.min(1, y / travel));
     }
 
     function onDragStart(e) {
       isDragging = true;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      const rect = pillTrack.getBoundingClientRect();
-      const td = thumbD();
+      const clientY  = e.touches ? e.touches[0].clientY : e.clientY;
       const thumbTop = parseFloat(pillThumb.style.top) || 0;
-      const yInPill = clientY - rect.top;
-
-      if (yInPill >= thumbTop && yInPill <= thumbTop + td) {
-        dragRelative = true;
-        dragStartY = clientY;
-        dragStartVal = sliderVal;
-      } else {
-        dragRelative = false;
+      const yInPill  = clientY - pillTrack.getBoundingClientRect().top;
+      dragRelative   = yInPill >= thumbTop && yInPill <= thumbTop + pillThumb.offsetWidth;
+      dragStartY     = clientY;
+      dragStartVal   = sliderVal;
+      if (!dragRelative) {
         sliderVal = valFromY(clientY);
-        dragStartY = clientY;
-        dragStartVal = sliderVal;
         updateSliderUI(sliderVal);
         applyFilter(sliderVal);
       }
@@ -297,13 +288,11 @@
 
     function onDragMove(e) {
       if (!isDragging) return;
+      e.preventDefault();
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
       if (dragRelative) {
-        const td = thumbD();
-        const inset = (pillTrack.clientWidth - td) / 2;
-        const travel = pillTrack.clientHeight - inset * 2 - td;
-        const delta = (clientY - dragStartY) / travel;
-        sliderVal = Math.max(0, Math.min(1, dragStartVal + delta));
+        const { travel } = getTrackMetrics();
+        sliderVal = Math.max(0, Math.min(1, dragStartVal + (clientY - dragStartY) / travel));
       } else {
         sliderVal = valFromY(clientY);
       }
@@ -315,18 +304,15 @@
 
     pillTrack.addEventListener('mousedown', onDragStart);
     pillTrack.addEventListener('touchstart', onDragStart, { passive: true });
-    pillTrack.addEventListener('touchmove', onDragMove, { passive: false });
     window.addEventListener('mousemove', onDragMove);
-    window.addEventListener('touchmove', (e) => { if (isDragging) onDragMove(e); }, { passive: true });
+    window.addEventListener('touchmove', onDragMove, { passive: false });
     window.addEventListener('mouseup', onDragEnd);
     window.addEventListener('touchend', onDragEnd);
 
-    const BASE_H = 209;
-
+    // --- Scaling ---
     function setUnit() {
       const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-      const unit = (h * 0.86) / BASE_H;
-      document.documentElement.style.setProperty('--unit', unit + 'px');
+      document.documentElement.style.setProperty('--unit', (h * 0.86 / 209) + 'px');
       updateSliderUI(sliderVal);
     }
 
