@@ -56,6 +56,10 @@ body {
 .play-btn:focus {
   outline: none;
 }
+.play-icon {
+  width: var(--icon-sz);
+  height: var(--icon-sz);
+}
 .slider-wrap {
   width: var(--pill-w);
 }
