@@ -16,7 +16,7 @@ const FILE_PATTERN = (label) => `ocean_${label}.m4a`;
 const FADE_MS = 200;                          // play/stop master fade
 const FADE_STEP_MS = 16;                      // master fade tick (~60fps)
 const PRE_FADE_DELAY_MS = 500;                // delay before audible start
-const SWITCH_MS = 100;                        // fade-out/fade-in ramp when switching files
+const SWITCH_MS = 0;                          // 0 = instant file swap (no fade)
 
 let players = [];        // the N <audio> elements, index 0 = brightest
 let activeIndex = 0;     // which file is currently selected
@@ -46,15 +46,16 @@ function applyActive() {
   }
 }
 
-// Switch which file is audible. Every element is already PLAYING at volume 0
-// (started on play), so a switch is just an instantaneous volume handoff --
-// no pause, no play, no cold start, no fade gap. This is the fastest possible
-// switch: the new element is already running, we just unmute it and mute the
-// old. (A short fade is applied via FADE-on-volume if SWITCH_MS > 0; with the
-// instant path there is zero added latency.)
+// Switch which single file is playing. Pause the current element, start the
+// next (at the old loop position so the texture doesn't jump). This is the
+// model that works on iOS, which only allows one playing element at a time.
+// With SWITCH_MS = 0 the swap is instant (no fade). With SWITCH_MS > 0 the
+// old one fades out, pauses, then the new one starts and fades in.
 let switchTimer = null;
 function selectIndex(idx) {
   if (idx === activeIndex) return;
+  const prev = players[activeIndex];
+  const next = players[idx];
   activeIndex = idx;
 
   if (!isPlaying) {
@@ -64,30 +65,50 @@ function selectIndex(idx) {
 
   if (switchTimer) clearInterval(switchTimer);
 
+  // Pause everything that isn't the incoming element.
+  for (let i = 0; i < players.length; i++) {
+    if (players[i] !== next) {
+      players[i].pause();
+      players[i].volume = 0;
+    }
+  }
+
   if (SWITCH_MS <= 0) {
-    // Instant handoff.
+    // Instant swap: start the new file at full volume.
+    try { next.currentTime = prev.currentTime % (next.duration || 1e9); } catch (e) {}
+    next.volume = masterGain;
+    next.play().catch(() => {});
     applyActive();
     return;
   }
 
-  // Short overlapping equal-power-ish fade between the two already-playing
-  // elements. Overlapping (not sequential) so there is no silent gap.
-  const prevIdx = (function () {
-    for (let i = 0; i < players.length; i++) if (players[i].volume > 0) return i;
-    return idx;
-  })();
+  // Fade out the old, pause it, then start and fade in the new (no overlap).
   const steps = Math.max(1, Math.round(SWITCH_MS / FADE_STEP_MS));
-  const startPrev = players[prevIdx].volume;
+  const startGain = prev.volume;
+  let phase = "out";
   let k = 0;
   switchTimer = setInterval(() => {
     k++;
     const t = k / steps;
-    if (prevIdx !== idx) players[prevIdx].volume = startPrev * (1 - t);
-    players[idx].volume = masterGain * t;
-    if (k >= steps) {
-      clearInterval(switchTimer);
-      switchTimer = null;
-      applyActive();
+    if (phase === "out") {
+      prev.volume = startGain * (1 - t);
+      if (k >= steps) {
+        prev.volume = 0;
+        prev.pause();
+        try { next.currentTime = prev.currentTime % (next.duration || 1e9); } catch (e) {}
+        next.volume = 0;
+        next.play().catch(() => {});
+        phase = "in";
+        k = 0;
+      }
+    } else {
+      next.volume = masterGain * t;
+      if (k >= steps) {
+        next.volume = masterGain;
+        clearInterval(switchTimer);
+        switchTimer = null;
+        applyActive();
+      }
     }
   }, FADE_STEP_MS);
 }
@@ -181,13 +202,8 @@ function setupPlayButton() {
       await unlockAll();
 
       masterGain = 0;
-      // Start ALL elements playing at volume 0 so every file stays warm and
-      // switching has no cold-start delay. Only the active one will be faded
-      // up. (If iOS refuses simultaneous playback, the inactive ones simply
-      // won't sound -- but the active one still plays.)
-      players.forEach((a) => { a.volume = 0; });
-      await Promise.all(players.map((a) => a.play().catch(() => {})));
       applyActive();
+      players[activeIndex].play().catch(() => {});
 
       isPlaying = true;
       if (typeof window.updatePlayIcon === "function") window.updatePlayIcon(true);
