@@ -1,81 +1,96 @@
-// ===== AUDIO ENGINE: AudioBuffer + live lowpass + MediaStream bridge =====
-// Decodes one file into an AudioBuffer, loops it gaplessly with an
-// AudioBufferSourceNode, runs it through a live BiquadFilter (the slider),
-// then routes the output to a MediaStreamDestination -> hidden <audio>.
-// The hidden media element is what iOS treats as backgroundable media, so
-// the live-filtered audio has a chance of surviving screen-off. A silent
-// keep-alive and resume-on-visibility help keep the context running.
-
-const SRC_URL = "ocean.mp3";
+// ==================== AUDIO ENGINE ====================
 const MIN_CUTOFF = 200;
 const MAX_CUTOFF = 20000;
 const EXPO = 2;
 const FILTER_Q = 0.1;
 const FADE_MS = 200;
-const TONE_RAMP_MS = 120;
 
-let ctx, buffer, source, filter, gain, dest, keepAlive;
-let hiddenAudio = null, playBtn = null;
-let isPlaying = false, isReady = false, unlocked = false;
-
-function freqFromVal(val) {
-  const curved = Math.pow(val, 1 / EXPO);
-  return MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
-}
-
-// Slider entry point — live filter sweep.
-window.setTone = function (val) {
-  if (!filter || !ctx) return;
-  const now = ctx.currentTime;
-  filter.frequency.cancelScheduledValues(now);
-  filter.frequency.setValueAtTime(filter.frequency.value, now);
-  filter.frequency.linearRampToValueAtTime(freqFromVal(val), now + TONE_RAMP_MS / 1000);
-};
+let ctx, buffer, source, filter, gain, dest, keepAlive, hiddenAudio, playBtn, isPlaying, isInitialized, isUnlocked;
 
 async function ensureGraph() {
-  if (isReady) return;
+  if (isInitialized) return;
+
   ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const resp = await fetch(SRC_URL);
-  buffer = await ctx.decodeAudioData(await resp.arrayBuffer());
+
+  const response = await fetch("ocean.mp3");
+  buffer = await ctx.decodeAudioData(await response.arrayBuffer());
 
   filter = ctx.createBiquadFilter();
   filter.type = "lowpass";
   filter.Q.value = FILTER_Q;
-  filter.frequency.value = freqFromVal(typeof sliderVal === "number" ? sliderVal : 0);
+  filter.frequency.value = freqFromVal(0);
 
   gain = ctx.createGain();
   gain.gain.value = 0;
 
   dest = ctx.createMediaStreamDestination();
 
-  // Silent keep-alive into the destination so output is constant.
+  filter.connect(gain).connect(dest);
+
   keepAlive = ctx.createOscillator();
   const kaGain = ctx.createGain();
   kaGain.gain.value = 0.0001;
   keepAlive.connect(kaGain).connect(dest);
-  keepAlive.start(0);
+  keepAlive.start();
 
+  if (!hiddenAudio) {
+    hiddenAudio = new Audio();
+    hiddenAudio.style.display = "none";
+    document.body.appendChild(hiddenAudio);
+  }
   hiddenAudio.srcObject = dest.stream;
   hiddenAudio.loop = true;
 
-  isReady = true;
+  isInitialized = true;
 }
 
+function freqFromVal(val) {
+  const curved = Math.pow(val, 1 / EXPO);
+  return MAX_CUTOFF * Math.pow(MIN_CUTOFF / MAX_CUTOFF, curved);
+}
+
+window.setTone = function (val) {
+  if (!filter || !ctx) return;
+  filter.frequency.setValueAtTime(freqFromVal(val), ctx.currentTime);
+};
+
 function startSource() {
+  if (source) {
+    try { source.stop(); } catch (e) {}
+  }
   source = ctx.createBufferSource();
   source.buffer = buffer;
-  source.loop = true;                 // gapless
-  source.connect(filter).connect(gain).connect(dest);
-  source.start(0);
+  source.loop = true;
+  source.connect(filter);
+  source.start();
+}
+
+async function unlockAudio() {
+  if (isUnlocked) return;
+  await ensureGraph();
+  await ctx.resume();
+
+  try {
+    hiddenAudio.muted = true;
+    await hiddenAudio.play().catch(() => {});
+    hiddenAudio.pause();
+    hiddenAudio.currentTime = 0;
+    hiddenAudio.muted = false;
+  } catch (e) {
+    // Still mark as unlocked so we don't keep retrying
+  }
+  isUnlocked = true;
 }
 
 async function play() {
-  await ensureGraph();
-  await ctx.resume();
+  await unlockAudio();
+
   startSource();
-  await hiddenAudio.play();
+  await hiddenAudio.play().catch(() => {});
+
   isPlaying = true;
   if (window.updatePlayIcon) window.updatePlayIcon(true);
+
   const now = ctx.currentTime;
   gain.gain.cancelScheduledValues(now);
   gain.gain.setValueAtTime(0, now);
@@ -84,28 +99,42 @@ async function play() {
 
 function stop() {
   if (!ctx) return;
+
   const now = ctx.currentTime;
   gain.gain.cancelScheduledValues(now);
   gain.gain.setValueAtTime(gain.gain.value, now);
   gain.gain.linearRampToValueAtTime(0, now + FADE_MS / 1000);
-  setTimeout(() => { try { source.stop(); } catch (e) {} }, FADE_MS + 30);
+
+  const stoppingSource = source;
+
+  setTimeout(() => {
+    if (stoppingSource) {
+      try { stoppingSource.stop(); } catch (e) {}
+    }
+    if (source === stoppingSource) source = null;
+
+    if (!isPlaying && hiddenAudio) hiddenAudio.pause();
+  }, FADE_MS + 50);
+
   isPlaying = false;
   if (window.updatePlayIcon) window.updatePlayIcon(false);
 }
 
 function initAudioEngine(elements) {
   playBtn = elements.playBtn;
-  hiddenAudio = elements.hiddenAudio;
-  playBtn.addEventListener("click", async () => {
-    if (!isPlaying) { try { await play(); } catch (e) {} }
-    else { stop(); }
+  hiddenAudio = elements.hiddenAudio || null;
+
+  playBtn?.addEventListener("click", () => {
+    isPlaying ? stop() : play().catch(console.error);
   });
+
   document.addEventListener("visibilitychange", () => {
-    if (ctx && ctx.state === "suspended") ctx.resume();
+    if (ctx?.state === "suspended") ctx.resume();
   });
   window.addEventListener("focus", () => {
-    if (ctx && ctx.state === "suspended") ctx.resume();
+    if (ctx?.state === "suspended") ctx.resume();
   });
+
   if ("mediaSession" in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({ title: "Ocean Waves" });
   }
