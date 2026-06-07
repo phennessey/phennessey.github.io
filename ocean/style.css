@@ -79,7 +79,6 @@ body {
   border-radius: 0 0 999px 999px;
   background: rgba(255, 255, 255, 0.09);
   pointer-events: none;
-  transition: height 0.1s ease;
 }
 .pill-thumb {
   position: absolute;
@@ -95,7 +94,6 @@ body {
   align-items: center;
   justify-content: center;
   gap: var(--unit);
-  transition: top 0.1s ease;
 }
 .slider-label {
   font-size: var(--font-tone);
