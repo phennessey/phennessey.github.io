@@ -3,7 +3,7 @@ const MIN_CUTOFF = 200;
 const MAX_CUTOFF = 20000;
 const EXPO = 2;
 const FILTER_Q = 0.1;
-const FADE_MS = 20;
+const FADE_MS = 50;
 
 let ctx, buffer, source, filter, gain, dest, keepAlive, hiddenAudio, playBtn, isPlaying, isInitialized, isUnlocked;
 
