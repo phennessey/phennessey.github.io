@@ -46,16 +46,15 @@ function applyActive() {
   }
 }
 
-// Switch which file is audible. All elements stay PLAYING (muted) the whole
-// time, so none ever goes cold -- switching just fades volume from the old to
-// the new with no overlap (old to 0, then new up). Because every element is
-// already warm, the switch has no decode/buffer delay. Only one is ever
-// audible. NOTE: this keeps all N elements playing at once; if iOS refuses
-// that, it will silence some and we fall back to the slower model.
+// Switch which file is audible. Every element is already PLAYING at volume 0
+// (started on play), so a switch is just an instantaneous volume handoff --
+// no pause, no play, no cold start, no fade gap. This is the fastest possible
+// switch: the new element is already running, we just unmute it and mute the
+// old. (A short fade is applied via FADE-on-volume if SWITCH_MS > 0; with the
+// instant path there is zero added latency.)
 let switchTimer = null;
 function selectIndex(idx) {
   if (idx === activeIndex) return;
-  const prevIdx = activeIndex;
   activeIndex = idx;
 
   if (!isPlaying) {
@@ -63,41 +62,32 @@ function selectIndex(idx) {
     return;
   }
 
-  const prev = players[prevIdx];
-  const next = players[idx];
-
   if (switchTimer) clearInterval(switchTimer);
 
-  // Make sure everything except the two involved is silent (but still
-  // playing, so it stays warm).
-  for (let i = 0; i < players.length; i++) {
-    if (i !== prevIdx && i !== idx) players[i].volume = 0;
+  if (SWITCH_MS <= 0) {
+    // Instant handoff.
+    applyActive();
+    return;
   }
 
+  // Short overlapping equal-power-ish fade between the two already-playing
+  // elements. Overlapping (not sequential) so there is no silent gap.
+  const prevIdx = (function () {
+    for (let i = 0; i < players.length; i++) if (players[i].volume > 0) return i;
+    return idx;
+  })();
   const steps = Math.max(1, Math.round(SWITCH_MS / FADE_STEP_MS));
-  const startGain = prev.volume;
-  let phase = "out";
+  const startPrev = players[prevIdx].volume;
   let k = 0;
-
   switchTimer = setInterval(() => {
     k++;
     const t = k / steps;
-    if (phase === "out") {
-      prev.volume = startGain * (1 - t);
-      if (k >= steps) {
-        prev.volume = 0;            // muted but STILL PLAYING (stays warm)
-        next.volume = 0;
-        phase = "in";
-        k = 0;
-      }
-    } else {
-      next.volume = masterGain * t;
-      if (k >= steps) {
-        next.volume = masterGain;
-        clearInterval(switchTimer);
-        switchTimer = null;
-        applyActive();
-      }
+    if (prevIdx !== idx) players[prevIdx].volume = startPrev * (1 - t);
+    players[idx].volume = masterGain * t;
+    if (k >= steps) {
+      clearInterval(switchTimer);
+      switchTimer = null;
+      applyActive();
     }
   }, FADE_STEP_MS);
 }
