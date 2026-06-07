@@ -11,7 +11,7 @@
 // exact SEGMENT_SEC and NUM_FILES to use here.
 
 const NUM_FILES = 6;                          // number of tone regions
-const SEGMENT_SEC = 34.3803;                  // exact per-segment duration (from bake output)
+let SEGMENT_SEC = 0;                          // derived from the file duration at load
 const COMBINED_SRC = "ocean_all.m4a";
 
 window.NUM_FILES = NUM_FILES;
@@ -43,7 +43,7 @@ function indexFromVal(val) {
 // Keep playback inside the active region: when currentTime passes the region
 // end, seek back to its start. Fires often via timeupdate.
 function onTimeUpdate() {
-  if (!isPlaying) return;
+  if (!isPlaying || SEGMENT_SEC <= 0) return;
   const end = regionEnd(activeIndex) - WRAP_GUARD_SEC;
   const start = regionStart(activeIndex);
   if (audioEl.currentTime >= end || audioEl.currentTime < start) {
@@ -100,6 +100,12 @@ function buildPlayer() {
   audioEl.playsInline = true;
   audioEl.volume = 0;
   audioEl.addEventListener("timeupdate", onTimeUpdate);
+  // Derive the per-region duration from the combined file's total length.
+  audioEl.addEventListener("loadedmetadata", () => {
+    if (isFinite(audioEl.duration) && audioEl.duration > 0) {
+      SEGMENT_SEC = audioEl.duration / NUM_FILES;
+    }
+  });
 }
 
 async function unlockPlayer() {
