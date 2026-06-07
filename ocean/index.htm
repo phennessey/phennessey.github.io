@@ -3,16 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>Ocean Waves</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <audio id="hiddenAudio" playsinline></audio>
   <div class="player-wrap">
     <button class="play-btn" id="playBtn" aria-label="Play">
-      <svg id="btnIcon" viewBox="0 0 24 24" fill="currentColor"
-           style="width:var(--icon-sz);height:var(--icon-sz)">
+      <svg id="btnIcon" viewBox="0 0 24 24" fill="currentColor" style="width:var(--icon-sz);height:var(--icon-sz)">
         <polygon points="5,3 19,12 5,21" transform="translate(1,0)"/>
       </svg>
     </button>
@@ -32,7 +31,8 @@
     document.addEventListener("DOMContentLoaded", () => {
       initSlider();
       initAudioEngine({
-        playBtn: document.getElementById("playBtn")
+        playBtn: document.getElementById("playBtn"),
+        hiddenAudio: document.getElementById("hiddenAudio")
       });
     });
   </script>
