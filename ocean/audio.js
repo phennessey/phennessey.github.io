@@ -5,7 +5,7 @@ const EXPO = 2;
 const FILTER_Q = 0.1;
 const FADE_MS = 50;
 
-let ctx, buffer, source, filter, gain, dest, keepAlive, hiddenAudio, playBtn, isPlaying, isInitialized, isUnlocked;
+let ctx, buffer, source, filter, gain, dest, keepAlive, hiddenAudio, playBtn, isPlaying, isInitialized, isUnlocked, playOffset = 0, startTime = 0;
 
 async function ensureGraph() {
   if (isInitialized) return;
@@ -62,7 +62,10 @@ function startSource() {
   source.buffer = buffer;
   source.loop = true;
   source.connect(filter);
-  source.start();
+
+  const offset = playOffset % buffer.duration;
+  source.start(0, offset);
+  startTime = ctx.currentTime - offset;
 }
 
 async function unlockAudio() {
@@ -99,6 +102,8 @@ async function play() {
 
 function stop() {
   if (!ctx) return;
+
+  playOffset = (ctx.currentTime - startTime) % buffer.duration;
 
   const now = ctx.currentTime;
   gain.gain.cancelScheduledValues(now);
