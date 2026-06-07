@@ -48,17 +48,15 @@ body {
   align-items: center;
   justify-content: center;
   transition: background 0.2s, opacity 0.3s;
+  -webkit-tap-highlight-color: transparent;
 }
-.play-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+@media (hover: hover) {
+  .play-btn:hover { background: rgba(255, 255, 255, 0.12); }
 }
 .play-btn:focus {
   outline: none;
 }
 .slider-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   width: var(--pill-w);
 }
 .pill-track {
@@ -102,6 +100,7 @@ body {
   color: rgba(13, 27, 42, 0.3);
   line-height: 1;
   text-align: center;
+  -webkit-user-select: none;
   user-select: none;
 }
 .slider-value {
@@ -110,5 +109,6 @@ body {
   color: rgba(13, 27, 42, 0.6);
   line-height: 1;
   text-align: center;
+  -webkit-user-select: none;
   user-select: none;
 }
