@@ -11,7 +11,7 @@
 // exact SEGMENT_SEC and NUM_FILES to use here.
 
 const NUM_FILES = 6;                          // number of tone regions
-const SEGMENT_SEC = 34.3803;                       // duration of each region (set from bake output)
+const SEGMENT_SEC = 34.3803;                  // exact per-segment duration (from bake output)
 const COMBINED_SRC = "ocean_all.m4a";
 
 window.NUM_FILES = NUM_FILES;
@@ -51,14 +51,19 @@ function onTimeUpdate() {
   }
 }
 
-// ---- switch tone = seek to region --------------------------------------
+// Switch tone = seek to the SAME offset within the new region, so playback
+// keeps moving forward continuously and only jumps ahead/behind by whole
+// region-widths (N seconds) rather than restarting the tone at 0.
 function selectIndex(idx) {
   if (idx === activeIndex) return;
+  const prevIdx = activeIndex;
   activeIndex = idx;
   if (!isPlaying) return;
-  // Seek into the new region. Preserve phase within the region so the texture
-  // doesn't restart abruptly (optional; here we jump to region start).
-  try { audioEl.currentTime = regionStart(idx); } catch (e) {}
+  // Offset within the old region, carried into the new one.
+  let offset = audioEl.currentTime - regionStart(prevIdx);
+  if (offset < 0) offset = 0;
+  if (offset > SEGMENT_SEC) offset = offset % SEGMENT_SEC;
+  try { audioEl.currentTime = regionStart(idx) + offset; } catch (e) {}
 }
 
 window.setTone = function (val, immediate) {
