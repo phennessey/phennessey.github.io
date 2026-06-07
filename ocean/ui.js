@@ -56,6 +56,11 @@ function setUnit() {
   document.documentElement.style.setProperty("--unit", (h * 0.86) / 209 + "px");
   updateSliderUI(sliderVal);
 }
+function applyOrientation() {
+  const angle = screen.orientation ? screen.orientation.angle : 0;
+  document.querySelector(".player-wrap").style.transform =
+    angle ? `rotate(${(360 - angle) % 360}deg)` : "";
+}
 function initSlider() {
   pillTrack.addEventListener("mousedown", onDragStart);
   pillTrack.addEventListener("touchstart", onDragStart, { passive: true });
@@ -65,6 +70,8 @@ function initSlider() {
   window.addEventListener("touchend", onDragEnd);
   if (window.visualViewport) window.visualViewport.addEventListener("resize", setUnit);
   window.addEventListener("resize", setUnit);
+  screen.orientation?.addEventListener("change", applyOrientation);
   setUnit(); updateSliderUI(0);
+  applyOrientation();
   window.updatePlayIcon = updatePlayIcon;
 }
