@@ -11,7 +11,7 @@
 // exact SEGMENT_SEC and NUM_FILES to use here.
 
 const NUM_FILES = 6;                          // number of tone regions
-const SEGMENT_SEC = 30;                       // duration of each region (set from bake output)
+const SEGMENT_SEC = 34.3803;                       // duration of each region (set from bake output)
 const COMBINED_SRC = "ocean_all.m4a";
 
 window.NUM_FILES = NUM_FILES;
