@@ -1,20 +1,20 @@
-// ==================== AUDIO ENGINE (single-file, no AudioContext) ====================
+// ==================== AUDIO ENGINE (one WAV per tone, native loop) ====================
 //
-// Plays N pre-filtered ocean loops as bare <audio> elements. Only ONE element
-// plays at a time (iOS allows only one simultaneous media element), so the
-// slider snaps to N discrete positions and switching position swaps which
-// single file is playing. No AudioContext anywhere, so playback survives
+// Plays N pre-filtered ocean loops as bare <audio> elements, one per tone.
+// WAV (PCM) has no encoder padding, so the native `loop` attribute loops each
+// file gaplessly -- no seeking, no manual wrap, no click. Only ONE element
+// plays at a time (iOS allows one simultaneous media element); switching tone
+// pauses the old and plays the new. No AudioContext, so playback survives
 // screen-off / backgrounding.
 //
-// Files are expected at FILE_PATTERN with two-digit labels, brightest first:
-//   ocean_05.m4a (brightest) ... ocean_00.m4a (darkest)   when NUM_FILES = 6
+// Files: ocean_05.wav (brightest) ... ocean_00.wav (darkest) when NUM_FILES = 6
 
-const NUM_FILES = 6;                         // how many loops / slider stops
+const NUM_FILES = 6;                          // how many loops / slider stops
+const FILE_PATTERN = (label) => `ocean_${label}.wav`;
 window.NUM_FILES = NUM_FILES;
-const FILE_PATTERN = (label) => `ocean_${label}.m4a`;
 
 const FADE_MS = 200;                          // play/stop master fade
-const FADE_STEP_MS = 16;                      // master fade tick (~60fps)
+const FADE_STEP_MS = 16;                      // fade tick (~60fps)
 const PRE_FADE_DELAY_MS = 500;                // delay before audible start
 const SWITCH_MS = 0;                          // 0 = instant file swap (no fade)
 
@@ -46,11 +46,10 @@ function applyActive() {
   }
 }
 
-// Switch which single file is playing. Pause the current element, start the
-// next (at the old loop position so the texture doesn't jump). This is the
-// model that works on iOS, which only allows one playing element at a time.
-// With SWITCH_MS = 0 the swap is instant (no fade). With SWITCH_MS > 0 the
-// old one fades out, pauses, then the new one starts and fades in.
+// ---- switch which single file is playing -------------------------------
+// Pause the current element, start the next. With SWITCH_MS = 0 the swap is
+// instant; with SWITCH_MS > 0 the old fades out, pauses, then the new starts
+// and fades in (no overlap, so within iOS's single-element limit).
 let switchTimer = null;
 function selectIndex(idx) {
   if (idx === activeIndex) return;
@@ -74,15 +73,12 @@ function selectIndex(idx) {
   }
 
   if (SWITCH_MS <= 0) {
-    // Instant swap: start the new file at full volume.
-    try { next.currentTime = prev.currentTime % (next.duration || 1e9); } catch (e) {}
     next.volume = masterGain;
     next.play().catch(() => {});
     applyActive();
     return;
   }
 
-  // Fade out the old, pause it, then start and fade in the new (no overlap).
   const steps = Math.max(1, Math.round(SWITCH_MS / FADE_STEP_MS));
   const startGain = prev.volume;
   let phase = "out";
@@ -95,7 +91,6 @@ function selectIndex(idx) {
       if (k >= steps) {
         prev.volume = 0;
         prev.pause();
-        try { next.currentTime = prev.currentTime % (next.duration || 1e9); } catch (e) {}
         next.volume = 0;
         next.play().catch(() => {});
         phase = "in";
@@ -112,6 +107,10 @@ function selectIndex(idx) {
     }
   }, FADE_STEP_MS);
 }
+
+window.setTone = function (val, immediate) {
+  selectIndex(indexFromVal(val));
+};
 
 // ---- master fade (play/stop) -------------------------------------------
 let fadeTimer = null;
@@ -133,18 +132,12 @@ function fadeMaster(to, ms, done) {
   }, FADE_STEP_MS);
 }
 
-// ---- the slider entry point (called by ui.js) ---------------------------
-// immediate is unused (snapping is instant); kept for signature compatibility.
-window.setTone = function (val, immediate) {
-  selectIndex(indexFromVal(val));
-};
-
 // ---- build + preload ----------------------------------------------------
 function buildPlayers() {
   for (let i = 0; i < NUM_FILES; i++) {
     const a = new Audio();
     a.src = FILE_PATTERN(labelForIndex(i));
-    a.loop = true;
+    a.loop = true;            // native gapless loop (WAV has no padding)
     a.preload = "auto";
     a.playsInline = true;
     a.volume = 0;
@@ -152,10 +145,8 @@ function buildPlayers() {
   }
 }
 
-// iOS requires a user gesture to allow a media element to play. We unlock all
-// of them on the first tap by briefly playing each one, but MUTED, so the
-// unlock is silent (otherwise iOS plays an audible cascade of all six).
-// Sequential rather than parallel so they don't pile up audibly.
+// iOS requires a user gesture to allow a media element to play. Unlock all on
+// the first tap (muted play+pause), then only one plays at a time after.
 async function unlockAll() {
   if (isUnlocked) return;
   for (const a of players) {
@@ -180,8 +171,6 @@ function setupPlayButton() {
 
   buildPlayers();
 
-  // Enable as soon as one element is ready; timeout safety net so the button
-  // is never stuck if an event doesn't fire.
   let enabled = false;
   function enable() {
     if (enabled) return;
