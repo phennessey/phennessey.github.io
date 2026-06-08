@@ -83,8 +83,11 @@ body {
   -webkit-user-drag: none;
   user-select: none;
   -webkit-user-select: none;
+  z-index: 1;
+  mix-blend-mode: screen;
 }
-
+.moon-img {
+  position: relative;
   width: var(--btn-sz);
   height: var(--btn-sz);
   display: block;
@@ -93,7 +96,7 @@ body {
   user-select: none;
   -webkit-user-select: none;
   pointer-events: none;
-  mix-blend-mode: screen;
+  z-index: 0;
 }
 .play-icon {
   width: var(--icon-sz);
@@ -107,6 +110,7 @@ body {
   filter: drop-shadow(0 1px 10px rgba(0,0,0,0.7));
   color: rgba(255, 255, 255, 0.7);
   pointer-events: none;
+  z-index: 2;
 }
 .slider-wrap {
   width: var(--pill-w);
