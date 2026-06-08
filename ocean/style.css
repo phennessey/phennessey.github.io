@@ -22,7 +22,6 @@ body {
 :root {
   --unit: 0px;
   --bg-h: 0px;
-  --bg-y: 0px;
   --pill-w: calc(43 * var(--unit));
   --pill-h: calc(160 * var(--unit));
   --btn-sz: calc(43 * var(--unit));
@@ -66,7 +65,7 @@ body {
   background-image: url('img/moon_bg.jpg');
   background-repeat: no-repeat;
   background-size: auto var(--bg-h);
-  background-position: 50% var(--bg-y);
+  background-position: 50% 30%;
   z-index: -1;
   pointer-events: none;
 }
@@ -105,7 +104,6 @@ body {
   border-radius: 999px;
   border: var(--border) solid rgba(255, 255, 255, 0.25);
   background: transparent;
-  overflow: hidden;
   cursor: pointer;
 }
 .pill-thumb {
