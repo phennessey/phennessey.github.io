@@ -87,6 +87,7 @@ async function unlockAudio() {
 
 async function play() {
   await unlockAudio();
+  if (typeof sliderVal !== "undefined") window.setTone(sliderVal);
 
   startSource();
   await hiddenAudio.play().catch(() => {});
