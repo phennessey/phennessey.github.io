@@ -63,8 +63,8 @@ body {
   height: 100vh;
   background-image: url('img/moon_bg.jpg');
   background-repeat: no-repeat;
-  background-size: auto 160vh;
-  background-position: 50% 33%;
+  background-size: auto 176vh;
+  background-position: 50% 31%;
   z-index: -1;
   pointer-events: none;
 }
