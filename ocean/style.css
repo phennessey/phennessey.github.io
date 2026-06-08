@@ -15,12 +15,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #000;
-  background-image: url('img/moon_bg.jpg');
-  background-repeat: no-repeat;
-  background-attachment: fixed;
-  background-size: auto 160vh;
-  background-position: 50% 33%;
+  background: #000;
   font-family: system-ui, sans-serif;
   color: #e8f4f8;
 }
@@ -42,6 +37,7 @@ body {
   flex-direction: column;
   align-items: center;
   gap: var(--gap);
+  overflow: visible;
 }
 .play-btn {
   position: relative;
@@ -56,6 +52,21 @@ body {
   align-items: center;
   justify-content: center;
   -webkit-tap-highlight-color: transparent;
+  overflow: visible;
+}
+.play-btn::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-image: url('img/moon_bg.jpg');
+  background-repeat: no-repeat;
+  background-size: auto 160vh;
+  background-position: 50% 33%;
+  z-index: -1;
+  pointer-events: none;
 }
 .play-btn:focus {
   outline: none;
@@ -78,7 +89,7 @@ body {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.7));
+  filter: drop-shadow(0 1px 10px rgba(0,0,0,0.7));
   color: #ffffff;
   pointer-events: none;
 }
@@ -95,15 +106,6 @@ body {
   overflow: hidden;
   cursor: pointer;
 }
-.pill-fill {
-  position: absolute;
-  bottom: var(--inset);
-  left: var(--inset);
-  right: var(--inset);
-  border-radius: 0 0 999px 999px;
-  background: rgba(255, 255, 255, 0.09);
-  pointer-events: none;
-}
 .pill-thumb {
   position: absolute;
   left: 50%;
@@ -111,7 +113,7 @@ body {
   width: var(--thumb-d);
   height: var(--thumb-d);
   border-radius: 50%;
-  background: #667887;
+  background: rgba(255, 255, 255, 0.5);
   pointer-events: none;
   display: flex;
   flex-direction: column;
