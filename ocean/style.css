@@ -25,7 +25,7 @@ body {
   --pill-h: calc(160 * var(--unit));
   --btn-sz: calc(43 * var(--unit));
   --gap: calc(6 * var(--unit));
-  --border: calc(1.5 * var(--unit));
+  --border: calc(1.25 * var(--unit));
   --inset: calc(1.5 * var(--unit));
   --thumb-d: calc(var(--pill-w) - var(--border) * 2 - var(--inset) * 2);
   --icon-sz: calc(17 * var(--unit));
