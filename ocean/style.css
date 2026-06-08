@@ -58,6 +58,7 @@ body {
   justify-content: center;
   -webkit-tap-highlight-color: transparent;
   overflow: visible;
+  mix-blend-mode: screen;
 }
 .play-btn::before {
   content: '';
@@ -85,7 +86,6 @@ body {
   user-select: none;
   -webkit-user-select: none;
   pointer-events: none;
-  mix-blend-mode: screen;
 }
 .play-icon {
   width: var(--icon-sz);
