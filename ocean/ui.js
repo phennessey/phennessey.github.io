@@ -69,6 +69,8 @@ function updatePlayIcon(playing) {
 function setUnit() {
   const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
   document.documentElement.style.setProperty("--unit", (h * 0.86) / 209 + "px");
+  document.documentElement.style.setProperty("--bg-h", (h * 1.6) + "px");
+  document.documentElement.style.setProperty("--bg-y", (h * 0.33) + "px");
   updateSliderUI(sliderVal);
 }
 function initSlider() {
