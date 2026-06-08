@@ -15,7 +15,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0d1b2a;
+  background-color: #0d1b2a;
+  background-image: url('img/moon_bg.jpg');
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  background-size: auto 100vh;
+  background-position: calc(50% - 0px) calc(50% - 22vh);
   font-family: system-ui, sans-serif;
   color: #e8f4f8;
 }
