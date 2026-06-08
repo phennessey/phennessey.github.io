@@ -6,6 +6,15 @@ const pillFill = document.getElementById("pillFill");
 const pillThumb = document.getElementById("pillThumb");
 const sliderValue = document.getElementById("sliderValue");
 const btnIcon = document.getElementById("btnIcon");
+const moonImages = [];
+function preloadMoonImages() {
+  for (let i = 0; i <= 100; i++) {
+    const n = String(i).padStart(3, "0");
+    const img = new Image();
+    img.src = "img/moon_" + n + ".png";
+    moonImages[i] = img;
+  }
+}
 function getTrackMetrics() {
   const td = pillThumb.offsetWidth;
   const inset = (pillTrack.clientWidth - td) / 2;
@@ -13,10 +22,12 @@ function getTrackMetrics() {
   return { td, inset, travel };
 }
 function updateMoonImage(displayVal) {
-  const img = document.getElementById("moonImg");
-  if (!img) return;
-  const n = String(Math.round(displayVal)).padStart(3, "0");
-  img.src = "img/moon_" + n + ".png";
+  const el = document.getElementById("moonImg");
+  if (!el) return;
+  const idx = Math.round(displayVal);
+  if (moonImages[idx] && moonImages[idx].complete) {
+    el.src = moonImages[idx].src;
+  }
 }
 function updateSliderUI(val) {
   const { td, inset, travel } = getTrackMetrics();
@@ -65,6 +76,7 @@ function setUnit() {
   updateSliderUI(sliderVal);
 }
 function initSlider() {
+  preloadMoonImages();
   pillTrack.addEventListener("mousedown", onDragStart);
   pillTrack.addEventListener("touchstart", onDragStart, { passive: true });
   window.addEventListener("mousemove", onDragMove);
