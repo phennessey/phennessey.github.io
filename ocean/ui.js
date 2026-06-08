@@ -70,8 +70,8 @@ function updateBgPosition() {
   const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
   const scaledH = h * 1.76;
   const scaledW = (816 / 1456) * scaledH;
-  const moonX = (406 / 816) * scaledW;
-  const moonY = (323 / 1456) * scaledH;
+  const moonX = (408 / 816) * scaledW;
+  const moonY = (320 / 1456) * scaledH;
   const btn = document.getElementById("playBtn");
   if (!btn) return;
   const rect = btn.getBoundingClientRect();
