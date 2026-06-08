@@ -21,6 +21,20 @@ body {
   font-family: system-ui, sans-serif;
   color: #e8f4f8;
 }
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-image: url('img/moon_bg.jpg');
+  background-repeat: no-repeat;
+  background-size: auto var(--bg-h);
+  background-position: var(--bg-x) var(--bg-y);
+  z-index: -1;
+  pointer-events: none;
+}
 :root {
   --unit: 0px;
   --bg-h: 0px;
@@ -57,40 +71,23 @@ body {
   align-items: center;
   justify-content: center;
   -webkit-tap-highlight-color: transparent;
-  overflow: hidden;
-  border-radius: 50%;
-}
-.player-wrap::before {
-  content: none;
-}
-body::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-image: url('img/moon_bg.jpg');
-  background-repeat: no-repeat;
-  background-size: auto var(--bg-h);
-  background-position: var(--bg-x) var(--bg-y);
-  z-index: -1;
-  pointer-events: none;
+  overflow: visible;
 }
 .play-btn:focus {
   outline: none;
 }
-.bg-crop {
-  position: absolute;
-  pointer-events: none;
-  -webkit-user-drag: none;
-  user-select: none;
-  -webkit-user-select: none;
-  z-index: 1;
-  mix-blend-mode: screen;
+.moon-frame {
+  position: relative;
+  width: var(--btn-sz);
+  height: var(--btn-sz);
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 .moon-img {
-  position: relative;
+  position: absolute;
   width: var(--btn-sz);
   height: var(--btn-sz);
   display: block;
@@ -100,6 +97,15 @@ body::before {
   -webkit-user-select: none;
   pointer-events: none;
   z-index: 0;
+}
+.bg-crop {
+  position: absolute;
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
+  mix-blend-mode: screen;
+  z-index: 1;
 }
 .play-icon {
   width: var(--icon-sz);
