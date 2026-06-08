@@ -1,4 +1,4 @@
-// ==================== UI (continuous slider + orientation lock) ====================
+// ==================== UI (continuous slider + aggressive orientation) ====================
 let sliderVal = 0;
 let isDragging = false, dragRelative = false, dragStartY = 0, dragStartVal = 0;
 
@@ -80,17 +80,15 @@ function applyOrientation() {
 
   const angle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
 
-  // Reset styles
+  playerWrap.style.transition = "transform 0.1s ease";
   playerWrap.style.transform = "";
   playerWrap.style.width = "";
   playerWrap.style.height = "";
   playerWrap.style.position = "";
   playerWrap.style.top = "";
   playerWrap.style.left = "";
-  playerWrap.style.transformOrigin = "";
 
   if (angle === 90 || angle === -90) {
-    // Landscape → rotate and swap dimensions
     playerWrap.style.transform = `rotate(${-angle}deg)`;
     playerWrap.style.width = `${window.innerHeight}px`;
     playerWrap.style.height = `${window.innerWidth}px`;
@@ -120,12 +118,14 @@ function initSlider() {
   if (window.visualViewport) window.visualViewport.addEventListener("resize", setUnit);
   window.addEventListener("resize", setUnit);
 
-  // Orientation handling
+  // More aggressive orientation detection for iOS
   const handleOrientation = () => applyOrientation();
+
   if (screen.orientation) {
     screen.orientation.addEventListener("change", handleOrientation);
   }
   window.addEventListener("orientationchange", handleOrientation);
+  window.addEventListener("resize", handleOrientation); // extra fallback
 
   setUnit();
   updateSliderUI(0);
