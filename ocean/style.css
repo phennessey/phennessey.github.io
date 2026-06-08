@@ -59,9 +59,11 @@ body {
   -webkit-tap-highlight-color: transparent;
   overflow: hidden;
   border-radius: 50%;
-  clip-path: circle(calc(50% - 2px));
 }
 .player-wrap::before {
+  content: none;
+}
+body::before {
   content: '';
   position: fixed;
   top: 0;
