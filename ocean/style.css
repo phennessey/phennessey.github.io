@@ -125,7 +125,7 @@ body {
   font-size: var(--font-tone);
   font-weight: 700;
   letter-spacing: 0.1em;
-  color: rgba(13, 27, 42, 0.3);
+  color: rgba(255, 255, 255, 0.4);
   line-height: 1;
   text-align: center;
   -webkit-user-select: none;
@@ -134,7 +134,7 @@ body {
 .slider-value {
   font-size: var(--font-val);
   font-weight: 700;
-  color: rgba(13, 27, 42, 0.6);
+  color: rgba(255, 255, 255, 0.7);
   line-height: 1;
   text-align: center;
   -webkit-user-select: none;
