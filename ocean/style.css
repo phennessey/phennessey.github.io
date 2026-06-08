@@ -22,6 +22,8 @@ body {
 :root {
   --unit: 0px;
   --bg-h: 0px;
+  --bg-x: 0px;
+  --bg-y: 0px;
   --pill-w: calc(43 * var(--unit));
   --pill-h: calc(160 * var(--unit));
   --btn-sz: calc(43 * var(--unit));
@@ -65,7 +67,7 @@ body {
   background-image: url('img/moon_bg.jpg');
   background-repeat: no-repeat;
   background-size: auto var(--bg-h);
-  background-position: 50% 30%;
+  background-position: var(--bg-x) var(--bg-y);
   z-index: -1;
   pointer-events: none;
 }
