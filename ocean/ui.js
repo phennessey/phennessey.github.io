@@ -2,7 +2,6 @@
 let sliderVal = 0;
 let isDragging = false, dragRelative = false, dragStartY = 0, dragStartVal = 0;
 const pillTrack = document.getElementById("pillTrack");
-const pillFill = document.getElementById("pillFill");
 const pillThumb = document.getElementById("pillThumb");
 const sliderValue = document.getElementById("sliderValue");
 const btnIcon = document.getElementById("btnIcon");
@@ -31,7 +30,6 @@ function updateSliderUI(val) {
   const { td, inset, travel } = getTrackMetrics();
   const thumbTop = inset + val * travel;
   pillThumb.style.top = thumbTop + "px";
-  pillFill.style.height = Math.max(0, pillTrack.clientHeight - (thumbTop + td / 2) - inset) + "px";
   const displayVal = Math.round((1 - val) * 100);
   sliderValue.textContent = displayVal;
   updateMoonImage(displayVal);
