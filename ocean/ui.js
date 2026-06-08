@@ -73,15 +73,16 @@ function updateBgPosition() {
   const moonX = (408 / 816) * scaledW;
   const moonY = (320 / 1456) * scaledH;
   const btn = document.getElementById("playBtn");
-  if (!btn) return;
+  const bgImg = document.getElementById("bgImg");
+  if (!btn || !bgImg) return;
   const rect = btn.getBoundingClientRect();
   const btnCenterX = rect.left + rect.width / 2;
   const btnCenterY = rect.top + rect.height / 2;
   const posX = btnCenterX - moonX;
   const posY = btnCenterY - moonY;
-  document.documentElement.style.setProperty("--bg-h", scaledH + "px");
-  document.documentElement.style.setProperty("--bg-x", posX + "px");
-  document.documentElement.style.setProperty("--bg-y", posY + "px");
+  bgImg.style.height = scaledH + "px";
+  bgImg.style.width = "auto";
+  bgImg.style.transform = "translate(" + posX + "px, " + posY + "px)";
 }
 function setUnit() {
   const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
