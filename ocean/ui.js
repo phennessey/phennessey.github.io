@@ -1,4 +1,4 @@
-// ==================== UI (continuous slider) ====================
+// ==================== UI (continuous slider + orientation lock) ====================
 let sliderVal = 0;
 let isDragging = false, dragRelative = false, dragStartY = 0, dragStartVal = 0;
 
@@ -7,6 +7,7 @@ const pillFill = document.getElementById("pillFill");
 const pillThumb = document.getElementById("pillThumb");
 const sliderValue = document.getElementById("sliderValue");
 const btnIcon = document.getElementById("btnIcon");
+const playerWrap = document.querySelector(".player-wrap");
 
 function getTrackMetrics() {
   const td = pillThumb.offsetWidth;
@@ -74,19 +75,38 @@ function updatePlayIcon(playing) {
     : '<polygon points="5,3 19,12 5,21" transform="translate(1,0)"/>';
 }
 
+function applyOrientation() {
+  if (!playerWrap) return;
+
+  const angle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+
+  // Reset styles
+  playerWrap.style.transform = "";
+  playerWrap.style.width = "";
+  playerWrap.style.height = "";
+  playerWrap.style.position = "";
+  playerWrap.style.top = "";
+  playerWrap.style.left = "";
+  playerWrap.style.transformOrigin = "";
+
+  if (angle === 90 || angle === -90) {
+    // Landscape → rotate and swap dimensions
+    playerWrap.style.transform = `rotate(${-angle}deg)`;
+    playerWrap.style.width = `${window.innerHeight}px`;
+    playerWrap.style.height = `${window.innerWidth}px`;
+    playerWrap.style.position = "absolute";
+    playerWrap.style.top = "50%";
+    playerWrap.style.left = "50%";
+    playerWrap.style.transformOrigin = "center center";
+  } else if (angle === 180) {
+    playerWrap.style.transform = "rotate(180deg)";
+  }
+}
+
 function setUnit() {
   const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
   document.documentElement.style.setProperty("--unit", (h * 0.86) / 209 + "px");
   updateSliderUI(sliderVal);
-}
-
-function applyOrientation() {
-  // This is a fallback. Real orientation locking is very limited on iOS web.
-  const angle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
-  const wrap = document.querySelector(".player-wrap");
-  if (wrap) {
-    wrap.style.transform = angle ? `rotate(${(360 - angle) % 360}deg)` : "";
-  }
 }
 
 function initSlider() {
@@ -100,12 +120,12 @@ function initSlider() {
   if (window.visualViewport) window.visualViewport.addEventListener("resize", setUnit);
   window.addEventListener("resize", setUnit);
 
-  // Orientation handling (limited effectiveness on iOS)
+  // Orientation handling
+  const handleOrientation = () => applyOrientation();
   if (screen.orientation) {
-    screen.orientation.addEventListener("change", applyOrientation);
-  } else if (window.orientation !== undefined) {
-    window.addEventListener("orientationchange", applyOrientation);
+    screen.orientation.addEventListener("change", handleOrientation);
   }
+  window.addEventListener("orientationchange", handleOrientation);
 
   setUnit();
   updateSliderUI(0);
