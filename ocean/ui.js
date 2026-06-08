@@ -12,12 +12,20 @@ function getTrackMetrics() {
   const travel = pillTrack.clientHeight - inset * 2 - td;
   return { td, inset, travel };
 }
+function updateMoonImage(displayVal) {
+  const img = document.getElementById("moonImg");
+  if (!img) return;
+  const n = String(Math.round(displayVal)).padStart(3, "0");
+  img.src = "img/moon_" + n + ".png";
+}
 function updateSliderUI(val) {
   const { td, inset, travel } = getTrackMetrics();
   const thumbTop = inset + val * travel;
   pillThumb.style.top = thumbTop + "px";
   pillFill.style.height = Math.max(0, pillTrack.clientHeight - (thumbTop + td / 2) - inset) + "px";
-  sliderValue.textContent = Math.round((1 - val) * 100);
+  const displayVal = Math.round((1 - val) * 100);
+  sliderValue.textContent = displayVal;
+  updateMoonImage(displayVal);
 }
 function valFromY(clientY) {
   const { td, inset, travel } = getTrackMetrics();
