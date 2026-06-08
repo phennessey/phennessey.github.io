@@ -25,9 +25,7 @@ function updateMoonImage(displayVal) {
   const el = document.getElementById("moonImg");
   if (!el) return;
   const idx = Math.round(displayVal);
-  if (moonImages[idx] && moonImages[idx].complete) {
-    el.src = moonImages[idx].src;
-  }
+  el.src = "img/moon_" + String(idx).padStart(3, "0") + ".png";
 }
 function updateSliderUI(val) {
   const { td, inset, travel } = getTrackMetrics();
