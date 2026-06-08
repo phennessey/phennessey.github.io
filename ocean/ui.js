@@ -66,12 +66,28 @@ function updatePlayIcon(playing) {
     ? '<rect x="6" y="4" width="4" height="15"/><rect x="14" y="4" width="4" height="15"/>'
     : '<polygon points="5,3 19,12 5,21" transform="translate(1,0)"/>';
 }
+function updateBgPosition() {
+  const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  const scaledH = h * 1.76;
+  const scaledW = (816 / 1456) * scaledH;
+  const moonX = (406 / 816) * scaledW;
+  const moonY = (323 / 1456) * scaledH;
+  const btn = document.getElementById("playBtn");
+  if (!btn) return;
+  const rect = btn.getBoundingClientRect();
+  const btnCenterX = rect.left + rect.width / 2;
+  const btnCenterY = rect.top + rect.height / 2;
+  const posX = btnCenterX - moonX;
+  const posY = btnCenterY - moonY;
+  document.documentElement.style.setProperty("--bg-h", scaledH + "px");
+  document.documentElement.style.setProperty("--bg-x", posX + "px");
+  document.documentElement.style.setProperty("--bg-y", posY + "px");
+}
 function setUnit() {
   const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
   document.documentElement.style.setProperty("--unit", (h * 0.86) / 209 + "px");
-  document.documentElement.style.setProperty("--bg-h", (h * 1.76) + "px");
-  document.documentElement.style.setProperty("--bg-y", "30%");
   updateSliderUI(sliderVal);
+  requestAnimationFrame(updateBgPosition);
 }
 function initSlider() {
   preloadMoonImages();
