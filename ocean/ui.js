@@ -7,7 +7,7 @@ const sliderValue = document.getElementById("sliderValue");
 const btnIcon = document.getElementById("btnIcon");
 const moonImages = [];
 function preloadMoonImages() {
-  for (let i = 0; i <= 100; i++) {
+  for (let i = 0; i <= 50; i++) {
     const n = String(i).padStart(3, "0");
     const img = new Image();
     img.src = "img/moon_" + n + ".png";
@@ -23,7 +23,7 @@ function getTrackMetrics() {
 function updateMoonImage(displayVal) {
   const el = document.getElementById("moonImg");
   if (!el) return;
-  const idx = Math.round(displayVal);
+  const idx = Math.round(displayVal / 2);
   el.src = "img/moon_" + String(idx).padStart(3, "0") + ".png";
 }
 function updateSliderUI(val) {
