@@ -18,13 +18,22 @@ body {
   align-items: center;
   justify-content: center;
   background-color: #000;
-  background-image: url('img/moon_bg.jpg');
-  background-repeat: no-repeat;
-  background-attachment: fixed;
-  background-size: auto var(--bg-h);
-  background-position: var(--bg-x) var(--bg-y);
   font-family: system-ui, sans-serif;
   color: #e8f4f8;
+}
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #000;
+  background-image: url('img/moon_bg.jpg');
+  background-repeat: no-repeat;
+  background-size: auto var(--bg-h);
+  background-position: var(--bg-x) var(--bg-y);
+  z-index: -1;
 }
 :root {
   --unit: 0px;
