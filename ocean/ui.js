@@ -73,7 +73,6 @@ function updateBgPosition() {
   const moonX = (408 / 816) * scaledW;
   const moonY = (320 / 1456) * scaledH;
   const btn = document.getElementById("playBtn");
-  const frame = document.querySelector(".moon-frame");
   const bgCrop = document.getElementById("bgCrop");
   if (!btn) return;
   const rect = btn.getBoundingClientRect();
@@ -85,13 +84,14 @@ function updateBgPosition() {
   document.documentElement.style.setProperty("--bg-h", scaledH + "px");
   document.documentElement.style.setProperty("--bg-x", posX + "px");
   document.documentElement.style.setProperty("--bg-y", posY + "px");
-  // cropped bg inside frame — offset relative to frame's top-left
-  if (bgCrop && frame) {
-    const frameRect = frame.getBoundingClientRect();
+  // cropped bg inside frame — moon point lands at button center.
+  // frame is centered in the button and the same size, so the frame's
+  // top-left equals the button's top-left; offset from that origin.
+  if (bgCrop) {
     bgCrop.style.width = scaledW + "px";
     bgCrop.style.height = scaledH + "px";
-    bgCrop.style.left = (posX - frameRect.left) + "px";
-    bgCrop.style.top = (posY - frameRect.top) + "px";
+    bgCrop.style.left = (rect.width / 2 - moonX) + "px";
+    bgCrop.style.top = (rect.height / 2 - moonY) + "px";
   }
 }
 function setUnit() {
