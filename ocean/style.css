@@ -17,23 +17,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #000;
-  font-family: system-ui, sans-serif;
-  color: #e8f4f8;
-}
-body::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  background-color: #000;
   background-image: url('img/moon_bg.jpg');
   background-repeat: no-repeat;
+  background-attachment: fixed;
   background-size: auto var(--bg-h);
   background-position: var(--bg-x) var(--bg-y);
-  z-index: -1;
-  pointer-events: none;
+  font-family: system-ui, sans-serif;
+  color: #e8f4f8;
 }
 :root {
   --unit: 0px;
@@ -96,16 +87,8 @@ body::before {
   user-select: none;
   -webkit-user-select: none;
   pointer-events: none;
-  z-index: 0;
-}
-.bg-crop {
-  position: absolute;
-  pointer-events: none;
-  -webkit-user-drag: none;
-  user-select: none;
-  -webkit-user-select: none;
   mix-blend-mode: screen;
-  z-index: 1;
+  z-index: 0;
 }
 .play-icon {
   width: var(--icon-sz);
