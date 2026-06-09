@@ -71,7 +71,7 @@ body {
   position: relative;
   width: var(--btn-sz);
   height: var(--btn-sz);
-  background: #000;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
