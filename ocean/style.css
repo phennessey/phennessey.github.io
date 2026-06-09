@@ -87,7 +87,17 @@ body::before {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  isolation: isolate;
+}
+.bg-crop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
+  z-index: 0;
 }
 .moon-img {
   position: absolute;
@@ -102,7 +112,7 @@ body::before {
   mix-blend-mode: screen;
   -webkit-transform: translate3d(0, 0, 0);
   transform: translate3d(0, 0, 0);
-  z-index: 0;
+  z-index: 1;
 }
 .play-icon {
   width: var(--icon-sz);
