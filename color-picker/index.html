@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OKHSL Color Picker</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="picker-wrap">
+    <div class="panel">
+      <canvas id="wheel"></canvas>
+      <svg class="overlay" id="disc-overlay"></svg>
+      <div class="disc-border-overlay"></div>
+    </div>
+    <div class="panel">
+      <div id="lightbar"></div>
+      <svg class="overlay" id="lightbar-overlay"></svg>
+    </div>
+    <div class="panel hex-panel">
+      <textarea class="hex-input" spellcheck="false" autocomplete="off"></textarea>
+      <button id="add-color-btn" type="button" aria-label="Add color">+</button>
+    </div>
+    <div class="library-panel" id="library-panel">
+      <label><input type="checkbox" data-library="base"> Show Pantones</label>
+      <label><input type="checkbox" data-option="sort"> Sort by hue</label>
+      <div class="libraries">
+        <label><input type="checkbox" data-library="pastel"> Pastel</label>
+        <label><input type="checkbox" data-library="neon"> Neon</label>
+        <label><input type="checkbox" data-library="sp"> Skin tones</label>
+        <label><input type="checkbox" data-library="xgc"> Extended gamut</label>
+        <label><input type="checkbox" data-library="metallic"> Metallic</label>
+      </div>
+    </div>
+  </div>
+  <div class="swatches"></div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
