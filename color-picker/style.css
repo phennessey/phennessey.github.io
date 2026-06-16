@@ -1,0 +1,645 @@
+/* Base / Layout */
+body {
+  --body-margin: 40px;
+  background: #666;
+  margin: var(--body-margin);
+  font-family: 'SF Mono', 'Fira Code', monospace, sans-serif;
+  /* Vertical flex layout so .swatches can flex-fill remaining viewport. */
+  min-height: calc(100vh - 2 * var(--body-margin));
+  display: flex;
+  flex-direction: column;
+}
+
+.picker-wrap {
+  --padding: 24px;
+  --squircle-r: calc(var(--padding) + 8px);
+  position: relative;
+  display: inline-flex;
+  align-self: flex-start;            /* don't stretch to body width */
+  align-items: center;
+  gap: var(--disc-lb-gap, 12px);
+  padding: calc(var(--padding) - 4px) calc(var(--padding) + 2px);
+  margin-bottom: 20px;
+  transition: opacity 0.15s ease;
+}
+
+/* When no swatch is active, dim the entire picker panel. */
+body:has(.swatches.none-selected) .picker-wrap { opacity: 0.3; }
+
+.panel {
+  position: relative;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+canvas {
+  display: block;
+}
+
+.overlay {
+  position: absolute;
+  top: 0; left: 0;
+  overflow: visible;
+}
+
+#disc-overlay .handle {
+  cursor: pointer;
+}
+
+#disc-overlay > circle[fill="transparent"]  {
+  cursor: crosshair;
+}
+
+#gamut-boundary {
+  cursor: crosshair;
+  transition-duration: 0.1s;
+}
+
+body.disc-dragging-single #disc-overlay,
+body.disc-dragging-single #disc-overlay * { cursor: none !important; }
+
+body.disc-dragging-single.cursor-outside-disc #disc-overlay,
+body.disc-dragging-single.cursor-outside-disc #disc-overlay * { cursor: auto !important; }
+
+#lightbar-overlay {
+  cursor: ns-resize;
+}
+
+#lightbar, .hex-input {
+  --squircle-r: calc(var(--padding) / 2);
+}
+
+.hex-panel {
+  position: relative;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+  width: 69px;
+  gap: 16px;
+}
+
+.hex-input {
+  border: 0;
+  flex: 1 1 auto;
+  width: 100%;
+  box-sizing: border-box;
+  --input-bg: rgba(255,255,255,0.25);
+  --input-fg: rgba(0,0,0,0.7);
+  background: var(--input-bg);
+  color: var(--input-fg);
+  font-size: 11px;
+  line-height: 1.85;
+  padding: 6px 0px;
+  text-align: center;
+  resize: none;
+  outline: none;
+  overflow-y: auto;
+  opacity: 0.5;
+  transition: color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+}
+
+.picker-wrap.light-bg .hex-input {
+  --input-bg: rgba(0,0,0,0.25);
+  --input-fg: rgba(255,255,255,0.7);
+}
+
+.hex-input:focus {
+  --input-fg: rgba(0,0,0,1);
+  opacity: 1;
+}
+.picker-wrap.light-bg .hex-input:focus {
+  --input-fg: rgba(255,255,255,1);
+}
+
+/* Handles */
+.handle {
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: 0.1;
+  transition: opacity 0.15s ease;
+}
+
+.handle.active, .handle:hover { opacity: 0.6; }
+.handle.multi { opacity: 1; }
+
+.handle .circle { stroke: #fff; transition-duration: 0.15s; }
+#disc-overlay.light-color .handle .circle { stroke: #000; }
+
+#lightbar-overlay .handle .pill {
+  stroke: #fff;
+  stroke-width: 1.75px;
+  filter: drop-shadow(0px 0px 1px rgba(0,0,0,0.5));
+  fill: transparent;
+}
+
+#lightbar-overlay .handle:not(.active):not(.multi) .pill {
+  filter: drop-shadow(0px 0px 0px rgba(0,0,0,0));
+}
+
+#add-color-btn {
+  flex: 0 0 auto;
+  width: 100%;
+  height: 26px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 0 1px 0;
+  cursor: pointer;
+  user-select: none;
+  font: 15px/1 'SF Mono', 'Fira Code', monospace;
+  font-weight: bold;
+  --btn-bg: rgba(255,255,255,0.25);
+  --btn-fg: rgba(0,0,0,0.7);
+  --btn-fg-hover: #000;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  opacity: 0.7;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.picker-wrap.light-bg #add-color-btn {
+  --btn-bg: rgba(0,0,0,0.25);
+  --btn-fg: rgba(255,255,255,0.7);
+  --btn-fg-hover: #fff;
+}
+
+#add-color-btn:hover:not(:disabled) { color: var(--btn-fg-hover); opacity: 1; }
+#add-color-btn:disabled { opacity: 0.35; cursor: default; }
+
+/* Library Panel */
+.library-panel {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: top;
+  gap: 4px;
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  user-select: none;
+  color: rgba(255,255,255,0.7);
+}
+
+.libraries {
+  font-size: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 19px;
+}
+
+.picker-wrap.light-bg .library-panel {
+  color: rgba(0,0,0,0.7);
+}
+
+.library-panel label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.library-panel input[type="checkbox"] {
+  margin: 0;
+  accent-color: currentColor;
+}
+
+.library-panel label:has(input:disabled) {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* Swatches */
+.swatches {
+  --swatch-padding: 8px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 5px;
+  margin-top: 16px;
+  align-items: stretch;
+  flex: 1 1 0;        /* fill remaining vertical space in body's flex column */
+  min-height: 0;
+}
+
+.swatch-container {
+  position: relative;
+  overflow: visible;
+  flex: 1 1 0;
+  min-width: 0;
+  /* Flex column so the inner can fill height via flex instead of a
+     percentage height. Safari won't resolve height:100% against a parent
+     whose own height comes from flex-grow, which collapsed the swatch. */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.swatch-inner {
+  --squircle-r: 14px;
+  overflow: hidden;
+  width: 100%;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 0;
+}
+
+.color-stack {
+  display: contents;
+}
+
+.color-swatch {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.color-swatch.p3 { display: none; }
+.swatch-container.out-of-srgb .color-swatch.p3 { display: block; }
+
+.swatch-container.out-of-srgb .color-swatch.srgb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: calc(var(--swatch-padding) * 2 + 13px);
+  z-index: 1;
+}
+
+/* Active indicator */
+.swatch-container::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 30px;
+  height: 4px;
+  background: #fff;
+  border-radius: 3px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s linear;
+}
+
+
+body.light-bg .swatch-container::before {
+  background: #555;
+  transition: background 0.2s ease;
+}
+
+.swatch-container.selected::before { opacity: 0.6; }
+.swatch-container.multi-selected::before { opacity: 0.6; }
+.swatch-container.hovered:not(.selected):not(.multi-selected)::before { opacity: 0.1; }
+
+/* Swatch readouts */
+.swatch-readout {
+  font-size: 10px;
+  color: rgba(255,255,255,0.5);
+  user-select: none;
+  transition: color 0.1s ease;
+}
+
+.swatch-container { container-type: inline-size; }
+
+.swatch-container.light .swatch-readout { color: rgba(0,0,0,0.5); }
+
+/* Hex readout brightens when the color region is hovered. */
+.swatch-container:has(.color-swatch:hover) .swatch-readout {
+  color: rgba(255,255,255,1);
+}
+.swatch-container.light:has(.color-swatch:hover) .swatch-readout {
+  color: rgba(0,0,0,1);
+}
+
+.swatches.none-selected .swatch-readout,
+.swatches.none-selected .icon { visibility: hidden; }
+
+/* Flex strip at the top-right of each swatch. Used for both the sRGB
+   top bar (delete + hex) and the P3 top bar (gamut icon + p3 readout).
+   Absolutely positioned so it floats over the color region. */
+.swatch-top-bar {
+  position: absolute;
+  top: var(--swatch-padding);
+  right: var(--swatch-padding);
+  display: flex;
+  align-items: center;
+  z-index: 1;
+}
+
+/* When out-of-srgb, the p3 top bar needs to clear the srgb strip above. */
+.swatch-container.out-of-srgb .color-swatch.p3 .swatch-top-bar {
+  top: calc(var(--swatch-padding) * 3 + 13px);
+}
+
+/* Swatch icons */
+.icon {
+  position: absolute;
+  height: 13px;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 1;
+}
+
+/* Icons inside a swatch-top-bar flow in the flex row instead. */
+.swatch-top-bar .icon {
+  position: static;
+  flex-shrink: 0;
+}
+
+.icon svg { width: 100%; height: 100%; }
+.icon:hover { color: rgba(255,255,255,1); }
+.swatch-container.light .icon { color: rgba(0,0,0,0.5); }
+.swatch-container.light .icon:hover { color: rgba(0,0,0,1); }
+
+.gamut-warning {
+  display: none;
+  top: var(--swatch-padding);
+  right: var(--swatch-padding);
+  height: 11px;
+  padding-right: 4px;
+}
+.swatch-container.out-of-srgb .gamut-warning { display: block; }
+
+
+
+/* Delete icon sits in the top-bar flex directly left of the hex readout.
+   Always occupies its layout slot; fades in on hover so the readout's
+   position never shifts. Mirrors .promoted-close behavior exactly. */
+.delete-swatch {
+  top: var(--swatch-padding);
+  left: var(--swatch-padding);
+  width: 14px;
+  height: 14px;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+/* Close box (top-left of the swatch) fades in while the swatch is hovered. */
+.swatch-container:has(.color-swatch:hover) .delete-swatch { opacity: 1; }
+
+body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
+
+/* When only one swatch remains, delete is a no-op. */
+.swatches > .swatch-container:only-child .delete-swatch {
+  visibility: hidden;
+}
+
+/* Swatch swap target */
+.swatch-container.swap-target::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 2px #fff;
+}
+
+/* Pantone Match Cells */
+.match-row {
+  display: contents;   /* pass-through wrapper */
+}
+
+.match-cells {
+  display: none;       /* shown only when show-matches AND !none-selected */
+  flex: 0 0 50%;       /* takes exactly 50% of swatch height */
+  min-height: 0;
+  flex-direction: row-reverse;   /* first DOM cell appears rightmost */
+}
+
+.swatches.show-matches .match-cells { display: flex; }
+
+/* When nothing is selected, chips hide everywhere. */
+.swatches.none-selected .match-cells { display: none; }
+
+.promoted-cell {
+  flex: 1 1 0;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: var(--swatch-padding);
+  container-type: inline-size;
+}
+
+.promoted-close {
+  position: static;
+  height: 11px;
+  padding-right: 4px;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.promoted-cell:has(.match-label:hover, .promoted-close:hover) .promoted-close {
+  opacity: 1;
+}
+
+.promoted-cell .match-label {
+  pointer-events: auto;
+}
+
+.match-cell {
+  flex: 1 1 0;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: var(--swatch-padding);
+  container-type: inline-size;
+  cursor: pointer;
+}
+
+.chip-gamut-warning {
+  position: absolute;
+  bottom: var(--swatch-padding);
+  right: var(--swatch-padding);
+  display: none;
+  height: 11px;
+}
+
+.noise-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url('https://raw.githubusercontent.com/phennessey/codepen/refs/heads/main/okhsl_picker/metallic.png');
+  background-size: 503px 323px;
+  mix-blend-mode: overlay;
+  opacity: 0;
+}
+
+.match-cell.metallic .noise-overlay,
+.promoted-cell.metallic .noise-overlay {
+  opacity: 0.8;
+}
+
+.match-cell.out-of-p3 .chip-gamut-warning { display: block; }
+
+.chip-gamut-tooltip {
+  position: absolute;
+  left: var(--swatch-padding);
+  right: var(--swatch-padding);
+  bottom: calc(50% + var(--swatch-padding));
+  font-size: 10px;
+  line-height: 1.3;
+  color: rgba(255,255,255,0.85);
+  text-align: right;
+  pointer-events: none;
+  user-select: none;
+  visibility: hidden;
+  opacity: 0.5;
+  z-index: 2;
+}
+
+.swatch-container.light .chip-gamut-tooltip { color: rgba(0,0,0,0.85); }
+.swatch-container:has(.chip-gamut-warning:hover) .chip-gamut-tooltip {
+  visibility: visible;
+}
+
+.match-label {
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 1.2;
+  text-align: right;
+  white-space: normal;
+  overflow-wrap: break-word;
+  user-select: none;
+  max-width: 100%;
+  max-height: 100%;
+  pointer-events: none;
+  color: rgba(255,255,255,0.5);
+  transition: color 0.1s ease;
+}
+
+/* Match chips sit dimmer at rest than the promoted label (which stays 0.5). */
+.match-cell .match-label { color: rgba(255,255,255,0.2); }
+
+.match-cell:hover .match-label,
+.promoted-cell:hover .match-label {
+  color: rgba(255,255,255,1);
+}
+
+.swatch-container.light .match-label { color: rgba(0,0,0,0.5); }
+.swatch-container.light .match-cell .match-label { color: rgba(0,0,0,0.2); }
+.swatch-container.light .match-cell:hover .match-label,
+.swatch-container.light .promoted-cell:hover .match-label {
+  color: rgba(0,0,0,1);
+}
+
+/* The promoted pantone's chip in the match row keeps its label in the
+   highlighted (hover-bright) state so you can see which chip is pinned. */
+.match-cell.promoted-match .match-label { color: rgba(255,255,255,1); }
+.swatch-container.light .match-cell.promoted-match .match-label { color: rgba(0,0,0,1); }
+
+@container (max-width: 80px) {
+  .match-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    text-align: initial;
+  }
+}
+
+.match-cap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 5px;
+  line-height: 1;
+  color: rgba(255,255,255,0.5);
+  pointer-events: none;
+  user-select: none;
+  transition: color 0.1s ease;
+}
+
+.swatch-container.light .match-cap { color: rgba(0,0,0,0.5); }
+
+.match-cell:hover .match-cap { color: rgba(255,255,255,1); }
+.swatch-container.light .match-cell:hover .match-cap { color: rgba(0,0,0,1); }
+
+.swatches.none-selected .match-cap { visibility: hidden; }
+.swatches.none-selected .match-label { visibility: hidden; }
+
+/* Drag dot */
+#swatch-dot {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  pointer-events: none;
+  transform: translate(-70%, -70%);
+  opacity: 0;
+  z-index: 9999;
+  transition: width 0.2s ease, height 0.2s ease;
+}
+
+#swatch-dot.visible {
+  opacity: 1;
+  width: 14px;
+  height: 14px;
+}
+
+body.swatch-dragging,
+body.swatch-dragging * { cursor: grabbing !important; }
+
+/* Pointer-driven focus rings produce stray borders on click; suppress them but
+   keep keyboard focus (:focus-visible) for accessibility. */
+*:focus:not(:focus-visible) { outline: none; }
+
+/* While dragging the disc or a swatch, nothing may become selected — otherwise
+   a hex readout / the hex textarea gets highlighted mid-drag and lingers. */
+body.swatch-dragging, body.swatch-dragging *,
+body.disc-dragging,   body.disc-dragging * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
+/* P3 Readout */
+.p3-readout {
+  display: none;            /* -> flex when out-of-srgb */
+  flex-flow: row nowrap;
+  justify-content: flex-end;
+  gap: 0 4px;
+  user-select: none;
+  font-size: 10px;
+  line-height: 13px;
+  color: rgba(255,255,255,0.5);
+  pointer-events: auto;
+  cursor: pointer;
+  transition: color 0.1s ease;
+}
+.p3-readout > span { white-space: nowrap; }
+
+/* Narrow swatch: stack the readout as four lines (P3 / r / g / b) instead
+   of letting one line overflow. The swatch-container is the size container. */
+@container (max-width: 150px) {
+  .p3-readout {
+    flex-direction: column;
+    align-items: flex-end;
+    line-height: 11px;
+  }
+}
+
+.swatch-container.out-of-srgb .p3-readout { display: flex; }
+.swatch-container.light .p3-readout       { color: rgba(0,0,0,0.5); }
+.swatches.none-selected .p3-readout       { visibility: hidden; }
+
+.color-swatch.p3 .swatch-top-bar:has(.p3-readout:hover, .gamut-warning:hover) .p3-readout {
+  color: rgba(255,255,255,1);
+}
+.swatch-container.light .color-swatch.p3 .swatch-top-bar:has(.p3-readout:hover, .gamut-warning:hover) .p3-readout {
+  color: rgba(0,0,0,1);
+}
+.swatches.none-selected .p3-readout       { visibility: hidden; }
