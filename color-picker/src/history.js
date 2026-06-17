@@ -5,7 +5,7 @@ import { S, P, els, pantoneSelections, loadPreferredMatchCount } from './state.j
 import { exitMultiSelect, deactivateSwatch, setActive, setHandles, applyMultiVisuals, computeFrozenEdges } from './selection.js';
 import { removeColorAt, createSwatchDOM, reindex, updateSwatch, wireSwatch, updateAddButton, swatchEl } from './swatches.js';
 import { findPantoneByName, syncLibraryCheckboxState, updateMatchesVisibility, libraryPanel } from './pantone.js';
-import { invalidateAndRender, observeSquircle } from './util.js';
+import { requestRender } from './util.js';
 import { hexTextarea } from './hex.js';
 
 // History
@@ -103,7 +103,6 @@ function restoreSnapshot(snap) {
     P.createHandle(i);
     P.createLightHandle(i);
     wireSwatch(createSwatchDOM(i));
-    observeSquircle(swatchEl(i).querySelector('.swatch-inner'));
   }
 
   const neededCategories = new Set();
@@ -136,7 +135,7 @@ function restoreSnapshot(snap) {
 
   if (selectedIndices.length === 0) {
     els.swatches.classList.add('none-selected');
-    invalidateAndRender();
+    requestRender();
   } else if (selectedIndices.length === 1) {
     setActive(selectedIndices[0]);
   } else {
@@ -146,7 +145,7 @@ function restoreSnapshot(snap) {
     els.swatches.classList.remove('none-selected');
     applyMultiVisuals();
     computeFrozenEdges();
-    invalidateAndRender();
+    requestRender();
   }
 
   updateAddButton();

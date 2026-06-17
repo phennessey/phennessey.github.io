@@ -7,7 +7,7 @@ import { idxOf } from './picker.js';
 import { computeP3AndSRGB } from './color.js';
 import { buildMatchCells, matchRowObserver, updateSwatchMatches } from './pantone.js';
 import { setActive, toggleMultiSelect, activateSwatch, exitMultiSelect } from './selection.js';
-import { observeSquircle, syncModKeys, invalidateAndRender } from './util.js';
+import { syncModKeys, requestRender } from './util.js';
 import { flushPendingWheelSnapshot, recordSnapshot } from './history.js';
 
 // Swatch DOM helpers
@@ -21,6 +21,8 @@ function updateSwatch(index) {
 
   container.querySelector('.color-swatch.srgb').style.background = srgbCss;
   container.querySelector('.color-swatch.p3').style.background   = p3Css;
+  // The chip strip's backdrop (swatch colour, or promoted Pantone colour) is
+  // owned by updateSwatchMatches, which knows the promotion state.
 
   const srgbEl = container.querySelector('.swatch-readout.srgb');
   if (srgbEl.textContent !== hex) srgbEl.textContent = hex;
@@ -108,7 +110,6 @@ function addLastDuplicate() {
   P.createLightHandle(i);
   wireSwatch(createSwatchDOM(i));
   setActive(i);
-  observeSquircle(swatchEl(i).querySelector('.swatch-inner'));
   updateAddButton();
   return i;
 }
@@ -160,7 +161,7 @@ function wireSwatch(container) {
       setActive(Math.min(ci, S.colors.length - 1));
     }
     updateAddButton();
-    invalidateAndRender();
+    requestRender();
     flushPendingWheelSnapshot();
     recordSnapshot();
   });

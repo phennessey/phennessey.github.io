@@ -7,30 +7,64 @@
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <div class="picker-wrap">
-    <div class="panel">
-      <canvas id="wheel"></canvas>
-      <svg class="overlay" id="disc-overlay"></svg>
-      <div class="disc-border-overlay"></div>
-    </div>
-    <div class="panel">
-      <div id="lightbar"></div>
-      <svg class="overlay" id="lightbar-overlay"></svg>
-    </div>
-    <div class="panel hex-panel">
-      <textarea class="hex-input" spellcheck="false" autocomplete="off"></textarea>
-      <button id="add-color-btn" type="button" aria-label="Add color">+</button>
-    </div>
-    <div class="library-panel" id="library-panel">
-      <label><input type="checkbox" data-library="base"> Show Pantones</label>
-      <label><input type="checkbox" data-option="sort"> Sort by hue</label>
-      <div class="libraries">
-        <label><input type="checkbox" data-library="pastel"> Pastel</label>
-        <label><input type="checkbox" data-library="neon"> Neon</label>
-        <label><input type="checkbox" data-library="sp"> Skin tones</label>
-        <label><input type="checkbox" data-library="xgc"> Extended gamut</label>
-        <label><input type="checkbox" data-library="metallic"> Metallic</label>
+  <div class="top-ui">
+
+    <div class="picker-wrap color-map-panel">
+      <div class="colormap-body">
+        <div class="panel">
+          <canvas id="wheel"></canvas>
+          <svg class="overlay" id="disc-overlay"></svg>
+          <div class="disc-border-overlay"></div>
+        </div>
+        <div class="panel">
+          <div id="lightbar"></div>
+          <svg class="overlay" id="lightbar-overlay"></svg>
+        </div>
       </div>
+    </div>
+
+    <div class="ui-section section-setup">
+      <div class="section-label">Setup</div>
+      <div class="section-body hex-panel">
+        <textarea class="hex-input" spellcheck="false" autocomplete="off"></textarea>
+        <button id="add-color-btn" type="button" aria-label="Add color">+</button>
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <div class="ui-section section-pantone">
+      <div class="section-label">Pantone</div>
+      <div class="section-body library-panel" id="library-panel">
+        <label><input type="checkbox" data-library="base"> Display Pantones</label>
+        <label><input type="checkbox" data-option="sort"> Sort by hue</label>
+        <div class="libraries">
+          <label><input type="checkbox" data-library="pastel"> Pastel</label>
+          <label><input type="checkbox" data-library="neon"> Neon</label>
+          <label><input type="checkbox" data-library="sp"> Skin tones</label>
+          <label><input type="checkbox" data-library="xgc"> Extended gamut</label>
+          <label><input type="checkbox" data-library="metallic"> Metallic</label>
+        </div>
+        <div class="deltae-control">
+          <span class="deltae-name">Cutoff</span>
+          <input type="range" id="cutoff-slider" class="deltae-slider">
+          <span id="cutoff-value" class="deltae-value"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <div class="ui-section section-cmyk">
+      <div class="section-label">CMYK</div>
+      <div class="section-body cmyk-body"></div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <div class="ui-section section-export">
+      <div class="section-label">Export</div>
+      <div class="section-body export-body"></div>
     </div>
   </div>
   <div class="swatches"></div>

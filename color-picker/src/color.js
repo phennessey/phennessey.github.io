@@ -16,6 +16,7 @@ import {
   DisplayP3Gamut,
   sRGBGamut,
   gamutMapOKLCH,
+  findCuspOKLCH,
   MapToL,
 } from "https://esm.sh/@texel/color@1.1.11?bundle";
 
@@ -76,9 +77,18 @@ export function sForChroma(h, targetC, lr) {
 }
 
 /** Return the OKLCH chroma of a color descriptor {h, s, L}. */
-export function getActiveChroma(col) {
+export function chromaOf(col) {
   convert(toOKLab(col.h, col.s, toe(col.L)), OKLab, OKLCH, _lch);
   return _lch[1];
+}
+
+/** Lightness (col.L space) of the Display-P3 chroma cusp for a hue — the
+ *  lightness at which this hue can reach its maximum chroma. findCuspOKLCH
+ *  returns OKLab L, which equals col.L (toeInv of the OKHSL lightness), so it
+ *  can be assigned to col.L directly. Depends on hue only, not saturation. */
+export function cuspL(h) {
+  const H = h * Math.PI * 2;
+  return findCuspOKLCH(Math.cos(H), Math.sin(H), DisplayP3Gamut)[0];
 }
 
 /** Test whether an (h, s, lr) triple falls within the sRGB gamut. */
@@ -95,8 +105,10 @@ export function computeP3AndSRGB(color) {
   _p3[0] = Math.max(0, _p3[0]);
   _p3[1] = Math.max(0, _p3[1]);
   _p3[2] = Math.max(0, _p3[2]);
-  const p3Css = `color(display-p3 ${_p3[0].toFixed(4)} ${_p3[1].toFixed(4)} ${_p3[2].toFixed(4)})`;
+  // 3 decimals is finer than even a 10-bit P3 panel can resolve (step ≈ 0.001),
+  // so the readout and the fill share one rounded string — they can't drift.
   const p3Str = `${_p3[0].toFixed(3)} ${_p3[1].toFixed(3)} ${_p3[2].toFixed(3)}`;
+  const p3Css = `color(display-p3 ${p3Str})`;
   convert(_lab, OKLab, sRGB, _rgb);
   const outOfSRGB = _rgb.some(v => v < -1e-4 || v > 1 + 1e-4);
   convert(_lab, OKLab, OKLCH, _lch);
@@ -117,5 +129,5 @@ export function computeP3AndSRGB(color) {
 export function neutralP3(L) {
   _lab[0] = L; _lab[1] = 0; _lab[2] = 0;
   convert(_lab, OKLab, DisplayP3, _p3);
-  return `color(display-p3 ${_p3[0].toFixed(4)} ${_p3[1].toFixed(4)} ${_p3[2].toFixed(4)})`;
+  return `color(display-p3 ${_p3[0].toFixed(3)} ${_p3[1].toFixed(3)} ${_p3[2].toFixed(3)})`;
 }

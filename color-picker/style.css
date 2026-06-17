@@ -1,30 +1,146 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap');
+
 /* Base / Layout */
 body {
   --body-margin: 40px;
   background: #666;
   margin: var(--body-margin);
-  font-family: 'SF Mono', 'Fira Code', monospace, sans-serif;
+  /* Roboto for everything by inheritance; Roboto Mono is opted into on the hex
+     input and section labels below. Fallbacks: sans-serif / monospace. */
+  font-family: 'Roboto', sans-serif;
+  font-optical-sizing: auto;
+  /* Global default tracking; inherited everywhere. Section labels override it. */
+  letter-spacing: 0.01em;
+  /* Squircle corner curve, applied via `corner-shape` alongside each element's
+     --squircle-r. superellipse(1.23) matches the old hand-rolled Bézier
+     squircle. Chrome-only; other browsers fall back to plain rounded corners. */
+  --squircle-shape: superellipse(1.23);
+  /* superellipse needs a slightly larger radius than the old Bézier squircle to
+     match it visually; this ratio scales every --squircle-r at point of use.
+     Default to 1 so browsers WITHOUT corner-shape (Safari/Firefox) keep the
+     true radius for their plain circular corners — the @supports block below
+     applies the squircle inflation only where superellipse actually renders. */
+  --squircle-scale: 1;
   /* Vertical flex layout so .swatches can flex-fill remaining viewport. */
   min-height: calc(100vh - 2 * var(--body-margin));
   display: flex;
   flex-direction: column;
 }
 
-.picker-wrap {
-  --padding: 24px;
-  --squircle-r: calc(var(--padding) + 8px);
+/* Inflate the squircle radius only where corner-shape: superellipse() renders,
+   so non-supporting browsers keep correctly-sized plain rounded corners. */
+@supports (corner-shape: superellipse(1)) {
+  body { --squircle-scale: calc(89 / 80); }
+}
+
+/* Top UI: a single outer frame (1px squircle outline via border-radius +
+   corner-shape) that encompasses everything. Inside, on the left, the filled COLOR MAP panel
+   (tinted by the selected lightness); to its right the SETUP / PANTONE / CMYK /
+   EXPORT sections. The frame's 4px padding gives an even gap to the color map
+   panel, and its radius is 4px larger so the two squircles stay concentric.
+   The frame + sections follow the PAGE background (body.light-bg). */
+.top-ui {
+  --padding: 24px;                   /* drives child squircle radii (lightbar, hex) */
+  --squircle-r: calc(var(--padding) + 13.5px);   /* = color map radius (32) + 5.5 */
+  --section-gap: 32px;               /* breathing room on each side of a divider */
+  --section-label-h: 13px;
+  --section-label-gap: 6px;
+  /* Vertical inset for the tool sections/dividers so labels + content don't
+     touch the frame. Added on top of the frame's 4px pad (≈20px from frame),
+     while the color map keeps its 4px concentric gap. */
+  --tools-vpad: 16px;
   position: relative;
   display: inline-flex;
   align-self: flex-start;            /* don't stretch to body width */
-  align-items: center;
-  gap: var(--disc-lb-gap, 12px);
-  padding: calc(var(--padding) - 4px) calc(var(--padding) + 2px);
+  align-items: stretch;              /* contents share one height */
+  gap: var(--section-gap);
+  padding: 6px 18px 6px 6px;         /* 6px gap to the color map (L/T/B); extra room on the right */
   margin-bottom: 20px;
-  transition: opacity 0.15s ease;
+  /* 1px squircle frame, drawn as an outline (offset inward 1px so it sits on
+     the box edge with zero layout impact, like the old SVG overlay). */
+  border-radius: calc(var(--squircle-r) * var(--squircle-scale));
+  corner-shape: var(--squircle-shape);
+  outline: 1px solid rgba(255,255,255,0.2);
+  outline-offset: -1px;
 }
 
-/* When no swatch is active, dim the entire picker panel. */
-body:has(.swatches.none-selected) .picker-wrap { opacity: 0.3; }
+/* When no swatch is active, dim the whole top UI and make it dead to the mouse
+   — no clicks, no text cursor on hover. Only the .swatches area (a sibling of
+   .top-ui) stays interactive, so selecting a swatch is the sole way out. */
+body:has(.swatches.none-selected) .top-ui {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+body.light-bg .top-ui { outline-color: rgba(0,0,0,0.2); }
+
+/* COLOR MAP panel — keeps the .picker-wrap hooks the JS targets (lightness
+   tint, guide-on-hover). Background set in JS; the squircle is native CSS
+   (border-radius + corner-shape) with overflow:clip to mask the fill.
+   ~33px of breathing room above/below the 264px wheel. Radius 4px smaller than
+   the frame so the two corners are concentric across the 4px gap. */
+.picker-wrap.color-map-panel {
+  --squircle-r: calc(var(--padding) + 8px);
+  position: relative;
+  flex: 0 0 auto;
+  padding: 33px 39px 33px 28px;      /* right = top/bottom + 6; wheel keeps 28 on the left */
+  transition: opacity 0.15s ease;
+  border-radius: calc(var(--squircle-r) * var(--squircle-scale));
+  corner-shape: var(--squircle-shape);
+  overflow: clip;                    /* clip the tinted fill to the squircle */
+}
+
+/* Wheel + lightbar, vertically centred, original gap between them. */
+.colormap-body {
+  display: flex;
+  align-items: center;
+  gap: var(--disc-lb-gap, 12px);
+}
+
+/* Function sections */
+.ui-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Top inset is 2px less than --tools-vpad so labels sit 2px higher; the bottom
+     keeps the full inset so section bodies stay put (the +2px label gap below
+     absorbs the label's rise). */
+  margin-top: calc(var(--tools-vpad) - 2px);
+  margin-bottom: var(--tools-vpad);
+}
+
+.section-label {
+  font-family: 'Roboto Mono', monospace;
+  height: var(--section-label-h);
+  line-height: var(--section-label-h);
+  margin-bottom: var(--section-label-gap);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+  white-space: nowrap;
+  user-select: none;
+  color: rgba(255,255,255,0.3);
+}
+body.light-bg .section-label { color: rgba(0,0,0,0.3); }
+
+/* Bodies fill the remaining column height so the SETUP hex field stretches. */
+.section-body { flex: 1 1 auto; min-height: 0; }
+
+/* The last section faces the frame on its right, so inset it to match the
+   sections' top/bottom breathing room instead of colliding with the outline. */
+.section-export { margin-right: var(--tools-vpad); }
+
+/* 1px dividers between tool sections. Stretch to the content box, inset by the
+   same vertical pad as the sections so they don't touch the frame. */
+.section-divider {
+  align-self: stretch;
+  width: 1px;
+  /* 2px less inset than --tools-vpad at each end → 4px longer than the sections. */
+  margin-block: calc(var(--tools-vpad) - 2px);
+  background: rgba(255,255,255,0.2);
+}
+body.light-bg .section-divider { background: rgba(0,0,0,0.2); }
 
 .panel {
   position: relative;
@@ -67,26 +183,31 @@ body.disc-dragging-single.cursor-outside-disc #disc-overlay * { cursor: auto !im
 
 #lightbar, .hex-input {
   --squircle-r: calc(var(--padding) / 2);
+  border-radius: calc(var(--squircle-r) * var(--squircle-scale));
+  corner-shape: var(--squircle-shape);
 }
 
 .hex-panel {
   position: relative;
-  align-self: stretch;
   display: flex;
   flex-direction: column;
   padding: 4px 0;
   width: 69px;
-  gap: 16px;
+  gap: 17px;
 }
 
 .hex-input {
-  border: 0;
   flex: 1 1 auto;
   width: 100%;
   box-sizing: border-box;
-  --input-bg: rgba(255,255,255,0.25);
-  --input-fg: rgba(0,0,0,0.7);
-  background: var(--input-bg);
+  --input-fg: rgba(255,255,255,0.3);
+  background: transparent;
+  font-family: 'Roboto Mono', monospace;
+  letter-spacing: inherit;   /* form controls don't inherit tracking; opt in to the global default */
+  /* 1px squircle frame matching the top-UI panel outline (border sits inside
+     via border-box, so it stays concentric like the panel's outline-offset).
+     Resting border/text are dimmed; focus restores the panel's 0.2 alpha. */
+  border: 1px solid rgba(255,255,255,0.1);
   color: var(--input-fg);
   font-size: 11px;
   line-height: 1.85;
@@ -95,21 +216,21 @@ body.disc-dragging-single.cursor-outside-disc #disc-overlay * { cursor: auto !im
   resize: none;
   outline: none;
   overflow-y: auto;
-  opacity: 0.5;
-  transition: color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+  transition: color 0.15s ease, border-color 0.15s ease;
 }
 
-.picker-wrap.light-bg .hex-input {
-  --input-bg: rgba(0,0,0,0.25);
-  --input-fg: rgba(255,255,255,0.7);
+body.light-bg .hex-input {
+  --input-fg: rgba(0,0,0,0.3);
+  border-color: rgba(0,0,0,0.1);
 }
 
 .hex-input:focus {
-  --input-fg: rgba(0,0,0,1);
-  opacity: 1;
-}
-.picker-wrap.light-bg .hex-input:focus {
   --input-fg: rgba(255,255,255,1);
+  border-color: rgba(255,255,255,0.2);
+}
+body.light-bg .hex-input:focus {
+  --input-fg: rgba(0,0,0,1);
+  border-color: rgba(0,0,0,0.2);
 }
 
 /* Handles */
@@ -120,8 +241,14 @@ body.disc-dragging-single.cursor-outside-disc #disc-overlay * { cursor: auto !im
   transition: opacity 0.15s ease;
 }
 
-.handle.active, .handle:hover { opacity: 0.6; }
+/* Hover highlight only on disc handles — they can be clicked to select. An
+   unselected lightbar handle can't be selected or dragged, so it gets no hover
+   affordance and keeps the lightbar's own ns-resize cursor (rather than the
+   clickable pointer) so it reads as part of the bar. */
+.handle.active, .disc-handle:hover { opacity: 0.6; }
 .handle.multi { opacity: 1; }
+
+#lightbar-overlay .handle:not(.active):not(.multi) { cursor: ns-resize; }
 
 .handle .circle { stroke: #fff; transition-duration: 0.15s; }
 #disc-overlay.light-color .handle .circle { stroke: #000; }
@@ -141,6 +268,7 @@ body.disc-dragging-single.cursor-outside-disc #disc-overlay * { cursor: auto !im
   flex: 0 0 auto;
   width: 100%;
   height: 26px;
+  margin-bottom: 17px;
   border: 0;
   border-radius: 999px;
   padding: 0 0 1px 0;
@@ -157,7 +285,7 @@ body.disc-dragging-single.cursor-outside-disc #disc-overlay * { cursor: auto !im
   transition: color 0.15s ease, opacity 0.15s ease;
 }
 
-.picker-wrap.light-bg #add-color-btn {
+body.light-bg #add-color-btn {
   --btn-bg: rgba(0,0,0,0.25);
   --btn-fg: rgba(255,255,255,0.7);
   --btn-fg-hover: #fff;
@@ -168,12 +296,11 @@ body.disc-dragging-single.cursor-outside-disc #disc-overlay * { cursor: auto !im
 
 /* Library Panel */
 .library-panel {
-  align-self: stretch;
   display: flex;
   flex-direction: column;
-  justify-content: top;
+  justify-content: flex-start;
   gap: 4px;
-  padding: 8px 10px;
+  padding: 8px 0;
   font-size: 11px;
   line-height: 1.4;
   user-select: none;
@@ -188,7 +315,7 @@ body.disc-dragging-single.cursor-outside-disc #disc-overlay * { cursor: auto !im
   padding-left: 19px;
 }
 
-.picker-wrap.light-bg .library-panel {
+body.light-bg .library-panel {
   color: rgba(0,0,0,0.7);
 }
 
@@ -210,6 +337,30 @@ body.disc-dragging-single.cursor-outside-disc #disc-overlay * { cursor: auto !im
   cursor: default;
 }
 
+/* Delta-E threshold slider (chip skyline cutoff). */
+.deltae-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.deltae-slider {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  accent-color: currentColor;
+  cursor: pointer;
+}
+.deltae-slider:disabled { opacity: 0.35; cursor: default; }
+.deltae-value {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+.library-panel:has(.deltae-slider:disabled) .deltae-value { opacity: 0.35; }
+
 /* Swatches */
 .swatches {
   --swatch-padding: 8px;
@@ -227,6 +378,8 @@ body.disc-dragging-single.cursor-outside-disc #disc-overlay * { cursor: auto !im
   overflow: visible;
   flex: 1 1 0;
   min-width: 0;
+  /* All swatch text (hex/p3 readouts, Pantone chip labels, tooltips, …) is mono. */
+  font-family: 'Roboto Mono', monospace;
   /* Flex column so the inner can fill height via flex instead of a
      percentage height. Safari won't resolve height:100% against a parent
      whose own height comes from flex-grow, which collapsed the swatch. */
@@ -239,6 +392,12 @@ body.disc-dragging-single.cursor-outside-disc #disc-overlay * { cursor: auto !im
 
 .swatch-inner {
   --squircle-r: 14px;
+  border-radius: calc(var(--squircle-r) * var(--squircle-scale));
+  corner-shape: var(--squircle-shape);
+  /* Be the containing block for the absolutely-positioned out-of-sRGB strip,
+     so overflow:hidden clips it to the squircle (overflow only clips abs
+     descendants whose containing block is this element). */
+  position: relative;
   overflow: hidden;
   width: 100%;
   flex: 1 1 0;
@@ -362,6 +521,10 @@ body.light-bg .swatch-container::before {
   top: var(--swatch-padding);
   right: var(--swatch-padding);
   height: 11px;
+  /* Explicit width (= height × the 18/16 viewBox aspect). The inline SVG has no
+     width/height attrs, so without this Safari resolves the icon box's width
+     differently from Chrome and the glyph drifts far left of the readout. */
+  width: calc(11px * 18 / 16);
   padding-right: 4px;
 }
 .swatch-container.out-of-srgb .gamut-warning { display: block; }
@@ -410,7 +573,17 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   flex: 0 0 50%;       /* takes exactly 50% of swatch height */
   min-height: 0;
   flex-direction: row-reverse;   /* first DOM cell appears rightmost */
+  position: relative;
+  /* No overflow clip here: each .chip-fill is bottom-anchored within its own
+     full-height cell so bars never spill, and the .match-cap (●) sits just
+     above the strip and must stay visible. The swatch-inner squircle handles
+     the rounded bottom corners.
+     Background (the swatch's own colour) is set in JS so the field reads as
+     continuous behind the bars. 0.1-alpha line marks the chip/field boundary;
+     drawn 1px ABOVE the strip (outset) so a perfect-match bar can't cover it. */
+  box-shadow: 0 -1px 0 rgba(255,255,255,0.1);
 }
+.swatch-container.light .match-cells { box-shadow: 0 -1px 0 rgba(0,0,0,0.1); }
 
 .swatches.show-matches .match-cells { display: flex; }
 
@@ -447,13 +620,25 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 .match-cell {
   flex: 1 1 0;
   min-width: 0;
-  position: relative;
+  position: relative;     /* full strip height; the clickable column */
+  container-type: inline-size;
+  cursor: pointer;
+}
+
+/* The colour bar within a chip column. Anchored to the strip bottom; its top
+   edge is driven by --chip-top (= deltaE/cutoff), so it shortens as the match
+   gets farther — the "skyline". Above it, the strip background shows through. */
+.chip-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: var(--chip-top, 0%);
   display: flex;
   align-items: flex-start;
   justify-content: flex-end;
   padding: var(--swatch-padding);
-  container-type: inline-size;
-  cursor: pointer;
+  overflow: hidden;
 }
 
 .chip-gamut-warning {
@@ -480,6 +665,8 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 }
 
 .match-cell.out-of-p3 .chip-gamut-warning { display: block; }
+/* …but once a bar is too short to hold it, hide the icon (set in JS). */
+.match-cell.out-of-p3.chip-short .chip-gamut-warning { display: none; }
 
 .chip-gamut-tooltip {
   position: absolute;
@@ -507,8 +694,9 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   font-size: 10px;
   line-height: 1.2;
   text-align: right;
-  white-space: normal;
-  overflow-wrap: break-word;
+  /* Never wrap: a label that outgrows its bar is clipped by .chip-fill's
+     overflow (vertically as the bar slides down, horizontally if too long). */
+  white-space: nowrap;
   user-select: none;
   max-width: 100%;
   max-height: 100%;
@@ -518,7 +706,7 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 }
 
 /* Match chips sit dimmer at rest than the promoted label (which stays 0.5). */
-.match-cell .match-label { color: rgba(255,255,255,0.2); }
+.match-cell .match-label { color: rgba(255,255,255,0.3); }
 
 .match-cell:hover .match-label,
 .promoted-cell:hover .match-label {
@@ -526,7 +714,7 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 }
 
 .swatch-container.light .match-label { color: rgba(0,0,0,0.5); }
-.swatch-container.light .match-cell .match-label { color: rgba(0,0,0,0.2); }
+.swatch-container.light .match-cell .match-label { color: rgba(0,0,0,0.3); }
 .swatch-container.light .match-cell:hover .match-label,
 .swatch-container.light .promoted-cell:hover .match-label {
   color: rgba(0,0,0,1);
@@ -545,13 +733,42 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   }
 }
 
+/* Best-match marker: a label-coloured 45° triangle painted into the top-left
+   corner of the best chip's bar. Sits at the bar top (--chip-top) and above the
+   .chip-fill via z-index. Shown only on the .best-match cell. */
 .match-cap {
   position: absolute;
   left: 0;
+  top: var(--chip-top, 0%);
+  width: 7px;
+  height: 7px;
+  z-index: 1;
+  background: currentColor;
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+  color: rgba(255,255,255,0.5);
+  pointer-events: none;
+  display: none;
+  transition: color 0.1s ease;
+}
+.match-cell.best-match .match-cap { display: block; }
+
+.swatch-container.light .match-cap { color: rgba(0,0,0,0.5); }
+
+.match-cell:hover .match-cap { color: rgba(255,255,255,1); }
+.swatch-container.light .match-cell:hover .match-cap { color: rgba(0,0,0,1); }
+
+.swatches.none-selected .match-cap { display: none; }
+.swatches.none-selected .match-label { visibility: hidden; }
+
+/* Promoted-chip marker: the ● dot floats just above the promoted chip's bar
+   top, centred (tracks the skyline via --chip-top). Shown only when promoted. */
+.match-dot {
+  position: absolute;
+  left: 0;
   right: 0;
-  bottom: 100%;
+  top: calc(var(--chip-top, 0%) - 10px);
   height: 10px;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   font-size: 5px;
@@ -561,14 +778,11 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   user-select: none;
   transition: color 0.1s ease;
 }
-
-.swatch-container.light .match-cap { color: rgba(0,0,0,0.5); }
-
-.match-cell:hover .match-cap { color: rgba(255,255,255,1); }
-.swatch-container.light .match-cell:hover .match-cap { color: rgba(0,0,0,1); }
-
-.swatches.none-selected .match-cap { visibility: hidden; }
-.swatches.none-selected .match-label { visibility: hidden; }
+.match-cell.promoted-match .match-dot { display: flex; }
+.swatch-container.light .match-dot { color: rgba(0,0,0,0.5); }
+.match-cell:hover .match-dot { color: rgba(255,255,255,1); }
+.swatch-container.light .match-cell:hover .match-dot { color: rgba(0,0,0,1); }
+.swatches.none-selected .match-dot { display: none; }
 
 /* Drag dot */
 #swatch-dot {

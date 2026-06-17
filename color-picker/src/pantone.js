@@ -4,19 +4,20 @@
 
 import {
   DOT_RADIUS, DOT_PEAK_OPACITY, DOT_FALLOFF_L, DOT_PROMOTED_RADIUS, DOT_PROMOTED_STROKE,
-  MIDDLE_GRAY, DISC_SIZE, N_MATCHES, MIN_MATCHES, MIN_WITH_PROMOTED, MAX_MATCHES, MIN_MATCH_WIDTH,
+  MIDDLE_GRAY, DISC_SIZE, DEFAULT_MATCH_COUNT, MIN_MATCHES, MIN_WITH_PROMOTED, MAX_MATCHES, MIN_MATCH_WIDTH,
+  MIN_CHIP_CUTOFF, MAX_CHIP_CUTOFF, MIN_GAMUT_BAR_H,
   GAMUT_ICON_SVG, CLOSE_ICON_SVG,
 } from './constants.js';
-import { S, P, els, pantoneSelections, savePreferredMatchCount } from './state.js';
+import { S, P, els, pantoneSelections, savePreferredMatchCount, saveChipCutoff } from './state.js';
 import { TAU, svgEl, idxOf } from './picker.js';
-import { toe, toOKLab } from './color.js';
+import { toe, toOKLab, computeP3AndSRGB } from './color.js';
 import { OKLabToOKHSL, OKHSLToOKLab, DisplayP3Gamut, convert, OKLab, DisplayP3 } from 'https://esm.sh/@texel/color@1.1.11?bundle';
 import { swatchEl } from './swatches.js';
 import { flushPendingWheelSnapshot, recordSnapshot } from './history.js';
 
 const PANTONE_URL = new URL('../Pantone_OKLAB.txt', import.meta.url);
 
-function demoteActiveMutation() {
+function clearPromotedOnEdit() {
   const targets = S.isMultiMode() ? S.multiSelect
                 : S.activeIndex !== -1 ? [S.activeIndex]
                 : [];
@@ -56,7 +57,7 @@ function isCategoryVisible(cat) {
 
 function anyLibraryEnabled() { return !!S.libraryFilters.base; }
 
-function isSelectedPantoneLibraryOn(category) {
+function isCategoryEnabled(category) {
   if (category === 'base') return true;
   return !!S.libraryFilters[category];
 }
@@ -120,7 +121,7 @@ function buildDots() {
     });
     frag.appendChild(circ);
     entry.el = circ;
-    entry._st = '';   // last applied-state key (see updateDots)
+    entry._stateKey = '';   // last applied-state key (see updateDots)
   }
   discDots.appendChild(frag);   // one DOM insertion instead of ~5000
 }
@@ -182,8 +183,8 @@ function updateDots() {
       }
     }
 
-    if (st === entry._st) continue;
-    entry._st = st;
+    if (st === entry._stateKey) continue;
+    entry._stateKey = st;
 
     if (st === 'H') {
       el.style.display = 'none';
@@ -211,7 +212,7 @@ function updateDots() {
 // Pantone matching
 
 // Scratch buffers
-const okhslLab    = [0, 0, 0];
+const okhslInput    = [0, 0, 0];
 const swatchLabBuf = [0, 0, 0];
 const p3Buf       = [0, 0, 0];
 const oklabBuf    = [0, 0, 0];
@@ -233,20 +234,20 @@ function findClosestMatches(targetL, targetA, targetB, n = MAX_MATCHES) {
       top.length = n;
     }
   }
-  return top.map(t => t.entry);
+  return top;   // [{ entry, distSq }], nearest first
 }
 
 function visibleMaxForRow(container) {
-  if (!container) return N_MATCHES;
+  if (!container) return DEFAULT_MATCH_COUNT;
   // Prefer the width cached by matchRowObserver (read post-layout, so it
   // costs no reflow here). Fall back to a live read until the observer has
   // first reported, so correctness never depends on observer timing.
-  let w = container._mcWidth;
+  let w = container._matchCellsWidth;
   if (!w) {   // null/0 (e.g. hidden or just re-shown) -> read live width
     const matchCells = container.querySelector('.match-cells');
     w = (matchCells && matchCells.clientWidth) || container.clientWidth;
   }
-  if (!w) return N_MATCHES;
+  if (!w) return DEFAULT_MATCH_COUNT;
   return Math.max(MIN_MATCHES, Math.floor(w / MIN_MATCH_WIDTH));
 }
 
@@ -268,18 +269,21 @@ function renderPromoted(cell, p) {
 
 function clearChipCell(cell) {
   cell.style.display = 'none';
-  cell.classList.remove('out-of-p3', 'metallic', 'promoted-match');
+  cell.classList.remove('out-of-p3', 'chip-short', 'metallic', 'promoted-match', 'best-match');
   delete cell.dataset.pantoneName;
 }
 
-function renderChipCell(cell, m, isBest, isPromoted) {
+function renderChipCell(cell, m, isBest, isPromoted, chipTopRatio, hideGamut) {
   cell.style.display    = '';
-  cell.style.background = pantoneP3Css(m);
+  // Bar top slides down from the midpoint by deltaE/cutoff (see updateSwatchMatches).
+  cell.style.setProperty('--chip-top', (chipTopRatio * 100).toFixed(2) + '%');
+  cell.querySelector('.chip-fill').style.background = pantoneP3Css(m);
   cell.dataset.pantoneName = m.name;
   cell.classList.toggle('out-of-p3', !!m.outOfP3);
+  cell.classList.toggle('chip-short', !!hideGamut);
   cell.classList.toggle('metallic', m.category === 'metallic');
   cell.classList.toggle('promoted-match', !!isPromoted);
-  cell.querySelector('.match-cap').textContent = isBest ? '●' : '';
+  cell.classList.toggle('best-match', !!isBest);
   renderPantoneLabel(cell.querySelector('.match-label'), m.name);
 }
 
@@ -319,7 +323,7 @@ function updateSwatchMatches(index) {
   const visibleMax = visibleMaxForRow(container);
 
   let selected = pantoneSelections.get(index) || null;
-  if (selected && !isSelectedPantoneLibraryOn(selected.category)) {
+  if (selected && !isCategoryEnabled(selected.category)) {
     pantoneSelections.delete(index);
     selected = null;
   }
@@ -340,31 +344,69 @@ function updateSwatchMatches(index) {
     return;
   }
 
-  okhslLab[0] = c.h * 360;
-  okhslLab[1] = c.s;
-  okhslLab[2] = toe(c.L);
-  OKHSLToOKLab(okhslLab, DisplayP3Gamut, swatchLabBuf);
+  okhslInput[0] = c.h * 360;
+  okhslInput[1] = c.s;
+  okhslInput[2] = toe(c.L);
+  OKHSLToOKLab(okhslInput, DisplayP3Gamut, swatchLabBuf);
 
   // c.matchCount is the user's persistent preferred count. Render only as
   // many chips as currently fit, but NEVER write the clamped value back:
   // doing so let transient states (e.g. width 0 while deselected) reset
   // the preference. Leaving it intact means the count survives selection
   // changes and recovers when space allows.
-  const desired = c.matchCount ?? N_MATCHES;
+  const desired = c.matchCount ?? DEFAULT_MATCH_COUNT;
   const minFloor = selected ? MIN_WITH_PROMOTED : MIN_MATCHES;
-  const bottomCount = Math.max(minFloor, Math.min(desired, visibleMax, MAX_MATCHES));
+  const chipCount = Math.max(minFloor, Math.min(desired, visibleMax, MAX_MATCHES));
 
-  const bottomMatches = findClosestMatches(
-    swatchLabBuf[0], swatchLabBuf[1], swatchLabBuf[2], bottomCount,
+  const matchChips = findClosestMatches(
+    swatchLabBuf[0], swatchLabBuf[1], swatchLabBuf[2], chipCount,
   );
+
+  // Skyline offset: a chip's vertical position is ratio = deltaE / chipCutoff of
+  // the strip height. deltaE ≥ chipCutoff → ratio ≥ 1 → dropped. The wheel sets
+  // the candidate count; survivors reflow to fill.
+  const cutoff = S.chipCutoff;
+  const ratioByEntry = new Map();
+  const kept = [];
+  for (const { entry, distSq } of matchChips) {
+    const ratio = Math.sqrt(distSq) / cutoff;
+    if (ratio >= 1) continue;
+    ratioByEntry.set(entry, ratio);
+    kept.push(entry);
+  }
 
   renderPromoted(promotedCell, selected);
 
-  const { displayOrder, bestDomIdx } = buildDisplayOrder(bottomMatches);
+  // The chip strip fills with the promoted Pantone's colour when one is pinned,
+  // otherwise the swatch's own colour — so the field reads as continuous behind
+  // the bars. (Owned here, not in updateSwatch, so promote/un-promote — which
+  // only call updateSwatchMatches — update the backdrop too.)
+  const matchCellsEl = container.querySelector('.match-cells');
+  if (matchCellsEl) {
+    if (selected) {
+      matchCellsEl.style.background = pantoneP3Css(selected);
+    } else {
+      const { p3Css, srgbCss, outOfSRGB } = computeP3AndSRGB(c);
+      matchCellsEl.style.background = outOfSRGB ? p3Css : srgbCss;
+    }
+  }
+
+  const { displayOrder, bestDomIdx } = buildDisplayOrder(kept);
+
+  // Bar height = (1 - ratio) × strip height; hide the gamut icon below the
+  // minimum height where it would no longer fit.
+  const stripH = container._matchCellsHeight
+    || container.querySelector('.match-cells')?.clientHeight || 0;
 
   for (let i = 0; i < cells.length; i++) {
-    if (i >= bottomCount || !displayOrder[i]) clearChipCell(cells[i]);
-    else renderChipCell(cells[i], displayOrder[i], i === bestDomIdx, !!selected && displayOrder[i].name === selected.name);
+    const entry = displayOrder[i];
+    if (!entry) { clearChipCell(cells[i]); continue; }
+    const ratio = ratioByEntry.get(entry);
+    const hideGamut = (1 - ratio) * stripH < MIN_GAMUT_BAR_H;
+    renderChipCell(
+      cells[i], entry, i === bestDomIdx,
+      !!selected && entry.name === selected.name, ratio, hideGamut,
+    );
   }
 }
 
@@ -389,7 +431,7 @@ function findPantoneByName(name) {
 function oklabToP3Css(L, a, b) {
   oklabBuf[0] = L; oklabBuf[1] = a; oklabBuf[2] = b;
   convert(oklabBuf, OKLab, DisplayP3, p3Buf);
-  return `color(display-p3 ${Math.max(0, p3Buf[0]).toFixed(4)} ${Math.max(0, p3Buf[1]).toFixed(4)} ${Math.max(0, p3Buf[2]).toFixed(4)})`;
+  return `color(display-p3 ${Math.max(0, p3Buf[0]).toFixed(3)} ${Math.max(0, p3Buf[1]).toFixed(3)} ${Math.max(0, p3Buf[2]).toFixed(3)})`;
 }
 
 // A pantone's pickable P3 colour: hold hue and lightness, pull the OKHSL
@@ -444,16 +486,26 @@ function buildMatchCells(container) {
     const cap = document.createElement('div');
     cap.className = 'match-cap';
     cell.appendChild(cap);
+    const dot = document.createElement('div');
+    dot.className = 'match-dot';
+    dot.textContent = '●';
+    cell.appendChild(dot);
+    // The colour bar: anchored to the strip bottom, its top edge set per-chip
+    // by --chip-top. Label + metallic noise ride inside it, so they track the
+    // skyline; the gamut icon stays pinned to the (full-height) cell bottom.
+    const fill = document.createElement('div');
+    fill.className = 'chip-fill';
     const label = document.createElement('div');
     label.className = 'match-label';
-    cell.appendChild(label);
+    fill.appendChild(label);
+    const noiseEl = document.createElement('div');
+    noiseEl.className = 'noise-overlay';
+    fill.appendChild(noiseEl);
+    cell.appendChild(fill);
     const gamutIcon = document.createElement('span');
     gamutIcon.className = 'icon chip-gamut-warning';
     gamutIcon.innerHTML = GAMUT_ICON_SVG;
     cell.appendChild(gamutIcon);
-    const noiseEl = document.createElement('div');
-    noiseEl.className = 'noise-overlay';
-    cell.appendChild(noiseEl);
     matchCells.appendChild(cell);
   }
   matchRow.appendChild(matchCells);
@@ -496,8 +548,10 @@ const matchRowObserver = new ResizeObserver(entries => {
     const container = entry.target.closest('.swatch-container');
     if (!container) continue;
     const w = entry.target.clientWidth;   // entry.target is .match-cells
-    if (container._mcWidth === w) continue;  // width unchanged → nothing to recompute
-    container._mcWidth = w;
+    const h = entry.target.clientHeight;  // strip height drives the gamut-icon cutoff
+    if (container._matchCellsWidth === w && container._matchCellsHeight === h) continue;
+    container._matchCellsWidth = w;
+    container._matchCellsHeight = h;
     const i = idxOf(container);
     if (Number.isInteger(i) && i >= 0 && i < S.colors.length) updateSwatchMatches(i);
   }
@@ -514,7 +568,7 @@ function wireMatchRowWheel(matchRow, container) {
     const visibleMax = Math.min(visibleMaxForRow(container), MAX_MATCHES);
     const hasSelection = pantoneSelections.has(i);
     const minFloor = hasSelection ? MIN_WITH_PROMOTED : MIN_MATCHES;
-    const stored = c.matchCount ?? N_MATCHES;
+    const stored = c.matchCount ?? DEFAULT_MATCH_COUNT;
     const effective = Math.min(stored, visibleMax);
     // Holding Shift makes the OS deliver wheel scroll on the X axis, so deltaY
     // is 0 and the value lands in deltaX — read whichever axis carries the
@@ -548,11 +602,11 @@ function wireMatchRowClick(matchRow, container) {
     const entry = findPantoneByName(name);
     if (!entry) return;
 
-    // Clicking a match chip promotes it. Clicking the already-promoted
-    // chip keeps it promoted (no toggle-off); un-promoting happens only
-    // via the promoted cell's close box or by changing the swatch colour.
-    if (pantoneSelections.get(i) === entry) return;
-    pantoneSelections.set(i, entry);
+    // Clicking a match chip promotes it; clicking the already-promoted chip
+    // again toggles it back off (in addition to the promoted cell's close box
+    // and swatch-colour changes).
+    if (pantoneSelections.get(i) === entry) pantoneSelections.delete(i);
+    else pantoneSelections.set(i, entry);
     updateSwatchMatches(i);
     updateDots();
     flushPendingWheelSnapshot();
@@ -564,6 +618,8 @@ function wireMatchRowClick(matchRow, container) {
 // Library filter checkboxes
 
 const libraryPanel = document.getElementById('library-panel');
+const cutoffSlider = document.getElementById('cutoff-slider');
+const cutoffValue  = document.getElementById('cutoff-value');
 if (libraryPanel) {
   libraryPanel.querySelectorAll('input[type="checkbox"][data-library]').forEach(cb => {
     cb.addEventListener('change', () => {
@@ -585,7 +641,25 @@ if (libraryPanel) {
     }
   });
 
+  wireCutoffSlider();
   syncLibraryCheckboxState();
+}
+
+function wireCutoffSlider() {
+  if (!cutoffSlider) return;
+  cutoffSlider.min   = MIN_CHIP_CUTOFF;
+  cutoffSlider.max   = MAX_CHIP_CUTOFF;
+  cutoffSlider.step  = 0.005;
+  cutoffSlider.value = S.chipCutoff;
+  if (cutoffValue) cutoffValue.textContent = S.chipCutoff.toFixed(3);
+  cutoffSlider.addEventListener('input', () => {
+    const v = parseFloat(cutoffSlider.value);
+    if (!Number.isFinite(v)) return;
+    S.chipCutoff = v;
+    saveChipCutoff(v);
+    if (cutoffValue) cutoffValue.textContent = v.toFixed(3);
+    updateAllSwatchMatches();
+  });
 }
 
 function syncLibraryCheckboxState() {
@@ -598,6 +672,7 @@ function syncLibraryCheckboxState() {
   libraryPanel.querySelectorAll('input[type="checkbox"][data-option]').forEach(cb => {
     cb.disabled = !baseOn;
   });
+  if (cutoffSlider) cutoffSlider.disabled = !baseOn;
 }
 
 function updateMatchesVisibility() {
@@ -607,7 +682,7 @@ function updateMatchesVisibility() {
 
 
 export {
-  demoteActiveMutation, loadPantoneLibrary, updateSwatchMatches, updateDots,
+  clearPromotedOnEdit, loadPantoneLibrary, updateSwatchMatches, updateDots,
   scheduleMatches, updateMatchesVisibility, syncLibraryCheckboxState,
   findPantoneByName, pantoneP3Css, buildMatchCells, matchRowObserver, libraryPanel,
 };

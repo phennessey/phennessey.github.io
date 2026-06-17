@@ -6,7 +6,7 @@ import { S, P, els, handlePos } from './state.js';
 import { meshEdgesFor } from './picker.js';
 import { neutralP3 } from './color.js';
 import { swatchEl } from './swatches.js';
-import { invalidateAndRender } from './util.js';
+import { requestRender } from './util.js';
 
 // Multi-select visuals
 
@@ -37,7 +37,7 @@ function computeFrozenEdges() {
 
 function updateMesh() {
   if (!S.isMultiMode() || !S.frozenEdges) { P.clearMesh(); return; }
-  const guidesActive = (S.mouseInPickerWrap || S.dragging) && (S.modKeys.shift || S.modKeys.meta);
+  const guidesActive = (S.pointerInPickerWrap || S.dragging) && (S.modKeys.shift || S.modKeys.meta);
   if (guidesActive) { P.clearMesh(); return; }
   const refIdx = S.multiSelect.has(S.activeIndex) ? S.activeIndex : [...S.multiSelect][0];
   const stroke = S.colors[refIdx]?.L > MIDDLE_GRAY ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)';
@@ -48,8 +48,14 @@ function updateMesh() {
 // Background
 
 function updateBackground() {
-  const idx = S.activeIndex !== -1 ? S.activeIndex : S.lastActiveIndex;
-  const L = S.colors[idx]?.L ?? 0.5;
+  // Nothing selected: drop the lightness tint and let the page background show
+  // through the color map panel (the frame + body behind it are the body bg).
+  if (S.activeIndex === -1) {
+    els.pickerWrap.style.backgroundColor = 'transparent';
+    els.pickerWrap.classList.remove('light-bg');
+    return;
+  }
+  const L = S.colors[S.activeIndex]?.L ?? 0.5;
   els.pickerWrap.style.backgroundColor = neutralP3(L);
   els.pickerWrap.classList.toggle('light-bg', L > MIDDLE_GRAY);
 }
@@ -94,7 +100,7 @@ function setActive(index, { silent = false } = {}) {
   activateSwatch(index);
   els.discOverlay.appendChild(P.handles[index]);
   els.lightbarOverlay.appendChild(P.lightHandles[index]);
-  if (!silent) invalidateAndRender();
+  if (!silent) requestRender();
 }
 
 function toggleMultiSelect(index) {
@@ -108,7 +114,7 @@ function toggleMultiSelect(index) {
   if (S.multiSelect.has(index)) S.activeIndex = index;
   els.swatches.classList.remove('none-selected');
   computeFrozenEdges();
-  invalidateAndRender();
+  requestRender();
 }
 
 function deselect() {

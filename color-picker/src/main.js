@@ -14,7 +14,6 @@ import { updateSwatch, createSwatchDOM, wireSwatch, swatchEl, updateAddButton } 
 import { updateSwatchMatches, updateDots, scheduleMatches, loadPantoneLibrary } from './pantone.js';
 import { updateBackground, updateMesh, setActive } from './selection.js';
 import { syncHexField, hexTextarea } from './hex.js';
-import { observeSquircle } from './util.js';
 import { recordSnapshot } from './history.js';
 import { applyBgLevel } from './interactions.js';
 
@@ -52,11 +51,9 @@ applyBgLevel();
 P.createHandle(0);
 P.createLightHandle(0);
 wireSwatch(createSwatchDOM(0));
-observeSquircle(swatchEl(0).querySelector('.swatch-inner'));
 els.swatches.classList.add('none-selected');
 setActive(0);
 P.render();
-[els.pickerWrap, els.lightbarEl, hexTextarea].forEach(observeSquircle);
 updateAddButton();
 recordSnapshot();
 loadPantoneLibrary();

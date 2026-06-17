@@ -7,7 +7,6 @@ import { srgbToOKHSL } from './color.js';
 import { swatchEl, removeColorAt, createSwatchDOM, wireSwatch, reindex, updateSwatch, updateAddButton } from './swatches.js';
 import { exitMultiSelect, setActive } from './selection.js';
 import { updateSwatchMatches } from './pantone.js';
-import { observeSquircle } from './util.js';
 import { flushPendingWheelSnapshot, recordSnapshot } from './history.js';
 
 // Hex input
@@ -54,7 +53,6 @@ function applyHexInput(rgbList) {
     P.createHandle(i);
     P.createLightHandle(i);
     wireSwatch(createSwatchDOM(i));
-    observeSquircle(swatchEl(i).querySelector('.swatch-inner'));
   }
 
   S.activeIndex = -1;
