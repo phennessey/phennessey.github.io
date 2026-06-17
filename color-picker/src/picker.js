@@ -6,7 +6,7 @@
 
 import { convert, OKLab, DisplayP3 } from "https://esm.sh/@texel/color@1.1.11?bundle";
 import {
-  toe, toOKLab, to255, clamp01, sForChroma, getActiveChroma, inSRGB,
+  toe, toOKLab, to255, clamp01, sForChroma, chromaOf, inSRGB, cuspL,
 } from './color.js';
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -15,6 +15,10 @@ export const TAU = 2 * Math.PI;
 
 // Scratch array for pixel rendering (reused across calls).
 const _p3 = [0, 0, 0];
+
+// 4×4 Bayer ordered-dither thresholds, centred to ±0.5 LSB (in 0–1 colour
+// units). Indexed by (y & 3, x & 3); a lookup, so essentially free per pixel.
+const BAYER4 = [0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5].map(v => (v / 16 - 0.46875) / 255);
 
 // ── Disc pixel rendering ─────────────────────────────────────────────
 
@@ -28,9 +32,11 @@ export function renderDiscPixels(imageData, discSize, lr) {
       const s  = Math.min(1, Math.sqrt(dx * dx + dy * dy) / discR);
       convert(toOKLab(h, s, lr), OKLab, DisplayP3, _p3);
       const idx = (y * discSize + x) * 4;
-      d[idx]     = to255(_p3[0]);
-      d[idx + 1] = to255(_p3[1]);
-      d[idx + 2] = to255(_p3[2]);
+      // Bayer 4×4 ordered dither (±0.5 LSB) breaks 8-bit banding — a LUT lookup.
+      const n = BAYER4[(y & 3) * 4 + (x & 3)];
+      d[idx]     = to255(_p3[0] + n);
+      d[idx + 1] = to255(_p3[1] + n);
+      d[idx + 2] = to255(_p3[2] + n);
       d[idx + 3] = 255;
     }
   }
@@ -246,10 +252,10 @@ export function createPicker(S, cfg) {
   makeHitArea(lightbarOverlay, svgEl('rect', { x: 0, y: 0, width: LB_WIDTH, height: LB_HEIGHT, fill: 'transparent' }));
 
   // ── SVG overlay elements ─────────────────────────────────────────
-  const GamutBoundary = svgEl('path', {
+  const gamutBoundary = svgEl('path', {
     id: 'gamut-boundary', fill: 'none', stroke: '#000', 'stroke-width': '0.5', 'stroke-linejoin': 'round',
   });
-  discOverlay.appendChild(GamutBoundary);
+  discOverlay.appendChild(gamutBoundary);
 
   const discHueLine = svgEl('line', {
     fill: 'none', 'stroke-width': '1', 'stroke-opacity': '0.3', 'pointer-events': 'none', opacity: '0',
@@ -262,6 +268,13 @@ export function createPicker(S, cfg) {
 
   const discRadialGuides = svgEl('g', { 'pointer-events': 'none' });
   discOverlay.appendChild(discRadialGuides);
+
+  // Chroma-cusp marker on the lightbar: a thin horizontal line at the
+  // max-chroma lightness, shown while a Shift lightbar drag can snap to it.
+  const cuspLine = svgEl('line', {
+    x1: 0, x2: LB_WIDTH, 'stroke-width': '1', 'pointer-events': 'none', opacity: '0',
+  });
+  lightbarOverlay.appendChild(cuspLine);
 
   // Mesh lines between multi-selected handles. Owned by the picker;
   // `updateMesh` takes the edge list and a point lookup so the picker
@@ -293,14 +306,14 @@ export function createPicker(S, cfg) {
   function clearMesh() { discMesh.innerHTML = ''; }
 
   // ── Render cache ─────────────────────────────────────────────────
-  let disc_img = null, disc_L = -1;
-  let lightbar_key = null;
-  let gamut_lr = -1, gamut_d = '';
+  let discImg = null, discL = -1;
+  let lightbarKey = null;
+  let gamutLr = -1, gamutD = '';
 
   function invalidateCache() {
-    disc_img = null; disc_L = -1;
-    lightbar_key = null;
-    gamut_lr = -1;
+    discImg = null; discL = -1;
+    lightbarKey = null;
+    gamutLr = -1;
   }
 
   const handles = [];
@@ -338,8 +351,8 @@ export function createPicker(S, cfg) {
     const refL = S.colors[S.lastActiveIndex]?.L ?? 0.5;
     const lr   = toe(refL);
 
-    if (disc_L === refL && disc_img) {
-      ctx.putImageData(disc_img, 0, 0);
+    if (discL === refL && discImg) {
+      ctx.putImageData(discImg, 0, 0);
       updateGamutBoundary(refL, lr);
       return;
     }
@@ -347,21 +360,24 @@ export function createPicker(S, cfg) {
     const img = ctx.createImageData(DISC_SIZE, DISC_SIZE);
     renderDiscPixels(img, DISC_SIZE, lr);
     ctx.putImageData(img, 0, 0);
-    disc_img = ctx.getImageData(0, 0, DISC_SIZE, DISC_SIZE);
-    disc_L   = refL;
+    // Cache the ImageData we just built rather than reading it back with
+    // getImageData — the pixels are identical, and this avoids a GPU→CPU
+    // readback (the source of Chrome's willReadFrequently hint).
+    discImg = img;
+    discL   = refL;
     updateGamutBoundary(refL, lr);
   }
 
   function updateGamutBoundary(L, lr) {
     const { stroke, opacity } = gamutBoundaryStyle(L, MIDDLE_GRAY);
-    GamutBoundary.setAttribute('stroke', stroke);
-    GamutBoundary.setAttribute('stroke-opacity', opacity);
+    gamutBoundary.setAttribute('stroke', stroke);
+    gamutBoundary.setAttribute('stroke-opacity', opacity);
     // The boundary path depends only on lr; recompute it (and re-parse the
     // 359-point SVG path) only when lightness actually changes.
-    if (lr !== gamut_lr) {
-      gamut_d  = gamutBoundaryPath(lr, DISC_R);
-      gamut_lr = lr;
-      GamutBoundary.setAttribute('d', gamut_d);
+    if (lr !== gamutLr) {
+      gamutD  = gamutBoundaryPath(lr, DISC_R);
+      gamutLr = lr;
+      gamutBoundary.setAttribute('d', gamutD);
     }
   }
 
@@ -371,9 +387,9 @@ export function createPicker(S, cfg) {
   function drawLightbar() {
     const active = S.colors[S.activeIndex !== -1 ? S.activeIndex : 0];
     const key    = `${active.h.toFixed(4)}_${active.s.toFixed(4)}`;
-    if (lightbar_key === key) return;
+    if (lightbarKey === key) return;
     lightbarEl.style.background = lightbarGradientCss(active.h, active.s);
-    lightbar_key = key;
+    lightbarKey = key;
   }
 
   // ── Guide overlays ───────────────────────────────────────────────
@@ -407,7 +423,7 @@ export function createPicker(S, cfg) {
     }
     if (S.modKeys.meta) {
       const lr = toe(col.L);
-      const targetC = getActiveChroma(col);
+      const targetC = chromaOf(col);
       discRadialGuides.appendChild(svgEl('path', {
         d: polarPath(360, h => sForChroma(h, targetC, lr) * DISC_R, DISC_R),
         fill: 'none', stroke, 'stroke-width': '1', 'pointer-events': 'none',
@@ -425,20 +441,40 @@ export function createPicker(S, cfg) {
     }
   }
 
+  // Position/show the chroma-cusp marker. Visible only when a single-colour
+  // Shift lightbar drag could snap to it: pointer on the lightbar, Shift held,
+  // Meta not (Meta is lock-chroma). Coloured for contrast at that lightness.
+  function updateCuspLine() {
+    const single = S.activeIndex !== -1 && !S.isMultiMode();
+    if (!(single && S.modKeys.shift && !S.modKeys.meta && S.pointerInLightbar)) {
+      cuspLine.setAttribute('opacity', '0');
+      return;
+    }
+    const cuspLval = cuspL(S.colors[S.activeIndex].h);
+    const y = toeLToY(toe(cuspLval));
+    setAttrs(cuspLine, {
+      y1: y.toFixed(2), y2: y.toFixed(2),
+      // Match the disc construction guides: 1px, 0.3-alpha black/white by lightness.
+      stroke: cuspLval > MIDDLE_GRAY ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)',
+      opacity: '1',
+    });
+  }
+
   function updateDiscGuides() {
+    updateCuspLine();
     discHueLine.setAttribute('opacity', '0');
     discChromaPath.setAttribute('opacity', '0');
     discRadialGuides.innerHTML = '';
 
     if (S.activeIndex === -1) return null;
 
-    const guidesVisible = S.mouseInPickerWrap || S.dragging;
+    const guidesVisible = S.pointerInPickerWrap || S.dragging;
     if (!guidesVisible) return null;
 
     // While the cursor is over the lightbar, Shift drives fine-adjustment
     // scroll on the lightbar (see interactions.js) rather than the disc's
     // saturation guides — so treat Shift as inactive for disc-guide purposes.
-    const shift = S.modKeys.shift && !S.mouseInLightbar;
+    const shift = S.modKeys.shift && !S.pointerInLightbar;
 
     if (S.isMultiMode()) {
       if (shift || S.modKeys.meta) {
@@ -451,7 +487,7 @@ export function createPicker(S, cfg) {
           drawGuideForColor(S.colors[S.hoveredHandle], dimStroke);
         }
 
-        if (shift && S.modKeys.meta && (S.mouseInPicker || S.hueConvergeDrag?.lockedH != null)) {
+        if (shift && S.modKeys.meta && (S.pointerInPicker || S.hueConvergeDrag?.lockedH != null)) {
           const targetH = S.hueConvergeDrag?.lockedH ?? S.mouseHueAngle;
           const a = targetH * TAU;
           setAttrs(discHueLine, {
@@ -475,16 +511,16 @@ export function createPicker(S, cfg) {
 
     if (shift) {
       drawHueLine(col, stroke);
-      if (S.modKeys.meta) showChromaPath(getActiveChroma(col), toe(col.L), stroke);
+      if (S.modKeys.meta) showChromaPath(chromaOf(col), toe(col.L), stroke);
       return null;
     }
 
     if (S.modKeys.meta) {
       let targetC, pathL;
-      if (S.lockedChromaPath) {
-        ({ targetC, L: pathL } = S.lockedChromaPath);
+      if (S.discChromaLock) {
+        ({ targetC, L: pathL } = S.discChromaLock);
       } else {
-        targetC = getActiveChroma(col); pathL = col.L;
+        targetC = chromaOf(col); pathL = col.L;
       }
       showChromaPath(targetC, toe(pathL), stroke);
       drawHueLine(col, stroke, Math.max(0, col.s * DISC_R - HANDLE_OUTER));

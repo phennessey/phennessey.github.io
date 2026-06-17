@@ -2,14 +2,14 @@
 // hue-convergence), the lightbar, swatch & chip drag-and-drop, modifier
 // keys, and background-brightness scrolling.
 
-import { BG_LEVELS, MIDDLE_GRAY, LB_HEIGHT } from './constants.js';
+import { BG_LEVELS, MIDDLE_GRAY, LB_HEIGHT, CUSP_SNAP_PX } from './constants.js';
 import { S, P, els, DISC_R, handlePos, yToToeL, toeLToY, pantoneSelections, loadPreferredMatchCount } from './state.js';
 import { TAU, idxOf } from './picker.js';
-import { toe, toeInv, clamp01, lToRaw, rawToL, sForChroma, getActiveChroma, hueDiff, computeP3AndSRGB } from './color.js';
-import { discXY, captureDrag, syncModKeys, invalidateAndRender } from './util.js';
+import { toe, toeInv, clamp01, lToRaw, rawToL, sForChroma, chromaOf, cuspL, hueDiff, computeP3AndSRGB } from './color.js';
+import { discXY, captureDrag, syncModKeys, requestRender } from './util.js';
 import { setActive, toggleMultiSelect, deselect, updateMesh } from './selection.js';
 import { updateSwatch } from './swatches.js';
-import { demoteActiveMutation, findPantoneByName, pantoneP3Css } from './pantone.js';
+import { clearPromotedOnEdit, findPantoneByName, pantoneP3Css } from './pantone.js';
 import { flushPendingWheelSnapshot, recordSnapshot, scheduleWheelSnapshot } from './history.js';
 
 // Modifier-key tracking
@@ -23,18 +23,18 @@ document.addEventListener('keydown', e => {
 
 document.addEventListener('keyup', e => {
   if (e.key === 'Shift') S.modKeys.shift = false;
-  else if (e.key === 'Meta') { S.modKeys.meta = false; S.lockedChromaPath = null; }
+  else if (e.key === 'Meta') { S.modKeys.meta = false; S.discChromaLock = null; }
   else return;
   if (S.hueConvergeDrag) S.hueConvergeDrag.needsReanchor = true;
   P.updateDiscGuides(); updateMesh();
 });
 
 els.pickerWrap.addEventListener('pointerenter', () => {
-  S.mouseInPickerWrap = true;
+  S.pointerInPickerWrap = true;
   if (S.modKeys.shift || S.modKeys.meta) { P.updateDiscGuides(); updateMesh(); }
 });
 els.pickerWrap.addEventListener('pointerleave', () => {
-  S.mouseInPickerWrap = false;
+  S.pointerInPickerWrap = false;
   if (S.modKeys.shift || S.modKeys.meta) { P.updateDiscGuides(); updateMesh(); }
 });
 
@@ -45,7 +45,7 @@ els.discOverlay.addEventListener('pointermove', ev => {
   syncModKeys(ev);
   if (S.dragging) return;
   const { dx, dy } = discXY(ev);
-  S.mouseInPicker   = Math.hypot(dx, dy) <= DISC_R;
+  S.pointerInPicker   = Math.hypot(dx, dy) <= DISC_R;
   S.mouseHueAngle   = ((Math.atan2(-dy, dx) / TAU) + 1) % 1;
 
   const hEl      = ev.target.closest('.disc-handle');
@@ -55,13 +55,13 @@ els.discOverlay.addEventListener('pointermove', ev => {
     if (S.modKeys.shift || S.modKeys.meta) { P.updateDiscGuides(); updateMesh(); }
   }
 
-  if (S.isMultiMode() && S.modKeys.shift && S.modKeys.meta && S.mouseInPicker) {
+  if (S.isMultiMode() && S.modKeys.shift && S.modKeys.meta && S.pointerInPicker) {
     P.updateDiscGuides();
   }
 });
 
 els.discOverlay.addEventListener('pointerleave', () => {
-  S.mouseInPicker = false;
+  S.pointerInPicker = false;
   if (S.hoveredHandle !== -1) { S.hoveredHandle = -1; P.updateDiscGuides(); updateMesh(); }
 });
 
@@ -78,10 +78,10 @@ function applyDiscPointer(ev) {
 
   if (S.modKeys.meta && !S.modKeys.shift) {
     const angle = Math.atan2(-rdy, rdx);
-    if (!S.lockedChromaPath) {
+    if (!S.discChromaLock) {
       const result = P.updateDiscGuides();
-      S.lockedChromaPath = {
-        targetC: getActiveChroma(col), L: col.L,
+      S.discChromaLock = {
+        targetC: chromaOf(col), L: col.L,
         cx: result ? result.cx : DISC_R, cy: result ? result.cy : DISC_R,
         lastAngle: angle,   // anchor: rotate from here, tracking cursor delta only
       };
@@ -89,11 +89,11 @@ function applyDiscPointer(ev) {
     // Rotate the hue by the cursor's angular delta rather than snapping to the
     // cursor — like grabbing a wheel at its current position. Normalise the
     // delta across the ±π seam so a wraparound doesn't cause a jump.
-    let d = angle - S.lockedChromaPath.lastAngle;
+    let d = angle - S.discChromaLock.lastAngle;
     d = ((d + Math.PI) % TAU + TAU) % TAU - Math.PI;
-    S.lockedChromaPath.lastAngle = angle;
+    S.discChromaLock.lastAngle = angle;
     col.h = ((col.h + d / TAU) % 1 + 1) % 1;
-    col.s = sForChroma(col.h, S.lockedChromaPath.targetC, toe(S.lockedChromaPath.L));
+    col.s = sForChroma(col.h, S.discChromaLock.targetC, toe(S.discChromaLock.L));
   } else {
     if (S.modKeys.shift && !S.modKeys.meta) {
       const a = col.h * TAU;
@@ -102,10 +102,10 @@ function applyDiscPointer(ev) {
       col.h = (Math.atan2(-dy, dx) / TAU + 1) % 1;
       col.s = Math.min(1, Math.sqrt(dx * dx + dy * dy) / DISC_R);
     }
-    S.lockedChromaPath = null;
+    S.discChromaLock = null;
   }
-  demoteActiveMutation();
-  invalidateAndRender();
+  clearPromotedOnEdit();
+  requestRender();
 }
 
 
@@ -148,8 +148,8 @@ function applyMultiDrag(ev) {
     S.colors[idx].h = (Math.atan2(-pdy, pdx) / TAU + 1) % 1;
     S.colors[idx].s = Math.min(1, Math.hypot(pdx, pdy) / DISC_R);
   }
-  demoteActiveMutation();
-  invalidateAndRender();
+  clearPromotedOnEdit();
+  requestRender();
 }
 
 function stopMultiDrag() { multiDrag = null; }
@@ -163,7 +163,7 @@ function startHueConvergeDrag(ev) {
   const nodes      = new Map();
   for (const i of S.multiSelect) {
     const col = S.colors[i], lr = toe(col.L);
-    nodes.set(i, { targetC: getActiveChroma(col), lr, startS: col.s, startOffset: hueDiff(col.h, lockedH) });
+    nodes.set(i, { targetC: chromaOf(col), lr, startS: col.s, startOffset: hueDiff(col.h, lockedH) });
   }
   S.hueConvergeDrag = { lockedH, nodes };
 }
@@ -189,7 +189,7 @@ function applyHueConvergeDrag(ev) {
       startProj: null, lastAmount: null, prevDX: null, prevDY: null, sliderAxis: null });
     for (const [i, node] of hcd.nodes) {
       const col = S.colors[i], lr = toe(col.L);
-      Object.assign(node, { targetC: getActiveChroma(col), lr, startS: col.s, startOffset: hueDiff(col.h, hcd.lockedH) });
+      Object.assign(node, { targetC: chromaOf(col), lr, startS: col.s, startOffset: hueDiff(col.h, hcd.lockedH) });
     }
   }
 
@@ -208,8 +208,8 @@ function applyHueConvergeDrag(ev) {
       S.colors[i].h = newH;
       S.colors[i].s = sForChroma(newH, targetC, lr);
     }
-    demoteActiveMutation();
-    invalidateAndRender();
+    clearPromotedOnEdit();
+    requestRender();
     return;
   }
 
@@ -250,8 +250,8 @@ function applyHueConvergeDrag(ev) {
     hcd.lastAngle = angle;
   }
 
-  demoteActiveMutation();
-  invalidateAndRender();
+  clearPromotedOnEdit();
+  requestRender();
 }
 
 function stopHueConvergeDrag() {
@@ -315,7 +315,7 @@ els.discOverlay.addEventListener('pointerdown', ev => {
       startDiscDrag({ hideCursor: true });
       applyDiscPointer(ev);
       captureDrag(els.discOverlay, ev, applyDiscPointer, () => {
-        endDiscDrag(); S.lockedChromaPath = null; discDragOffset = { x: 0, y: 0 };
+        endDiscDrag(); S.discChromaLock = null; discDragOffset = { x: 0, y: 0 };
       });
       break;
     case 'select':
@@ -327,7 +327,7 @@ els.discOverlay.addEventListener('pointerdown', ev => {
       startDiscDrag({ hideCursor: true });
       applyDiscPointer(ev);
       captureDrag(els.discOverlay, ev, applyDiscPointer, () => {
-        endDiscDrag(); S.lockedChromaPath = null; discDragOffset = { x: 0, y: 0 };
+        endDiscDrag(); S.discChromaLock = null; discDragOffset = { x: 0, y: 0 };
       });
       break;
     case 'multi':
@@ -352,7 +352,7 @@ els.discOverlay.addEventListener('pointerdown', ev => {
 
 let lbDragOffset = 0;
 let lbMultiDrag  = null;
-let lbLockedChroma = null;   // non-null while meta is held
+let lbChromaLock = null;   // non-null while meta is held
 
 function applyLightbarPointer(ev) {
   syncModKeys(ev);
@@ -360,17 +360,31 @@ function applyLightbarPointer(ev) {
   const col  = S.colors[S.activeIndex];
 
   if (S.modKeys.meta) {
-    if (lbLockedChroma === null) lbLockedChroma = getActiveChroma(col);
+    if (lbChromaLock === null) lbChromaLock = chromaOf(col);
   } else {
-    lbLockedChroma = null;
+    lbChromaLock = null;
   }
 
-  col.L = toeInv(yToToeL(ev.clientY - rect.top - lbDragOffset));
-  if (lbLockedChroma !== null) {
-    col.s = sForChroma(col.h, lbLockedChroma, toe(col.L));
+  // Shift (without Meta) gives the lightbar a magnetic snap zone at the hue's
+  // chroma cusp (its max-chroma lightness): the slider tracks the pointer as
+  // usual, but within CUSP_SNAP_PX of the cusp's position it sticks to that
+  // value. An invisible single-colour gesture; Meta still means lock-chroma,
+  // and Shift+wheel stays the fine-tune scroll.
+  const pointerY = ev.clientY - rect.top - lbDragOffset;
+  if (S.modKeys.shift && !S.modKeys.meta) {
+    const cuspLval = cuspL(col.h);
+    const cuspY    = toeLToY(toe(cuspLval));
+    col.L = Math.abs(pointerY - cuspY) <= CUSP_SNAP_PX
+      ? cuspLval
+      : toeInv(yToToeL(pointerY));
+  } else {
+    col.L = toeInv(yToToeL(pointerY));
   }
-  demoteActiveMutation();
-  invalidateAndRender();
+  if (lbChromaLock !== null) {
+    col.s = sForChroma(col.h, lbChromaLock, toe(col.L));
+  }
+  clearPromotedOnEdit();
+  requestRender();
 }
 
 function startLbMultiDrag(ev, dragIdx) {
@@ -391,7 +405,7 @@ function applyLbMultiDrag(ev) {
   if (S.modKeys.meta) {
     if (!lbMultiDrag.chromaLocks) {
       const locks = new Map();
-      for (const i of S.multiSelect) locks.set(i, getActiveChroma(S.colors[i]));
+      for (const i of S.multiSelect) locks.set(i, chromaOf(S.colors[i]));
       lbMultiDrag.chromaLocks = locks;
     }
   } else {
@@ -413,8 +427,8 @@ function applyLbMultiDrag(ev) {
     }
   }
 
-  demoteActiveMutation();
-  invalidateAndRender();
+  clearPromotedOnEdit();
+  requestRender();
 }
 
 els.lightbarOverlay.addEventListener('pointerdown', ev => {
@@ -441,7 +455,7 @@ els.lightbarOverlay.addEventListener('pointerdown', ev => {
   applyLightbarPointer(ev);
   captureDrag(els.lightbarOverlay, ev, applyLightbarPointer, () => {
     lbDragOffset = 0;
-    lbLockedChroma = null;
+    lbChromaLock = null;
   });
 });
 
@@ -451,13 +465,13 @@ els.lightbarOverlay.addEventListener('pointerdown', ev => {
 // when Shift is already held (and works either order: shift-then-hover or
 // hover-then-shift, since both are read live).
 function enterLightbar() {
-  if (S.mouseInLightbar) return;
-  S.mouseInLightbar = true;
+  if (S.pointerInLightbar) return;
+  S.pointerInLightbar = true;
   if (S.modKeys.shift) P.updateDiscGuides();   // clear any disc saturation guide
 }
 function leaveLightbar() {
-  if (!S.mouseInLightbar) return;
-  S.mouseInLightbar = false;
+  if (!S.pointerInLightbar) return;
+  S.pointerInLightbar = false;
   if (S.modKeys.shift) P.updateDiscGuides();   // restore disc guides off the lightbar
 }
 els.lightbarOverlay.addEventListener('pointerenter', enterLightbar);
@@ -472,7 +486,7 @@ els.lightbarOverlay.addEventListener('wheel', ev => {
 
   // Shift over the lightbar = fine adjustment: move the handle ~1px per wheel
   // notch (1px = 1/LB_HEIGHT in toe-L space) instead of the normal coarse step.
-  const fine = S.modKeys.shift && S.mouseInLightbar;
+  const fine = S.modKeys.shift && S.pointerInLightbar;
   // Holding Shift makes the OS deliver wheel scroll on the X axis, so deltaY is
   // 0 and the value lands in deltaX — read whichever axis carries the scroll,
   // else the direction gets stuck going one way.
@@ -480,32 +494,32 @@ els.lightbarOverlay.addEventListener('wheel', ev => {
   if (!scroll) return;
   const dir  = scroll > 0 ? -1 : 1;
 
-  const lockChroma = S.modKeys.meta;
+  const lockingChroma = S.modKeys.meta;
 
   if (S.isMultiMode()) {
-    const preLocks = lockChroma ? new Map() : null;
-    if (preLocks) {
-      for (const i of S.multiSelect) preLocks.set(i, getActiveChroma(S.colors[i]));
+    const chromaLocks = lockingChroma ? new Map() : null;
+    if (chromaLocks) {
+      for (const i of S.multiSelect) chromaLocks.set(i, chromaOf(S.colors[i]));
     }
     for (const i of S.multiSelect) {
       S.colors[i].L = fine
         ? toeInv(clamp01(toe(S.colors[i].L) + dir / LB_HEIGHT))
         : toeInv(rawToL(lToRaw(toe(S.colors[i].L)) + dir / 8));
     }
-    if (preLocks) {
-      for (const [i, targetC] of preLocks) {
+    if (chromaLocks) {
+      for (const [i, targetC] of chromaLocks) {
         S.colors[i].s = sForChroma(S.colors[i].h, targetC, toe(S.colors[i].L));
       }
     }
   } else {
     const col = S.colors[S.activeIndex];
-    const targetC = lockChroma ? getActiveChroma(col) : null;
+    const targetC = lockingChroma ? chromaOf(col) : null;
     const step = fine ? 1 / LB_HEIGHT : 1 / 32;
     col.L = toeInv(clamp01(toe(col.L) + dir * step));
     if (targetC !== null) col.s = sForChroma(col.h, targetC, toe(col.L));
   }
-  demoteActiveMutation();
-  invalidateAndRender();
+  clearPromotedOnEdit();
+  requestRender();
   scheduleWheelSnapshot();
 }, { passive: false });
 
@@ -637,7 +651,7 @@ els.swatches.addEventListener('pointerdown', ev => {
 
 
 document.addEventListener('pointerdown', ev => {
-  if (ev.target.closest('.picker-wrap') || ev.target.closest('.swatches')) return;
+  if (ev.target.closest('.top-ui') || ev.target.closest('.swatches')) return;
   if (S.activeIndex === -1 && !S.isMultiMode()) return;
   deselect();
 });
@@ -656,9 +670,13 @@ function applyBgLevel() {
 }
 
 document.addEventListener('wheel', ev => {
-  if (ev.target.closest('.picker-wrap, .swatch-container')) return;
+  if (ev.target.closest('.top-ui, .swatch-container')) return;
   ev.preventDefault();
-  bgLevel = Math.max(0, Math.min(BG_LEVELS - 1, bgLevel + (ev.deltaY > 0 ? -1 : 1)));
+  // Holding Shift makes the OS deliver wheel scroll on the X axis, so deltaY is
+  // 0 and the value lands in deltaX — read whichever axis carries the scroll,
+  // else the direction gets stuck going one way.
+  const scroll = ev.deltaY || ev.deltaX;
+  bgLevel = Math.max(0, Math.min(BG_LEVELS - 1, bgLevel + (scroll > 0 ? -1 : 1)));
   applyBgLevel();
 }, { passive: false });
 

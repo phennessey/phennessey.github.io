@@ -9,6 +9,8 @@ export const HANDLE_R    = 6;
 export const HANDLE_SW   = 1.75;
 export const MIDDLE_GRAY = 0.57;
 export const MAX_COLORS  = 10;
+// Magnetic snap radius (px) around the chroma cusp during a Shift lightbar drag.
+export const CUSP_SNAP_PX = 10;
 
 // Pantone dot rendering
 export const DOT_RADIUS       = 1.5;
@@ -18,11 +20,22 @@ export const DOT_PROMOTED_RADIUS = 2.5;
 export const DOT_PROMOTED_STROKE = 1.75;
 
 // Pantone matching
-export const N_MATCHES            = 5;   // default per-swatch match count
+export const DEFAULT_MATCH_COUNT            = 5;   // default per-swatch match count
 export const MIN_MATCHES          = 1;
 export const MIN_WITH_PROMOTED    = 2;   // matchCount floor when a pantone is promoted
 export const MAX_MATCHES          = 50;  // true max settable via wheel
 export const MIN_MATCH_WIDTH      = 28;  // px; visible max = floor(rowWidth / MIN_MATCH_WIDTH)
+
+// Chip "skyline": a chip slides down by  ratio = deltaE / chipCutoff  of the
+// strip height (deltaE = OKLab distance); at/beyond the cutoff (ratio ≥ 1) it
+// slides fully out and is hidden. The chipCutoff slider sets that distance —
+// lowering it scales the skyline and hides more poor matches.
+export const DEFAULT_CHIP_CUTOFF = 0.05;
+export const MIN_CHIP_CUTOFF     = 0.01;
+export const MAX_CHIP_CUTOFF     = 0.10;
+// Below this bar height (px), a chip has no room for its out-of-gamut icon, so
+// the icon is hidden.
+export const MIN_GAMUT_BAR_H       = 26;
 
 // Misc
 export const HISTORY_LIMIT        = 100;
