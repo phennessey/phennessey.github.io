@@ -6,21 +6,21 @@
 import { createPicker } from './picker.js';
 import {
   DISC_SIZE, DISC_LB_GAP, LB_WIDTH, LB_HEIGHT, HANDLE_R, HANDLE_SW,
-  MIDDLE_GRAY, DEFAULT_MATCH_COUNT, MIN_MATCHES, MAX_MATCHES,
+  MIDDLE_GRAY, DEFAULT_MATCH_COUNT, MIN_VISIBLE_CHIPS, MAX_MATCHES,
   DEFAULT_CHIP_CUTOFF, MIN_CHIP_CUTOFF, MAX_CHIP_CUTOFF,
 } from './constants.js';
 
-// Preferred match-chip count lives in user space (localStorage), NOT in the
-// undo history: changing how many Pantone chips a swatch shows is a display
-// preference, not an edit to the colour document. New swatches default to the
-// last-used count; if it can't be read (private mode, blocked storage, never
-// set), we fall back to DEFAULT_MATCH_COUNT.
+// Each swatch's chip count `n` (how many Pantone chips it shows) lives in user
+// space (localStorage), NOT the undo history — it's a display preference, not
+// an edit to the colour document. New swatches inherit the last-used value; if
+// it can't be read (private mode, blocked storage, never set), we fall back to
+// DEFAULT_MATCH_COUNT.
 const MATCH_COUNT_KEY = 'okhsl.matchCount';
 
 export function loadPreferredMatchCount() {
   try {
     const v = parseInt(localStorage.getItem(MATCH_COUNT_KEY), 10);
-    if (Number.isFinite(v) && v >= MIN_MATCHES && v <= MAX_MATCHES) return v;
+    if (Number.isFinite(v) && v >= MIN_VISIBLE_CHIPS && v <= MAX_MATCHES) return v;
   } catch { /* storage unavailable */ }
   return DEFAULT_MATCH_COUNT;
 }
@@ -29,7 +29,9 @@ export function savePreferredMatchCount(n) {
   try { localStorage.setItem(MATCH_COUNT_KEY, String(n)); } catch { /* storage unavailable */ }
 }
 
-// Chip delta-E cutoff (deltaE → fully hidden) is a display preference (localStorage).
+// One global chip cutoff (the OKLab distance out to which chips show), shared by
+// every swatch and set by the Pantone-section slider. A display preference, not
+// part of the undo history.
 const CHIP_CUTOFF_KEY = 'okhsl.chipCutoff';
 
 export function loadChipCutoff() {
@@ -67,7 +69,7 @@ export const S = {
 
   sortChipsByHue: false,
 
-  // Delta-E cutoff driving the chip "skyline" (see constants.js).
+  // Global chip cutoff (OKLab distance), shared by all swatches (see constants).
   chipCutoff: loadChipCutoff(),
 };
 

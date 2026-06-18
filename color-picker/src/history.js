@@ -15,8 +15,8 @@ let historyIndex = -1;
 let wheelSnapshotTimer = null;
 let pointerSnapshot    = null;
 
-// matchCount is deliberately absent from snapshots: the visible chip count is
-// a persistent user-space preference (see state.js), not part of the undoable
+// matchCount is deliberately absent from snapshots: the chip count is a
+// persistent user-space preference (see state.js), not part of the undoable
 // colour document. Undo/redo preserves whatever count each swatch currently
 // has rather than rewinding it.
 function takeSnapshot() {

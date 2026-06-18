@@ -4,8 +4,8 @@
 
 import {
   DOT_RADIUS, DOT_PEAK_OPACITY, DOT_FALLOFF_L, DOT_PROMOTED_RADIUS, DOT_PROMOTED_STROKE,
-  MIDDLE_GRAY, DISC_SIZE, DEFAULT_MATCH_COUNT, MIN_MATCHES, MIN_WITH_PROMOTED, MAX_MATCHES, MIN_MATCH_WIDTH,
-  MIN_CHIP_CUTOFF, MAX_CHIP_CUTOFF, MIN_GAMUT_BAR_H,
+  MIDDLE_GRAY, DISC_SIZE, DEFAULT_MATCH_COUNT, MIN_MATCHES, MAX_MATCHES, MIN_MATCH_WIDTH,
+  MIN_VISIBLE_CHIPS, MIN_CHIP_CUTOFF, MAX_CHIP_CUTOFF, MIN_GAMUT_BAR_H,
   GAMUT_ICON_SVG, CLOSE_ICON_SVG,
 } from './constants.js';
 import { S, P, els, pantoneSelections, savePreferredMatchCount, saveChipCutoff } from './state.js';
@@ -237,6 +237,25 @@ function findClosestMatches(targetL, targetA, targetB, n = MAX_MATCHES) {
   return top;   // [{ entry, distSq }], nearest first
 }
 
+// The `n` closest matches to a swatch (closest-first). Each swatch shows a
+// fixed count `n` (wheel-set); the per-colour cutoff is then derived from these
+// distances so the skyline always fills (see updateSwatchMatches).
+function closestN(c, n) {
+  okhslInput[0] = c.h * 360;
+  okhslInput[1] = c.s;
+  okhslInput[2] = toe(c.L);
+  OKHSLToOKLab(okhslInput, DisplayP3Gamut, swatchLabBuf);
+  return findClosestMatches(swatchLabBuf[0], swatchLabBuf[1], swatchLabBuf[2], n);
+}
+
+// The visible count for a swatch: the wheel-set preference, floored so some
+// chips always show and capped by what the row physically holds.
+function chipCountFor(c, visibleMax) {
+  const desired = c.matchCount ?? DEFAULT_MATCH_COUNT;
+  const cap = Math.min(visibleMax, MAX_MATCHES);
+  return Math.max(Math.min(MIN_VISIBLE_CHIPS, cap), Math.min(desired, cap));
+}
+
 function visibleMaxForRow(container) {
   if (!container) return DEFAULT_MATCH_COUNT;
   // Prefer the width cached by matchRowObserver (read post-layout, so it
@@ -344,31 +363,17 @@ function updateSwatchMatches(index) {
     return;
   }
 
-  okhslInput[0] = c.h * 360;
-  okhslInput[1] = c.s;
-  okhslInput[2] = toe(c.L);
-  OKHSLToOKLab(okhslInput, DisplayP3Gamut, swatchLabBuf);
-
-  // c.matchCount is the user's persistent preferred count. Render only as
-  // many chips as currently fit, but NEVER write the clamped value back:
-  // doing so let transient states (e.g. width 0 while deselected) reset
-  // the preference. Leaving it intact means the count survives selection
-  // changes and recovers when space allows.
-  const desired = c.matchCount ?? DEFAULT_MATCH_COUNT;
-  const minFloor = selected ? MIN_WITH_PROMOTED : MIN_MATCHES;
-  const chipCount = Math.max(minFloor, Math.min(desired, visibleMax, MAX_MATCHES));
-
-  const matchChips = findClosestMatches(
-    swatchLabBuf[0], swatchLabBuf[1], swatchLabBuf[2], chipCount,
-  );
-
-  // Skyline offset: a chip's vertical position is ratio = deltaE / chipCutoff of
-  // the strip height. deltaE ≥ chipCutoff → ratio ≥ 1 → dropped. The wheel sets
-  // the candidate count; survivors reflow to fill.
+  // The wheel sets this swatch's candidate count `n` (a cap); the global cutoff
+  // (slider, same for every swatch) then hides any of those n beyond the cutoff
+  // and sets the skyline scale: ratio = deltaE / cutoff, closest at the top,
+  // matches at/beyond the cutoff dropped.
   const cutoff = S.chipCutoff;
+  const n = chipCountFor(c, visibleMax);
+  const pool = closestN(c, n);
+
   const ratioByEntry = new Map();
   const kept = [];
-  for (const { entry, distSq } of matchChips) {
+  for (const { entry, distSq } of pool) {
     const ratio = Math.sqrt(distSq) / cutoff;
     if (ratio >= 1) continue;
     ratioByEntry.set(entry, ratio);
@@ -565,23 +570,22 @@ function wireMatchRowWheel(matchRow, container) {
     ev.preventDefault();
     ev.stopPropagation();
     const c = S.colors[i];
-    const visibleMax = Math.min(visibleMaxForRow(container), MAX_MATCHES);
-    const hasSelection = pantoneSelections.has(i);
-    const minFloor = hasSelection ? MIN_WITH_PROMOTED : MIN_MATCHES;
-    const stored = c.matchCount ?? DEFAULT_MATCH_COUNT;
-    const effective = Math.min(stored, visibleMax);
     // Holding Shift makes the OS deliver wheel scroll on the X axis, so deltaY
-    // is 0 and the value lands in deltaX — read whichever axis carries the
-    // scroll, else the count only ever moves one direction.
+    // is 0 and the value lands in deltaX — read whichever axis carries it.
     const scroll = ev.deltaY || ev.deltaX;
     if (!scroll) return;
-    const next = effective + (scroll > 0 ? 1 : -1);
-    const clamped = Math.max(minFloor, Math.min(visibleMax, next));
-    if (clamped === stored) return;
-    c.matchCount = clamped;
-    // Persist as the user's last-used preference; do NOT snapshot — the
-    // visible chip count is intentionally excluded from undo history.
-    savePreferredMatchCount(clamped);
+
+    // The wheel sets n — how many chips this swatch shows. Each colour then
+    // derives its own cutoff from that count (see updateSwatchMatches).
+    const visibleMax = Math.min(visibleMaxForRow(container), MAX_MATCHES);
+    const floor = Math.min(MIN_VISIBLE_CHIPS, visibleMax);
+    const cur = chipCountFor(c, visibleMax);
+    const next = Math.max(floor, Math.min(visibleMax, cur + (scroll > 0 ? 1 : -1)));
+    if (next === (c.matchCount ?? DEFAULT_MATCH_COUNT)) return;
+    c.matchCount = next;
+    // Persist as the user's last-used preference; do NOT snapshot — chip
+    // count is intentionally excluded from undo history.
+    savePreferredMatchCount(next);
     updateSwatchMatches(i);
   }, { passive: false });
 }
@@ -655,7 +659,7 @@ function wireCutoffSlider() {
   cutoffSlider.addEventListener('input', () => {
     const v = parseFloat(cutoffSlider.value);
     if (!Number.isFinite(v)) return;
-    S.chipCutoff = v;
+    S.chipCutoff = v;                 // one global cutoff for every swatch
     saveChipCutoff(v);
     if (cutoffValue) cutoffValue.textContent = v.toFixed(3);
     updateAllSwatchMatches();

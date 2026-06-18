@@ -20,19 +20,20 @@ export const DOT_PROMOTED_RADIUS = 2.5;
 export const DOT_PROMOTED_STROKE = 1.75;
 
 // Pantone matching
-export const DEFAULT_MATCH_COUNT            = 5;   // default per-swatch match count
+export const DEFAULT_MATCH_COUNT  = 5;   // fallback chip count when row width is unknown
 export const MIN_MATCHES          = 1;
-export const MIN_WITH_PROMOTED    = 2;   // matchCount floor when a pantone is promoted
-export const MAX_MATCHES          = 50;  // true max settable via wheel
+export const MAX_MATCHES          = 50;  // candidate-pool / cell-count ceiling
 export const MIN_MATCH_WIDTH      = 28;  // px; visible max = floor(rowWidth / MIN_MATCH_WIDTH)
 
-// Chip "skyline": a chip slides down by  ratio = deltaE / chipCutoff  of the
-// strip height (deltaE = OKLab distance); at/beyond the cutoff (ratio ≥ 1) it
-// slides fully out and is hidden. The chipCutoff slider sets that distance —
-// lowering it scales the skyline and hides more poor matches.
+// Chip "skyline": one global delta-E cutoff (slider-set) applies to every
+// swatch. Within each swatch's wheel-set candidate count, matches closer than
+// the cutoff are shown, positioned by ratio = deltaE / cutoff (closest at the
+// top); matches at/beyond the cutoff are hidden. MIN_VISIBLE_CHIPS floors how
+// low the wheel can take the candidate count.
+export const MIN_VISIBLE_CHIPS   = 3;
 export const DEFAULT_CHIP_CUTOFF = 0.05;
 export const MIN_CHIP_CUTOFF     = 0.01;
-export const MAX_CHIP_CUTOFF     = 0.10;
+export const MAX_CHIP_CUTOFF     = 0.30;
 // Below this bar height (px), a chip has no room for its out-of-gamut icon, so
 // the icon is hidden.
 export const MIN_GAMUT_BAR_H       = 26;
