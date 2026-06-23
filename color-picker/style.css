@@ -43,9 +43,13 @@ body {
 .top-ui {
   --padding: 24px;                   /* drives child squircle radii (lightbar, hex) */
   --squircle-r: calc(var(--padding) + 13.5px);   /* = color map radius (32) + 5.5 */
-  --section-gap: 32px;               /* breathing room on each side of a divider */
+  --section-gap: 16px;               /* breathing room on each side of a divider */
   --section-label-h: 13px;
   --section-label-gap: 6px;
+  /* Tool-section label/marker colours: dim when inactive, brighter when the
+     section is active (open). */
+  --label-color: rgba(255,255,255,0.4);
+  --label-color-active: rgba(255,255,255,0.78);
   /* Vertical inset for the tool sections/dividers so labels + content don't
      touch the frame. Added on top of the frame's 4px pad (≈20px from frame),
      while the color map keeps its 4px concentric gap. */
@@ -73,7 +77,11 @@ body:has(.swatches.none-selected) .top-ui {
   pointer-events: none;
 }
 
-body.light-bg .top-ui { outline-color: rgba(0,0,0,0.2); }
+body.light-bg .top-ui {
+  outline-color: rgba(0,0,0,0.2);
+  --label-color: rgba(0,0,0,0.5);
+  --label-color-active: rgba(0,0,0,0.8);
+}
 
 /* COLOR MAP panel — keeps the .picker-wrap hooks the JS targets (lightness
    tint, guide-on-hover). Background set in JS; the squircle is native CSS
@@ -102,7 +110,7 @@ body.light-bg .top-ui { outline-color: rgba(0,0,0,0.2); }
 .ui-section {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   /* Top inset is 2px less than --tools-vpad so labels sit 2px higher; the bottom
      keeps the full inset so section bodies stay put (the +2px label gap below
      absorbs the label's rise). */
@@ -110,23 +118,152 @@ body.light-bg .top-ui { outline-color: rgba(0,0,0,0.2); }
   margin-bottom: var(--tools-vpad);
 }
 
+/* Header row: the toggle checkbox + the horizontal section label, aligned. */
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--section-label-h);
+  margin-bottom: var(--section-label-gap);
+}
+
+/* Toggle hit area: a square ~30% wider than the triangle, holding the marker. */
+.section-toggle-box {
+  position: relative;
+  flex: 0 0 auto;
+  width: 13px;                                  /* 30% wider than the 10px triangle */
+  height: 13px;
+}
+/* The checkbox is an invisible, clickable region. It fills the hit box and
+   extends 6px to the right (the head gap) so the space between the triangle and
+   the section label is also clickable, reaching right up to the label. */
+.section-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  position: absolute;
+  inset: 0 -6px 0 0;       /* top right bottom left — right edge stretched into the gap */
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+/* Visual marker: a right triangle (half as tall as wide) in the label colour,
+   centred in the hit box. Points down while inactive; snaps to point right when
+   active — the rotation is intentionally NOT animated. */
+.section-tri {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 5px;
+  background: var(--label-color);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);   /* points down */
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);   /* easeOutExpo */
+}
+.section-toggle:checked ~ .section-tri {
+  transform: translate(-50%, -50%) rotate(-90deg);   /* points right */
+  background: var(--label-color-active);
+}
+
 .section-label {
   font-family: 'Roboto Mono', monospace;
   height: var(--section-label-h);
   line-height: var(--section-label-h);
-  margin-bottom: var(--section-label-gap);
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  text-align: center;
+  text-align: left;
   white-space: nowrap;
   user-select: none;
-  color: rgba(255,255,255,0.2);
+  color: var(--label-color);
+  transition: color 0.3s ease;
 }
-body.light-bg .section-label { color: rgba(0,0,0,0.3); }
+.collapsible .section-label { cursor: pointer; }
+.collapsible.open .section-label { color: var(--label-color-active); }
+/* Highlight the label to the active alpha on hover — including hovering the
+   triangle or the gap. When collapsed, hovering anywhere in the clickable column
+   lights the vertical label; when open, hovering the head lights the horizontal
+   label. */
+.collapsible .section-label:hover,
+.section-head:hover .section-label,
+.section-vlabel:hover,
+.collapsible:not(.open):hover .section-vlabel { color: var(--label-color-active); }
+
+/* 90°-rotated label under the toggle while a collapsible section is closed.
+   Absolutely positioned (out of flow) so it can cross-fade with the body via
+   opacity without shifting layout; it stays in the triangle's left column so it
+   never overlaps the (label-aligned) option checkboxes. */
+.section-vlabel {
+  position: absolute;
+  top: calc(var(--section-label-h) + var(--section-label-gap));   /* just below the head */
+  left: 3px;                                                      /* = section padding-left, under the toggle */
+  font-family: 'Roboto Mono', monospace;
+  writing-mode: vertical-rl;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  user-select: none;
+  color: var(--label-color);
+  transition: opacity 0.1s ease, color 0.15s ease;
+}
+
+/* Collapsible sections: closed by default. The horizontal label and body are
+   hidden; the vertical label shows. Opening animates the width and swaps the
+   labels. */
+.collapsible {
+  position: relative;             /* positioning context for the absolute vlabel */
+  overflow: hidden;
+  /* clamp to the toggle column width while closed; expands on open */
+  max-width: 13px;
+  padding-left: 3px;
+  padding-right: 3px;
+  transition: max-width 0.2s cubic-bezier(0.16, 1, 0.3, 1);   /* easeOutExpo */
+}
+/* The entire collapsed column is clickable (handled in main.js), so show the
+   pointer cursor across it — not just on the triangle. */
+.collapsible:not(.open) { cursor: pointer; }
+/* At rest the horizontal label and body are hidden and the vertical label shows. */
+.collapsible .section-label { display: none; }
+.collapsible .section-body {
+  display: none;
+  /* Indent so the options align under the horizontal section label (past the
+     toggle + head gap), not under the triangle/vertical label. */
+  margin-left: calc(13px + 6px);
+}
+.collapsible.open {
+  /* Snug to the widest content so the width animation runs (almost) its full
+     course instead of the box snapping to content size early. */
+  max-width: 120px;
+}
+.collapsible.open .section-label { display: block; }
+.collapsible.open .section-body { display: flex; }
+.collapsible.open .section-vlabel { opacity: 0; pointer-events: none; }
+
+/* Animated collapse (.collapsing is added by JS, removed when the width
+   transition ends): the body/label stay fully opaque and are simply cropped/
+   revealed by the shrinking box, while the vertical label fades IN. They occupy
+   different columns, so no conflict. */
+.collapsible.collapsing .section-label { display: block; }
+.collapsible.collapsing .section-body { display: flex; }
+.collapsible.collapsing .section-vlabel { opacity: 1; }
+
+/* During the width animation the section narrows past its content width. Pin the
+   head and body to their intrinsic width so they DON'T reflow/wrap as the box
+   shrinks — they're simply clipped by the section's overflow:hidden instead. */
+.collapsible .section-head,
+.collapsible .section-body { width: max-content; }
 
 /* Bodies fill the remaining column height so the SETUP hex field stretches. */
 .section-body { flex: 1 1 auto; min-height: 0; }
+
+/* SETUP keeps the original (un-reduced) horizontal breathing room: the global
+   --section-gap was halved for the collapsible sections, so add the difference
+   back as margin on each side of SETUP. */
+.section-setup {
+  margin-inline: calc(32px - var(--section-gap));
+}
 
 /* The last section faces the frame on its right, so inset it to match the
    sections' top/bottom breathing room instead of colliding with the outline. */
@@ -313,7 +450,6 @@ body.light-bg #add-color-btn {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding-left: 19px;
 }
 
 body.light-bg .library-panel {
@@ -523,11 +659,11 @@ body.light-bg .swatch-container::before {
   display: none;
   top: var(--swatch-padding);
   right: var(--swatch-padding);
-  height: 11px;
+  height: 10px;
   /* Explicit width (= height × the 18/16 viewBox aspect). The inline SVG has no
      width/height attrs, so without this Safari resolves the icon box's width
      differently from Chrome and the glyph drifts far left of the readout. */
-  width: calc(11px * 18 / 16);
+  width: calc(10px * 18 / 16);
   padding-right: 4px;
 }
 .swatch-container.out-of-srgb .gamut-warning { display: block; }
@@ -641,9 +777,12 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
    the name (or the box itself); no fade — it's instantly on or off, at full
    alpha when shown. */
 .promoted-close {
-  position: static;
+  position: relative;
+  top: 0.5px;    /* nudge down to align with the label */
   flex-shrink: 0;
   height: 11px;
+  width: 11px;   /* explicit width (square 16×16 icon) — Safari won't size an
+                    auto-width box from the SVG's aspect ratio, so it must be set */
   padding-right: 4px;
   display: none;
   pointer-events: auto;
@@ -775,11 +914,17 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   background-image: url('https://raw.githubusercontent.com/phennessey/codepen/refs/heads/main/okhsl_picker/metallic.png');
   background-size: 503px 323px;
   mix-blend-mode: overlay;
-  opacity: 0;
+  opacity: 0.8;
+  /* Hidden entirely (not just transparent) on non-metallic chips. mix-blend-mode
+     forces a backdrop-blending composite layer and the texture is rasterized per
+     chip even at opacity:0 — so a transparent overlay on every chip was painting
+     and blending ~44 layers PER resize frame (the resize-glitch culprit).
+     display:none removes the layer/paint/blend cost completely. */
+  display: none;
 }
 
 .match-cell.metallic .noise-overlay {
-  opacity: 0.8;
+  display: block;
 }
 
 .match-cell.out-of-p3 .chip-gamut-warning { display: block; }
@@ -886,25 +1031,24 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 }
 .match-cell.hue-match .match-cap { opacity: 1; }
 
-/* Hover dot: a 5px circle centred on the top edge of the chip being hovered
-   (--chip-top is the bar's top offset). Coloured like the chip label's hover
-   state (full-opacity white / black in light mode). */
+/* Hover cap: a solid upward triangle (same 12×6 shape as the hue-marker
+   .match-cap) sitting on the top edge of the chip being hovered (--chip-top is
+   the bar's top offset). Coloured like the chip label's hover state. */
 .match-cell::after {
   content: "";
   position: absolute;
-  top: calc(var(--chip-top, 0%) - 4px);
-  left: 50%;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.5);
-  transform: translate(-50%, -50%);
+  top: calc(var(--chip-top, 0%) - 6px);   /* base flush with the bar's top edge */
+  left: 0;
+  width: 100%;                            /* span the full chip width */
+  height: 6px;
+  background: rgba(255,255,255,0.2);
+  clip-path: polygon(50% 0, 0 100%, 100% 100%);
   opacity: 0;
   pointer-events: none;
   z-index: 3;
   transition: opacity 0.1s ease;
 }
-.swatch-container.light .match-cell::after { background: rgba(0,0,0,0.5); }
+.swatch-container.light .match-cell::after { background: rgba(0,0,0,0.2); }
 .match-cell:has(.chip-fill:hover, .chip-gamut-warning:hover)::after { opacity: 1; }
 /* On promotion the chips collapse — kill the hover dot instantly (no fade). */
 .match-cells.has-promotion .match-cell::after {
@@ -924,10 +1068,11 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 /* Out-of-P3 caution beside the promoted name (top-right overlay): small, left of
    the label. Keeps a pointer cursor on hover. */
 .promoted-gamut-warning {
-  position: static;
+  position: relative;
+  top: 0.5px;    /* nudge down to align with the label */
   flex-shrink: 0;
-  height: 11px;
-  width: calc(11px * 18 / 16);
+  height: 10px;                  /* 1px shorter */
+  width: calc(10px * 18 / 16);   /* keep the 18:16 aspect ratio */
   padding-right: 4px;
   pointer-events: auto;
   cursor: pointer;

@@ -45,6 +45,42 @@ P.render = function () {
   syncHexField();
 };
 
+// Collapsible tool sections. The toggle checkbox expands/collapses its section
+// (animated via the .open class). These are view-state only — they never touch
+// undo history. The pantone toggle additionally drives the library "base"
+// filter (wired in pantone.js via its data-library="base" attribute).
+document.querySelectorAll('.section-toggle').forEach(cb => {
+  const section = cb.closest('.ui-section');
+  // Open instantly; collapse via a transient `.collapsing` class so the body
+  // clips + fades while the width animates, then is hidden once the 0.3s width
+  // transition finishes. A timeout (not transitionend) finalizes it so it can't
+  // get stuck if the transition is throttled/interrupted.
+  const sync = () => {
+    clearTimeout(section._collapseTimer);
+    if (cb.checked) {
+      section.classList.remove('collapsing');
+      section.classList.add('open');
+    } else if (section.classList.contains('open')) {
+      section.classList.remove('open');
+      section.classList.add('collapsing');
+      section._collapseTimer = setTimeout(() => section.classList.remove('collapsing'), 200);
+    } else {
+      section.classList.remove('collapsing');
+    }
+  };
+  cb.addEventListener('change', sync);
+  sync();
+  // While collapsed, a click ANYWHERE in the narrow column (triangle, the gap
+  // below it, the vertical label) opens the section — no dead zones. When open
+  // this is a no-op so the body's own controls keep working. Clicks on the
+  // checkbox itself are skipped since it toggles natively.
+  section.addEventListener('click', (e) => {
+    if (section.classList.contains('open') || e.target === cb) return;
+    cb.checked = !cb.checked;
+    cb.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+});
+
 // Init
 
 applyBgLevel();
