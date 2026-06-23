@@ -3,9 +3,9 @@
 // keys, and background-brightness scrolling.
 
 import { BG_LEVELS, MIDDLE_GRAY, LB_HEIGHT, CUSP_SNAP_PX } from './constants.js';
-import { S, P, els, DISC_R, handlePos, yToToeL, toeLToY, pantoneSelections, loadPreferredMatchCount } from './state.js';
+import { S, P, els, DISC_R, handlePos, yToToeL, toeLToY, pantoneSelections } from './state.js';
 import { TAU, idxOf } from './picker.js';
-import { toe, toeInv, clamp01, lToRaw, rawToL, sForChroma, chromaOf, cuspL, hueDiff, computeP3AndSRGB } from './color.js';
+import { toe, toeInv, clamp01, lToRaw, rawToL, sForChroma, chromaOf, cuspL, hueDiff, computeP3AndSRGB, inSRGB, srgbToOKHSL } from './color.js';
 import { discXY, captureDrag, syncModKeys, requestRender } from './util.js';
 import { setActive, toggleMultiSelect, deselect, updateMesh } from './selection.js';
 import { updateSwatch } from './swatches.js';
@@ -99,8 +99,11 @@ function applyDiscPointer(ev) {
       const a = col.h * TAU;
       col.s = clamp01((dx * Math.cos(a) - dy * Math.sin(a)) / DISC_R);
     } else {
-      col.h = (Math.atan2(-dy, dx) / TAU + 1) % 1;
-      col.s = Math.min(1, Math.sqrt(dx * dx + dy * dy) / DISC_R);
+      const r = Math.sqrt(dx * dx + dy * dy);
+      // At dead-centre the angle is undefined; keep the last hue so it stays as
+      // latent state (a neutral colour remembers the hue it descended from).
+      if (r > 1e-3) col.h = (Math.atan2(-dy, dx) / TAU + 1) % 1;
+      col.s = Math.min(1, r / DISC_R);
     }
     S.discChromaLock = null;
   }
@@ -618,10 +621,23 @@ els.swatches.addEventListener('pointerdown', ev => {
 });
 
 els.swatches.addEventListener('pointerdown', ev => {
-  if (ev.target.closest('.chip-gamut-warning')) return;
-  const sourceCell = ev.target.closest('.match-cell');
-  if (!sourceCell) return;
-  const entry = findPantoneByName(sourceCell.dataset.pantoneName);
+  const container = ev.target.closest('.swatch-container');
+  if (!container) return;
+  if (!ev.target.closest('.match-cells')) return;     // only the pantone region
+  if (ev.target.closest('.promoted-cell')) return;     // overlay controls aren't a drag source
+
+  // The pantone region only starts a drag from two places:
+  //   1. a specific chip's fill (the bar) -> drags that chip's pantone, or
+  //   2. the filled background of a promoted swatch -> drags the promoted pantone.
+  // Anywhere else in the region (the empty strip above the bars of a non-promoted
+  // swatch) starts nothing.
+  let entry = null;
+  if (ev.target.closest('.chip-fill')) {
+    const cell = ev.target.closest('.match-cell');
+    entry = cell && findPantoneByName(cell.dataset.pantoneName);
+  } else {
+    entry = pantoneSelections.get(idxOf(container)) || null;
+  }
   if (!entry) return;
 
   startDrag(ev, {
@@ -632,13 +648,21 @@ els.swatches.addEventListener('pointerdown', ev => {
       if (!target) return;
       const ti = idxOf(target);
       if (!Number.isInteger(ti) || ti < 0 || ti >= S.colors.length) return;
-      const prevCount = S.colors[ti].matchCount ?? loadPreferredMatchCount();
-      // Store the pantone projected to the P3 rim (radial chroma reduction:
-      // hold hue + lightness, clamp OKHSL saturation to ≤ 1). This is the only
-      // colour we can actually pick, and it renders identically to the chip /
-      // promoted cell / drag dot (all via pantoneP3Css). The true out-of-P3
-      // pantone is still recorded as the promoted selection + caution icon.
-      S.colors[ti] = { h: entry.h, s: Math.min(1, entry.s), L: entry.L, matchCount: prevCount };
+      // If the Pantone is within sRGB, snap to its exact 8-bit hex so the
+      // readout matches and no P3 strip is shown. Round-trip through hex to
+      // guarantee the OKHSL lands on an exact sRGB value (floating-point
+      // OKHSL ↔ sRGB can drift by a sub-step, making outOfSRGB flip).
+      // Otherwise project to the P3 rim (clamp saturation to ≤ 1).
+      const s0 = Math.min(1, entry.s);
+      if (inSRGB(entry.h, s0, toe(entry.L))) {
+        const { hex } = computeP3AndSRGB({ h: entry.h, s: s0, L: entry.L });
+        const r = parseInt(hex.slice(1, 3), 16) / 255;
+        const g = parseInt(hex.slice(3, 5), 16) / 255;
+        const b = parseInt(hex.slice(5, 7), 16) / 255;
+        S.colors[ti] = srgbToOKHSL(r, g, b);
+      } else {
+        S.colors[ti] = { h: entry.h, s: s0, L: entry.L };
+      }
       pantoneSelections.set(ti, entry);
       if (ti === S.activeIndex) P.invalidateCache();
       updateSwatch(ti);

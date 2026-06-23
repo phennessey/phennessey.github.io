@@ -25,15 +25,13 @@ export const MIN_MATCHES          = 1;
 export const MAX_MATCHES          = 50;  // candidate-pool / cell-count ceiling
 export const MIN_MATCH_WIDTH      = 28;  // px; visible max = floor(rowWidth / MIN_MATCH_WIDTH)
 
-// Chip "skyline": one global delta-E cutoff (slider-set) applies to every
-// swatch. Within each swatch's wheel-set candidate count, matches closer than
-// the cutoff are shown, positioned by ratio = deltaE / cutoff (closest at the
-// top); matches at/beyond the cutoff are hidden. MIN_VISIBLE_CHIPS floors how
-// low the wheel can take the candidate count.
-export const MIN_VISIBLE_CHIPS   = 3;
-export const DEFAULT_CHIP_CUTOFF = 0.05;
-export const MIN_CHIP_CUTOFF     = 0.01;
-export const MAX_CHIP_CUTOFF     = 0.30;
+// Chip "skyline": every swatch fills with as many chips as physically fit
+// (floor(rowWidth / MIN_MATCH_WIDTH)). Bar heights are scaled per swatch to
+// maximize dynamic range: the worst match (largest deltaE) sits at SKYLINE_FLOOR
+// and the rest scale linearly against a perfect (deltaE = 0) match at full
+// height, so the best lands at its true relative position — never pinned to the
+// top.
+export const SKYLINE_FLOOR = 0.08;
 // Below this bar height (px), a chip has no room for its out-of-gamut icon, so
 // the icon is hidden.
 export const MIN_GAMUT_BAR_H       = 26;

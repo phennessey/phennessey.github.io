@@ -37,18 +37,12 @@
       <div class="section-label">Pantone</div>
       <div class="section-body library-panel" id="library-panel">
         <label><input type="checkbox" data-library="base"> Display Pantones</label>
-        <label><input type="checkbox" data-option="sort"> Sort by hue</label>
         <div class="libraries">
           <label><input type="checkbox" data-library="pastel"> Pastel</label>
           <label><input type="checkbox" data-library="neon"> Neon</label>
           <label><input type="checkbox" data-library="sp"> Skin tones</label>
           <label><input type="checkbox" data-library="xgc"> Extended gamut</label>
           <label><input type="checkbox" data-library="metallic"> Metallic</label>
-        </div>
-        <div class="deltae-control">
-          <span class="deltae-name">Cutoff</span>
-          <input type="range" id="cutoff-slider" class="deltae-slider">
-          <span id="cutoff-value" class="deltae-value"></span>
         </div>
       </div>
     </div>
@@ -68,6 +62,7 @@
     </div>
   </div>
   <div class="swatches"></div>
+  <div class="status-region" id="status-region"></div>
 
   <script type="module" src="./src/main.js"></script>
 </body>

@@ -25,6 +25,7 @@ body {
   min-height: calc(100vh - 2 * var(--body-margin));
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 /* Inflate the squircle radius only where corner-shape: superellipse() renders,
@@ -237,7 +238,7 @@ body.light-bg .hex-input:focus {
 .handle {
   pointer-events: auto;
   cursor: pointer;
-  opacity: 0.1;
+  opacity: 0.3;
   transition: opacity 0.15s ease;
 }
 
@@ -535,7 +536,7 @@ body.light-bg .swatch-container::before {
 
 /* Delete icon sits in the top-bar flex directly left of the hex readout.
    Always occupies its layout slot; fades in on hover so the readout's
-   position never shifts. Mirrors .promoted-close behavior exactly. */
+   position never shifts. */
 .delete-swatch {
   top: var(--swatch-padding);
   left: var(--swatch-padding);
@@ -588,43 +589,71 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 .swatch-container.light .match-cells { box-shadow: 0 -1px 0 rgba(0,0,0,0.1); }
 
 .swatches.show-matches .match-cells { display: flex; }
+/* Also show the region when a pantone is promoted, even if chips are hidden.
+   With a promotion active, drop the chip/field divider line entirely. */
+.match-cells.has-promotion { display: flex; }
+.match-cells.has-promotion,
+.swatch-container.light .match-cells.has-promotion { box-shadow: none; }
 
-/* When nothing is selected, chips hide everywhere. */
+/* When chips are hidden but a promotion is active: suppress chips and border. */
+.swatches:not(.show-matches) .match-cells.has-promotion .match-cell { display: none !important; }
+.swatches:not(.show-matches) .match-cells.has-promotion { box-shadow: none; }
+
+/* When nothing is selected, chips hide everywhere… */
 .swatches.none-selected .match-cells { display: none; }
+/* …but a promoted swatch still shows its region filled with the pinned colour
+   (just the colour field — chips and the promoted label stay hidden). */
+.swatches.none-selected .match-cells.has-promotion { display: flex; }
+.swatches.none-selected .match-cells.has-promotion .match-cell { display: none !important; }
 
 .promoted-cell {
-  flex: 1 1 0;
-  min-height: 0;
-  position: relative;
-  overflow: hidden;
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
   display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
+  align-items: center;
   padding: var(--swatch-padding);
-  container-type: inline-size;
+  pointer-events: none;
+  color: rgba(255,255,255,0.5);
+}
+.swatch-container.light .promoted-cell {
+  color: rgba(0,0,0,0.5);
 }
 
+/* De-promote box next to the promoted name. Fully hidden until the user hovers
+   the name (or the box itself); no fade — it's instantly on or off, at full
+   alpha when shown. */
 .promoted-close {
   position: static;
+  flex-shrink: 0;
   height: 11px;
   padding-right: 4px;
-  opacity: 0;
-  transition: opacity 0.1s ease;
+  display: none;
+  pointer-events: auto;
+  cursor: pointer;
+  color: rgba(255,255,255,1);
 }
-.promoted-cell:has(.match-label:hover, .promoted-close:hover) .promoted-close {
-  opacity: 1;
+.swatch-container.light .promoted-close { color: rgba(0,0,0,1); }
+/* The promoted-cell is pointer-events:none with interactive children, so
+   :hover fires only over the name / caution / close box — one selector reveals
+   the close box across that whole group (drag from name to box never drops it). */
+.promoted-cell:hover .promoted-close {
+  display: block;
 }
 
 .promoted-cell .match-label {
   pointer-events: auto;
+  cursor: pointer;
 }
 
 .match-cell {
   flex: 1 1 0;
   min-width: 0;
-  position: relative;     /* full strip height; the clickable column */
+  position: relative;     /* full strip height; the bar anchors to its bottom */
   container-type: inline-size;
-  cursor: pointer;
+  cursor: default;        /* the empty strip above the bar isn't the chip; only
+                             .chip-fill (the bar) shows the pointer cursor */
 }
 
 /* The colour bar within a chip column. Anchored to the strip bottom; its top
@@ -638,17 +667,38 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   top: var(--chip-top, 0%);
   display: flex;
   align-items: flex-start;
-  justify-content: flex-end;
+  justify-content: center;
   padding: var(--swatch-padding);
   overflow: hidden;
+  border-right: 0.5px solid rgba(255,255,255,0.3);
+  cursor: pointer;        /* only the bar (chip body) is the interactive area */
 }
+
+.swatch-container.light .chip-fill {
+  border-right-color: rgba(0,0,0,0.3);
+}
+
+/* The rightmost chip is the outer edge — no border there. */
+.match-cell.chip-rightmost .chip-fill { border-right: none; }
 
 .chip-gamut-warning {
   position: absolute;
   bottom: var(--swatch-padding);
-  right: var(--swatch-padding);
+  left: 50%;
+  transform: translateX(-50%);
   display: none;
   height: 11px;
+}
+/* The gamut icon brightens when hovering the chip body (the bar or the icon —
+   not the empty strip above the bar); the promoted caution brightens with the
+   whole promoted-cell group — name, caution, or close box. */
+.match-cell:has(.chip-fill:hover, .chip-gamut-warning:hover) .chip-gamut-warning,
+.promoted-cell:hover .promoted-gamut-warning {
+  color: rgba(255,255,255,1);
+}
+.swatch-container.light .match-cell:has(.chip-fill:hover, .chip-gamut-warning:hover) .chip-gamut-warning,
+.swatch-container.light .promoted-cell:hover .promoted-gamut-warning {
+  color: rgba(0,0,0,1);
 }
 
 .noise-overlay {
@@ -661,34 +711,53 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   opacity: 0;
 }
 
-.match-cell.metallic .noise-overlay,
-.promoted-cell.metallic .noise-overlay {
+.match-cell.metallic .noise-overlay {
   opacity: 0.8;
 }
 
 .match-cell.out-of-p3 .chip-gamut-warning { display: block; }
-/* …but once a bar is too short to hold it, hide the icon (set in JS). */
+/* …hidden only when the bar is too short to hold it (set in JS). */
 .match-cell.out-of-p3.chip-short .chip-gamut-warning { display: none; }
 
-.chip-gamut-tooltip {
+/* Hide the chip's label when it can't fit: the bar is too short to show it all,
+   or it collides with the gamut icon (both detected in JS). The gamut icon
+   stays visible. visibility (not display) keeps the box so JS can still measure
+   the text extent. */
+.match-cell.label-clipped .match-label { visibility: hidden; }
+
+/* When the label is hidden (too short / collides), a small dot stands in for the
+   name at the label's top-centre anchor — shown only while hovering the chip. */
+.chip-fill::after {
+  content: '';
   position: absolute;
-  left: var(--swatch-padding);
-  right: var(--swatch-padding);
-  bottom: calc(50% + var(--swatch-padding));
+  top: var(--swatch-padding);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.9);
+  display: none;
+  pointer-events: none;
+}
+.swatch-container.light .chip-fill::after { background: rgba(0,0,0,0.9); }
+.match-cell.label-clipped:has(.chip-fill:hover, .chip-gamut-warning:hover) .chip-fill::after { display: block; }
+
+/* Shared status line below the swatch region — pulled out of the flex flow so
+   the swatches fill flush to the body bottom (= 40px from viewport edge). Sits
+   in the body-margin gap below. */
+.status-region {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  padding: 6px 12px;
+  font-family: 'Roboto Mono', monospace;
   font-size: 10px;
   line-height: 1.3;
-  color: rgba(255,255,255,0.85);
-  text-align: right;
-  pointer-events: none;
+  text-align: left;
+  color: rgba(255,255,255,0.6);
   user-select: none;
-  visibility: hidden;
-  opacity: 0.5;
-  z-index: 2;
-}
-
-.swatch-container.light .chip-gamut-tooltip { color: rgba(0,0,0,0.85); }
-.swatch-container:has(.chip-gamut-warning:hover) .chip-gamut-tooltip {
-  visibility: visible;
 }
 
 .match-label {
@@ -708,17 +777,20 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 }
 
 /* Match chips sit dimmer at rest than the promoted label (which stays 0.5). */
-.match-cell .match-label { color: rgba(255,255,255,0.3); }
+.match-cell .match-label { color: rgba(255,255,255,0.3); text-align: center; }
 
-.match-cell:hover .match-label,
-.promoted-cell:hover .match-label {
+.chip-fill:hover .match-label {
   color: rgba(255,255,255,1);
 }
 
+.promoted-cell:hover .match-label {
+  color: rgba(255,255,255,1);
+}
+.swatch-container.light .promoted-cell:hover .match-label { color: rgba(0,0,0,1); }
+
 .swatch-container.light .match-label { color: rgba(0,0,0,0.5); }
 .swatch-container.light .match-cell .match-label { color: rgba(0,0,0,0.3); }
-.swatch-container.light .match-cell:hover .match-label,
-.swatch-container.light .promoted-cell:hover .match-label {
+.swatch-container.light .chip-fill:hover .match-label {
   color: rgba(0,0,0,1);
 }
 
@@ -735,56 +807,73 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   }
 }
 
-/* Best-match marker: a label-coloured 45° triangle painted into the top-left
-   corner of the best chip's bar. Sits at the bar top (--chip-top) and above the
-   .chip-fill via z-index. Shown only on the .best-match cell. */
+/* Closest-hue marker: a label-coloured 45° triangle painted into the top-left
+   corner of the closest-hue chip's bar. Sits at the bar top (--chip-top) and
+   above the .chip-fill via z-index. Shown only on the .hue-match cell. */
 .match-cap {
   position: absolute;
-  right: 0;
+  right: 0.5px;
   top: var(--chip-top, 0%);
   width: 7px;
   height: 7px;
   z-index: 1;
   background: currentColor;
   clip-path: polygon(100% 0, 0 0, 100% 100%);
-  color: rgba(255,255,255,0.5);
+  color: rgba(255,255,255,0.3);   /* matches the chip's right-border opacity */
   pointer-events: none;
   display: none;
-  transition: color 0.1s ease;
 }
-.match-cell.best-match .match-cap { display: block; }
+.match-cell.hue-match .match-cap { display: block; }
 
-.swatch-container.light .match-cap { color: rgba(0,0,0,0.5); }
-
-.match-cell:hover .match-cap { color: rgba(255,255,255,1); }
-.swatch-container.light .match-cell:hover .match-cap { color: rgba(0,0,0,1); }
+.swatch-container.light .match-cap { color: rgba(0,0,0,0.3); }
 
 .swatches.none-selected .match-cap { display: none; }
 .swatches.none-selected .match-label { visibility: hidden; }
 
-/* Promoted-chip marker: the ● dot floats just above the promoted chip's bar
-   top, centred (tracks the skyline via --chip-top). Shown only when promoted. */
-.match-dot {
+/* Promoted-chip marker: an upward-pointing isosceles triangle that protrudes
+   out of the TOP edge of the chip's bar (base on the bar's top edge, apex
+   pointing up above it), spanning the full chip width, in the (bright)
+   promoted-label colour. */
+.match-tri {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(var(--chip-top, 0%) - 10px);
-  height: 10px;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  font-size: 5px;
-  line-height: 1;
-  color: rgba(255,255,255,0.5);
+  left: 50%;
+  top: var(--chip-top, 0%);
+  transform: translate(-50%, -100%);   /* sit fully above the bar's top edge */
+  width: 100%;
+  aspect-ratio: 4 / 1;      /* full-width base */
+  z-index: 1;               /* above .chip-fill (which follows it in the DOM) */
+  background: currentColor;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  color: rgba(255,255,255,0.3);
   pointer-events: none;
-  user-select: none;
+  display: none;
   transition: color 0.1s ease;
 }
-.match-cell.promoted-match .match-dot { display: flex; }
-.swatch-container.light .match-dot { color: rgba(0,0,0,0.5); }
-.match-cell:hover .match-dot { color: rgba(255,255,255,1); }
-.swatch-container.light .match-cell:hover .match-dot { color: rgba(0,0,0,1); }
-.swatches.none-selected .match-dot { display: none; }
+/* The promoted chip's bar is hidden, so the triangle is its click target for
+   toggling the promotion back off. */
+.match-cell.promoted-match .match-tri { display: block; pointer-events: auto; cursor: pointer; }
+.swatch-container.light .match-tri { color: rgba(0,0,0,0.3); }
+.swatches.none-selected .match-tri { display: none; }
+
+/* The promoted chip is marked by its triangle, so suppress the closest-hue cap
+   there even if it is also that chip. */
+.match-cell.promoted-match .match-cap { display: none !important; }
+
+/* The promoted chip renders like a normal chip — its bar, label, gamut icon and
+   (if it is the closest-hue chip) cap all stay visible — plus the top triangle
+   marking it as promoted. Its label and icon are never clipped/hidden. */
+
+/* Out-of-P3 caution beside the promoted name (top-right overlay): small, left of
+   the label. Keeps a pointer cursor on hover. */
+.promoted-gamut-warning {
+  position: static;
+  flex-shrink: 0;
+  height: 11px;
+  width: calc(11px * 18 / 16);
+  padding-right: 4px;
+  pointer-events: auto;
+  cursor: pointer;
+}
 
 /* Drag dot */
 #swatch-dot {

@@ -555,9 +555,12 @@ export function createPicker(S, cfg) {
     // consumer CSS *may* react to it if desired. It is no longer
     // required for baseline styling, but keeping it preserves
     // backward-compatibility for rules that key off it.
-    S.colors.forEach((_, i) => lightHandles[i]?.classList.toggle('light-color', S.colors[i].L > MIDDLE_GRAY));
+    S.colors.forEach((col, i) => {
+      lightHandles[i]?.classList.toggle('light-color', col.L > MIDDLE_GRAY);
+    });
     updateDiscGuides();
-    const lightBg = S.activeIndex !== -1 && S.colors[S.activeIndex].L > MIDDLE_GRAY;
+    const refIdx = S.activeIndex !== -1 ? S.activeIndex : S.lastActiveIndex;
+    const lightBg = refIdx !== undefined && refIdx !== -1 && S.colors[refIdx]?.L > MIDDLE_GRAY;
     discOverlay.classList.toggle('light-color', lightBg);
     lightbarOverlay.classList.toggle('light-color', lightBg);
   }
