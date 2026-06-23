@@ -725,8 +725,11 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   transform: translateX(-50%);
   display: none;
   height: 11px;
+  /* Match the chip labels' resting alpha (0.3), overriding the generic .icon 0.5. */
+  color: rgba(255,255,255,0.3);
   transition: opacity 0.1s ease;
 }
+.swatch-container.light .chip-gamut-warning { color: rgba(0,0,0,0.3); }
 /* The gamut icon brightens when hovering the chip body (the bar or the icon —
    not the empty strip above the bar); the promoted caution brightens with the
    whole promoted-cell group — name, caution, or close box. */
@@ -756,6 +759,12 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 .match-cell.out-of-p3 .chip-gamut-warning { display: block; }
 /* …hidden only when the bar is too short to hold it (set in JS). */
 .match-cell.out-of-p3.chip-short .chip-gamut-warning { display: none; }
+
+/* Chips with a gamut icon: mask shifted up 10px (bottom edge at 100%-10px) so the
+   text clears the icon at the bottom; 20px fade span. */
+.match-cell.out-of-p3 .chip-label-wrap {
+  mask-image: linear-gradient(to bottom, black calc(100% - 30px), transparent calc(100% - 10px));
+}
 
 /* When a promotion is active, label wraps and gamut icons in chips fade out
    faster than the bars collapse (0.1s vs 0.2s), so they vanish cleanly. */
@@ -798,7 +807,10 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 /* Match chips sit dimmer at rest than the promoted label (which stays 0.5). */
 .match-cell .match-label { color: rgba(255,255,255,0.3); text-align: center; }
 
-.chip-fill:hover ~ .chip-label-wrap .match-label {
+/* Hovering anywhere on the chip (the bar or its gamut icon) brightens the label;
+   the icon brightens via the same condition (see .chip-gamut-warning rule above),
+   so the icon has no independent hover state. */
+.match-cell:has(.chip-fill:hover, .chip-gamut-warning:hover) .match-label {
   color: rgba(255,255,255,1);
 }
 
@@ -809,7 +821,7 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 
 .swatch-container.light .match-label { color: rgba(0,0,0,0.5); }
 .swatch-container.light .match-cell .match-label { color: rgba(0,0,0,0.3); }
-.swatch-container.light .chip-fill:hover ~ .chip-label-wrap .match-label {
+.swatch-container.light .match-cell:has(.chip-fill:hover, .chip-gamut-warning:hover) .match-label {
   color: rgba(0,0,0,1);
 }
 
@@ -826,18 +838,18 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   }
 }
 
-/* Hue-boundary marker: upward-pointing isosceles triangle (13px wide, 6.5px
-   tall — height is exactly half the odd width). The apex sits at 50% = 6.5px
-   from the box's left edge. The box is positioned relative to .match-cell, whose
-   right edge carries the chip's 0.5px border-right (occupying cellRight-0.5 to
-   cellRight, so its visual center is cellRight-0.25). right: -6.25px puts the
+/* Hue-boundary marker: upward-pointing isosceles triangle (14px wide, 7px
+   tall — height is exactly half the width). The apex sits at 50% = 7px from the
+   box's left edge. The box is positioned relative to .match-cell, whose right
+   edge carries the chip's 0.5px border-right (occupying cellRight-0.5 to
+   cellRight, so its visual center is cellRight-0.25). right: -6.75px puts the
    apex on that line's center. Measured to land within 0.001px on all chips. */
 .match-cap {
   position: absolute;
   bottom: 0;
-  right: -6.25px;
-  width: 13px;
-  height: 6.5px;
+  right: -6.75px;
+  width: 14px;
+  height: 7px;
   background: currentColor;
   clip-path: polygon(50% 0, 0 100%, 100% 100%);
   color: rgba(255,255,255,0.3);
