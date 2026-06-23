@@ -291,24 +291,36 @@ function renderPromoted(cell, p) {
   const matchCells = cell.parentElement;
   const warn = cell.querySelector('.promoted-gamut-warning');
   if (p) {
-    cell.style.display = '';
     cell.dataset.pantoneName = p.name;
     renderPantoneLabel(cell.querySelector('.match-label'), p.name);
     cell.classList.toggle('out-of-p3', !!p.outOfP3);
     if (warn) warn.style.display = p.outOfP3 ? '' : 'none';
+    if (matchCells && !matchCells.classList.contains('has-promotion')) {
+      startChipTransition(matchCells);
+    }
     if (matchCells) matchCells.classList.add('has-promotion');
   } else {
-    cell.style.display = 'none';
     delete cell.dataset.pantoneName;
     cell.classList.remove('out-of-p3');
     if (warn) warn.style.display = 'none';
+    if (matchCells && matchCells.classList.contains('has-promotion')) {
+      startChipTransition(matchCells);
+    }
     if (matchCells) matchCells.classList.remove('has-promotion');
   }
 }
 
+function startChipTransition(matchCells) {
+  clearTimeout(matchCells._chipTransitionTimer);
+  matchCells.classList.add('chips-transitioning');
+  matchCells._chipTransitionTimer = setTimeout(() => {
+    matchCells.classList.remove('chips-transitioning');
+  }, 250);
+}
+
 function clearChipCell(cell) {
   cell.style.display = 'none';
-  cell.classList.remove('out-of-p3', 'chip-short', 'metallic', 'promoted-match', 'hue-match', 'label-clipped');
+  cell.classList.remove('out-of-p3', 'chip-short', 'metallic', 'promoted-match', 'hue-match');
   delete cell.dataset.pantoneName;
 }
 
@@ -417,13 +429,14 @@ function updateSwatchMatches(index) {
     kept.push(entry);
   }
 
+  const matchCellsEl = container.querySelector('.match-cells');
+
   renderPromoted(promotedCell, selected);
 
   // The chip strip fills with the promoted Pantone's colour when one is pinned,
   // otherwise the swatch's own colour — so the field reads as continuous behind
   // the bars. (Owned here, not in updateSwatch, so promote/un-promote — which
   // only call updateSwatchMatches — update the backdrop too.)
-  const matchCellsEl = container.querySelector('.match-cells');
   if (matchCellsEl) {
     if (selected) {
       matchCellsEl.style.background = pantoneP3Css(selected);
@@ -455,7 +468,6 @@ function updateSwatchMatches(index) {
     );
   }
 
-  hideClippedLabels(cells);
 }
 
 // Hide a chip's text label when it won't fit cleanly: either the bar is too
@@ -464,27 +476,6 @@ function updateSwatchMatches(index) {
 // "floor": the icon's top edge when the icon shows, otherwise the bar's bottom.
 // Measured post-layout, batched to one reflow; the label keeps its layout box
 // (visibility, not display) so the measurement stays stable across frames.
-function hideClippedLabels(cells) {
-  const pending = [];
-  for (const cell of cells) {
-    if (cell.style.display === 'none') continue;
-    const fill = cell.querySelector('.chip-fill');
-    const label = fill && fill.querySelector('.match-label');
-    if (!label || !label.firstChild) continue;
-    const range = document.createRange();
-    range.selectNodeContents(label);
-    const textR = range.getBoundingClientRect();
-    let floor = fill.getBoundingClientRect().bottom;
-    const iconShown = cell.classList.contains('out-of-p3') && !cell.classList.contains('chip-short');
-    if (iconShown) {
-      const ir = cell.querySelector('.chip-gamut-warning').getBoundingClientRect();
-      if (ir.top < floor) floor = ir.top;
-    }
-    const hide = textR.height > 0 && textR.bottom > floor + 0.5;
-    pending.push([cell, hide]);
-  }
-  for (const [cell, hide] of pending) cell.classList.toggle('label-clipped', hide);
-}
 
 function renderPantoneLabel(labelEl, name) {
   labelEl.textContent = name;
@@ -533,7 +524,6 @@ function buildMatchCells(container) {
 
   const promotedCell = document.createElement('div');
   promotedCell.className = 'promoted-cell';
-  promotedCell.style.display = 'none';
   const depromote = ev => {
     ev.stopPropagation();
     const i = idxOf(container);
@@ -572,23 +562,21 @@ function buildMatchCells(container) {
     const cap = document.createElement('div');
     cap.className = 'match-cap';
     cell.appendChild(cap);
-    // Promoted-chip marker: an upward 45° right triangle flush with the strip
-    // bottom (shown only on the promoted chip, whose colour bar is hidden).
-    const tri = document.createElement('div');
-    tri.className = 'match-tri';
-    cell.appendChild(tri);
-    // The colour bar: anchored to the strip bottom, its top edge set per-chip
-    // by --chip-top. Label + metallic noise ride inside it, so they track the
-    // skyline; the gamut icon stays pinned to the (full-height) cell bottom.
+    // The colour bar: background + border only. Label lives in a sibling
+    // .chip-label-wrap so it can be masked independently without fading
+    // the chip's background colour.
     const fill = document.createElement('div');
     fill.className = 'chip-fill';
-    const label = document.createElement('div');
-    label.className = 'match-label';
-    fill.appendChild(label);
     const noiseEl = document.createElement('div');
     noiseEl.className = 'noise-overlay';
     fill.appendChild(noiseEl);
     cell.appendChild(fill);
+    const labelWrap = document.createElement('div');
+    labelWrap.className = 'chip-label-wrap';
+    const label = document.createElement('div');
+    label.className = 'match-label';
+    labelWrap.appendChild(label);
+    cell.appendChild(labelWrap);
     const gamutIcon = document.createElement('span');
     gamutIcon.className = 'icon chip-gamut-warning';
     gamutIcon.innerHTML = GAMUT_ICON_SVG;
@@ -607,9 +595,6 @@ function updateAllSwatchMatches() {
 }
 
 // Labels are measured against the (mono) font; if it isn't ready at first paint,
-// fallback-font metrics can leave label-fit states wrong. Re-measure once the
-// font loads so labels show/hide correctly without needing a library toggle.
-document.fonts?.ready.then(() => updateAllSwatchMatches());
 
 // Coalesce match recomputes (the ~1ms-per-swatch findClosestMatches scan)
 // to one pass per animation frame, so multiple pointer events within a
@@ -648,7 +633,7 @@ function wireMatchRowClick(matchRow, container) {
     // Only the chip body toggles promotion — the empty field above a chip is not
     // a target. The bar, its gamut icon (part of the chip body), and the promoted
     // chip's triangle marker all count.
-    const hit = ev.target.closest('.chip-fill, .chip-gamut-warning, .match-tri');
+    const hit = ev.target.closest('.chip-fill, .chip-gamut-warning');
     if (!hit) return;
     const cell = hit.closest('.match-cell');
     if (!cell) return;
