@@ -1,7 +1,7 @@
 // Undo/redo: snapshotting swatch state and restoring it.
 
 import { HISTORY_LIMIT, WHEEL_DEBOUNCE_MS } from './constants.js';
-import { S, P, els, pantoneSelections, loadPreferredMatchCount } from './state.js';
+import { S, P, els, pantoneSelections } from './state.js';
 import { exitMultiSelect, deactivateSwatch, setActive, setHandles, applyMultiVisuals, computeFrozenEdges } from './selection.js';
 import { removeColorAt, createSwatchDOM, reindex, updateSwatch, wireSwatch, updateAddButton, swatchEl } from './swatches.js';
 import { findPantoneByName, syncLibraryCheckboxState, updateMatchesVisibility, libraryPanel } from './pantone.js';
@@ -15,10 +15,6 @@ let historyIndex = -1;
 let wheelSnapshotTimer = null;
 let pointerSnapshot    = null;
 
-// matchCount is deliberately absent from snapshots: the chip count is a
-// persistent user-space preference (see state.js), not part of the undoable
-// colour document. Undo/redo preserves whatever count each swatch currently
-// has rather than rewinding it.
 function takeSnapshot() {
   return S.colors.map((c, i) => ({
     h: c.h, s: c.s, L: c.L,
@@ -86,20 +82,11 @@ function restoreSnapshot(snap) {
 
   while (S.colors.length > snap.length) removeColorAt(S.colors.length - 1);
 
-  // Preserve each existing swatch's live matchCount (it's a user-space
-  // preference, not part of the snapshot); swatches re-created by this restore
-  // adopt the last-used preferred count.
   for (let i = 0; i < S.colors.length; i++) {
-    S.colors[i] = {
-      h: snap[i].h, s: snap[i].s, L: snap[i].L,
-      matchCount: S.colors[i].matchCount ?? loadPreferredMatchCount(),
-    };
+    S.colors[i] = { h: snap[i].h, s: snap[i].s, L: snap[i].L };
   }
   for (let i = S.colors.length; i < snap.length; i++) {
-    S.colors.push({
-      h: snap[i].h, s: snap[i].s, L: snap[i].L,
-      matchCount: loadPreferredMatchCount(),
-    });
+    S.colors.push({ h: snap[i].h, s: snap[i].s, L: snap[i].L });
     P.createHandle(i);
     P.createLightHandle(i);
     wireSwatch(createSwatchDOM(i));

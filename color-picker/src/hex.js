@@ -2,7 +2,7 @@
 // entered hex lists back into the palette.
 
 import { MAX_COLORS } from './constants.js';
-import { S, P, pantoneSelections, loadPreferredMatchCount } from './state.js';
+import { S, P, pantoneSelections } from './state.js';
 import { srgbToOKHSL } from './color.js';
 import { swatchEl, removeColorAt, createSwatchDOM, wireSwatch, reindex, updateSwatch, updateAddButton } from './swatches.js';
 import { exitMultiSelect, setActive } from './selection.js';
@@ -45,11 +45,10 @@ function applyHexInput(rgbList) {
   while (S.colors.length > rgbList.length) removeColorAt(S.colors.length - 1);
 
   for (let i = 0; i < Math.min(S.colors.length, rgbList.length); i++) {
-    const prevCount = S.colors[i].matchCount ?? loadPreferredMatchCount();
-    S.colors[i] = { ...srgbToOKHSL(...rgbList[i]), matchCount: prevCount };
+    S.colors[i] = { ...srgbToOKHSL(...rgbList[i]) };
   }
   for (let i = S.colors.length; i < rgbList.length; i++) {
-    S.colors.push({ ...srgbToOKHSL(...rgbList[i]), matchCount: loadPreferredMatchCount() });
+    S.colors.push({ ...srgbToOKHSL(...rgbList[i]) });
     P.createHandle(i);
     P.createLightHandle(i);
     wireSwatch(createSwatchDOM(i));

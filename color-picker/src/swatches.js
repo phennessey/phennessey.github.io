@@ -2,7 +2,7 @@
 // and wiring per-swatch click/drag interactions.
 
 import { MIDDLE_GRAY, MAX_COLORS, GAMUT_ICON_SVG, CLOSE_ICON_SVG } from './constants.js';
-import { S, P, els, pantoneSelections, loadPreferredMatchCount } from './state.js';
+import { S, P, els, pantoneSelections } from './state.js';
 import { idxOf } from './picker.js';
 import { computeP3AndSRGB } from './color.js';
 import { buildMatchCells, matchRowObserver, updateSwatchMatches } from './pantone.js';
@@ -104,7 +104,7 @@ function removeColorAt(i) {
 function addLastDuplicate() {
   if (S.colors.length >= MAX_COLORS) return -1;
   const source = S.colors[S.colors.length - 1];
-  S.colors.push({ h: source.h, s: source.s, L: source.L, matchCount: loadPreferredMatchCount() });
+  S.colors.push({ h: source.h, s: source.s, L: source.L });
   const i = S.colors.length - 1;
   P.createHandle(i);
   P.createLightHandle(i);

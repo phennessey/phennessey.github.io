@@ -6,48 +6,11 @@
 import { createPicker } from './picker.js';
 import {
   DISC_SIZE, DISC_LB_GAP, LB_WIDTH, LB_HEIGHT, HANDLE_R, HANDLE_SW,
-  MIDDLE_GRAY, DEFAULT_MATCH_COUNT, MIN_VISIBLE_CHIPS, MAX_MATCHES,
-  DEFAULT_CHIP_CUTOFF, MIN_CHIP_CUTOFF, MAX_CHIP_CUTOFF,
+  MIDDLE_GRAY,
 } from './constants.js';
 
-// Each swatch's chip count `n` (how many Pantone chips it shows) lives in user
-// space (localStorage), NOT the undo history — it's a display preference, not
-// an edit to the colour document. New swatches inherit the last-used value; if
-// it can't be read (private mode, blocked storage, never set), we fall back to
-// DEFAULT_MATCH_COUNT.
-const MATCH_COUNT_KEY = 'okhsl.matchCount';
-
-export function loadPreferredMatchCount() {
-  try {
-    const v = parseInt(localStorage.getItem(MATCH_COUNT_KEY), 10);
-    if (Number.isFinite(v) && v >= MIN_VISIBLE_CHIPS && v <= MAX_MATCHES) return v;
-  } catch { /* storage unavailable */ }
-  return DEFAULT_MATCH_COUNT;
-}
-
-export function savePreferredMatchCount(n) {
-  try { localStorage.setItem(MATCH_COUNT_KEY, String(n)); } catch { /* storage unavailable */ }
-}
-
-// One global chip cutoff (the OKLab distance out to which chips show), shared by
-// every swatch and set by the Pantone-section slider. A display preference, not
-// part of the undo history.
-const CHIP_CUTOFF_KEY = 'okhsl.chipCutoff';
-
-export function loadChipCutoff() {
-  try {
-    const v = parseFloat(localStorage.getItem(CHIP_CUTOFF_KEY));
-    if (Number.isFinite(v) && v >= MIN_CHIP_CUTOFF && v <= MAX_CHIP_CUTOFF) return v;
-  } catch { /* storage unavailable */ }
-  return DEFAULT_CHIP_CUTOFF;
-}
-
-export function saveChipCutoff(v) {
-  try { localStorage.setItem(CHIP_CUTOFF_KEY, String(v)); } catch { /* storage unavailable */ }
-}
-
 export const S = {
-  colors:          [{ h: 0, s: 0, L: MIDDLE_GRAY, matchCount: loadPreferredMatchCount() }],
+  colors:          [{ h: 0, s: 0, L: MIDDLE_GRAY }],
   activeIndex:     -1,
   lastActiveIndex: 0,
   multiSelect:     new Set(),
@@ -66,11 +29,6 @@ export const S = {
   hueConvergeDrag:  null,
 
   libraryFilters: { base: false, pastel: false, neon: false, sp: false, xgc: false, metallic: false },
-
-  sortChipsByHue: false,
-
-  // Global chip cutoff (OKLab distance), shared by all swatches (see constants).
-  chipCutoff: loadChipCutoff(),
 };
 
 // Renderer + derived geometry
