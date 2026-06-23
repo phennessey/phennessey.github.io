@@ -5,7 +5,7 @@
 import { BG_LEVELS, MIDDLE_GRAY, LB_HEIGHT, CUSP_SNAP_PX } from './constants.js';
 import { S, P, els, DISC_R, handlePos, yToToeL, toeLToY, pantoneSelections } from './state.js';
 import { TAU, idxOf } from './picker.js';
-import { toe, toeInv, clamp01, lToRaw, rawToL, sForChroma, chromaOf, cuspL, hueDiff, computeP3AndSRGB, inSRGB, srgbToOKHSL } from './color.js';
+import { toe, toeInv, clamp01, lToRaw, rawToL, sForChroma, chromaOf, cuspL, hueDiff, computeP3AndSRGB } from './color.js';
 import { discXY, captureDrag, syncModKeys, requestRender } from './util.js';
 import { setActive, toggleMultiSelect, deselect, updateMesh } from './selection.js';
 import { updateSwatch } from './swatches.js';
@@ -641,21 +641,11 @@ els.swatches.addEventListener('pointerdown', ev => {
       if (!target) return;
       const ti = idxOf(target);
       if (!Number.isInteger(ti) || ti < 0 || ti >= S.colors.length) return;
-      // If the Pantone is within sRGB, snap to its exact 8-bit hex so the
-      // readout matches and no P3 strip is shown. Round-trip through hex to
-      // guarantee the OKHSL lands on an exact sRGB value (floating-point
-      // OKHSL ↔ sRGB can drift by a sub-step, making outOfSRGB flip).
-      // Otherwise project to the P3 rim (clamp saturation to ≤ 1).
-      const s0 = Math.min(1, entry.s);
-      if (inSRGB(entry.h, s0, toe(entry.L))) {
-        const { hex } = computeP3AndSRGB({ h: entry.h, s: s0, L: entry.L });
-        const r = parseInt(hex.slice(1, 3), 16) / 255;
-        const g = parseInt(hex.slice(3, 5), 16) / 255;
-        const b = parseInt(hex.slice(5, 7), 16) / 255;
-        S.colors[ti] = srgbToOKHSL(r, g, b);
-      } else {
-        S.colors[ti] = { h: entry.h, s: s0, L: entry.L };
-      }
+      // Place the indicator at the Pantone's true position in P3 (saturation
+      // clamped to the P3 rim for out-of-P3 pantones). We no longer snap the
+      // stored colour to the 8-bit sRGB hex grid — the swatch readout shows the
+      // closest sRGB hex on its own when the colour is within sRGB.
+      S.colors[ti] = { h: entry.h, s: Math.min(1, entry.s), L: entry.L };
       pantoneSelections.set(ti, entry);
       if (ti === S.activeIndex) P.invalidateCache();
       updateSwatch(ti);

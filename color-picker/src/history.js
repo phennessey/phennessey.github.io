@@ -106,12 +106,16 @@ function restoreSnapshot(snap) {
     for (const cat of neededCategories) {
       if (cat !== 'base') S.libraryFilters[cat] = true;
     }
-    if (libraryPanel) {
-      libraryPanel.querySelectorAll('input[type="checkbox"][data-library]').forEach(cb => {
-        cb.checked = !!S.libraryFilters[cb.dataset.library];
-      });
-      syncLibraryCheckboxState();
-    }
+    // The base toggle lives outside #library-panel (in the section head), so
+    // query the whole document for every data-library checkbox.
+    document.querySelectorAll('input[type="checkbox"][data-library]').forEach(cb => {
+      cb.checked = !!S.libraryFilters[cb.dataset.library];
+    });
+    // Keep the collapsible pantone section's open-state in sync with the base
+    // filter when a restore turns it on (view-state only, no history effect).
+    const pantoneSection = document.querySelector('.section-pantone');
+    if (pantoneSection) pantoneSection.classList.toggle('open', S.libraryFilters.base);
+    syncLibraryCheckboxState();
     updateMatchesVisibility();
   }
 

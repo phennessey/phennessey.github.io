@@ -24,7 +24,9 @@
     </div>
 
     <div class="ui-section section-setup">
-      <div class="section-label">Setup</div>
+      <div class="section-head">
+        <div class="section-label">Setup</div>
+      </div>
       <div class="section-body hex-panel">
         <textarea class="hex-input" spellcheck="false" autocomplete="off"></textarea>
         <button id="add-color-btn" type="button" aria-label="Add color">+</button>
@@ -33,10 +35,16 @@
 
     <div class="section-divider"></div>
 
-    <div class="ui-section section-pantone">
-      <div class="section-label">Pantone</div>
+    <div class="ui-section section-pantone collapsible">
+      <div class="section-head">
+        <span class="section-toggle-box">
+          <input type="checkbox" class="section-toggle" id="toggle-pantone" data-library="base">
+          <span class="section-tri" aria-hidden="true"></span>
+        </span>
+        <label class="section-label" for="toggle-pantone">Pantone</label>
+      </div>
+      <div class="section-vlabel">Pantone</div>
       <div class="section-body library-panel" id="library-panel">
-        <label><input type="checkbox" data-library="base"> Display Pantones</label>
         <div class="libraries">
           <label><input type="checkbox" data-library="pastel"> Pastel</label>
           <label><input type="checkbox" data-library="neon"> Neon</label>
@@ -49,15 +57,29 @@
 
     <div class="section-divider"></div>
 
-    <div class="ui-section section-cmyk">
-      <div class="section-label">CMYK</div>
+    <div class="ui-section section-cmyk collapsible">
+      <div class="section-head">
+        <span class="section-toggle-box">
+          <input type="checkbox" class="section-toggle" id="toggle-cmyk">
+          <span class="section-tri" aria-hidden="true"></span>
+        </span>
+        <label class="section-label" for="toggle-cmyk">CMYK</label>
+      </div>
+      <div class="section-vlabel">CMYK</div>
       <div class="section-body cmyk-body"></div>
     </div>
 
     <div class="section-divider"></div>
 
-    <div class="ui-section section-export">
-      <div class="section-label">Export</div>
+    <div class="ui-section section-export collapsible">
+      <div class="section-head">
+        <span class="section-toggle-box">
+          <input type="checkbox" class="section-toggle" id="toggle-export">
+          <span class="section-tri" aria-hidden="true"></span>
+        </span>
+        <label class="section-label" for="toggle-export">Export</label>
+      </div>
+      <div class="section-vlabel">Export</div>
       <div class="section-body export-body"></div>
     </div>
   </div>

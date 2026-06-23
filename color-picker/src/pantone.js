@@ -112,7 +112,8 @@ function buildDots() {
   const frag = document.createDocumentFragment();
   for (const entry of pantoneData) {
     const ang = entry.h * TAU;
-    const s   = Math.min(1, entry.s);  // clamp OOG pantones to the rim
+    // TEMP: rim-clamp disabled — OOG pantones render at their true s (outside the disc).
+    const s   = entry.s;  // was: Math.min(1, entry.s)
     const cx  = DISC_R_LOCAL + Math.cos(ang) * s * DISC_R_LOCAL;
     const cy  = DISC_R_LOCAL - Math.sin(ang) * s * DISC_R_LOCAL;
     const circ = svgEl('circle', {
@@ -328,6 +329,9 @@ function renderChipCell(cell, m, isHueMatch, isPromoted, chipTopRatio, hideGamut
   cell.style.display    = '';
   // Bar top slides down from the midpoint by deltaE/cutoff (see updateSwatchMatches).
   cell.style.setProperty('--chip-top', (chipTopRatio * 100).toFixed(2) + '%');
+  // Cache the ratio so a height-only resize can re-evaluate the gamut cutoff
+  // without re-running the (expensive) match scan (see applyGamutCutoff).
+  cell._chipRatio = chipTopRatio;
   cell.querySelector('.chip-fill').style.background = pantoneP3Css(m);
   cell.dataset.pantoneName = m.name;
   cell.classList.toggle('out-of-p3', !!m.outOfP3);
@@ -626,17 +630,64 @@ function scheduleMatches(indices) {
   });
 }
 
+// Height-only update. The match SET is independent of strip height — only each
+// chip's gamut-icon cutoff (hideGamut) depends on it. So a vertical resize just
+// re-toggles `chip-short` from each chip's cached ratio, with NO library scan.
+function applyGamutCutoff(index) {
+  const container = swatchEl(index);
+  if (!container) return;
+  const stripH = container._matchCellsHeight
+    || container.querySelector('.match-cells')?.clientHeight || 0;
+  if (!stripH) return;
+  for (const cell of container.querySelectorAll('.match-cells > .match-cell')) {
+    if (cell.style.display === 'none') continue;
+    const ratio = cell._chipRatio;
+    if (ratio == null) continue;
+    cell.classList.toggle('chip-short', (1 - ratio) * stripH < MIN_GAMUT_BAR_H);
+  }
+}
+
+let _cutoffRAF = 0;
+const _dirtyCutoff = new Set();
+function scheduleGamutCutoff(index) {
+  _dirtyCutoff.add(index);
+  if (_cutoffRAF) return;
+  _cutoffRAF = requestAnimationFrame(() => {
+    _cutoffRAF = 0;
+    const ids = [..._dirtyCutoff];
+    _dirtyCutoff.clear();
+    for (const i of ids) if (i < S.colors.length) applyGamutCutoff(i);
+  });
+}
+
 const matchRowObserver = new ResizeObserver(entries => {
   for (const entry of entries) {
     const container = entry.target.closest('.swatch-container');
     if (!container) continue;
     const w = entry.target.clientWidth;   // entry.target is .match-cells
     const h = entry.target.clientHeight;  // strip height drives the gamut-icon cutoff
-    if (container._matchCellsWidth === w && container._matchCellsHeight === h) continue;
+    // Always cache the live size so updateSwatchMatches/visibleMaxForRow can read
+    // it without forcing a reflow. Both width and height change every frame during
+    // a drag-resize, but the actual rendering only steps on two discrete things:
+    //  - CHIP COUNT (derived from width, capped at MAX_MATCHES) → the match SET
+    //    changes, so a full recompute is needed (coalesced via scheduleMatches).
+    //  - STRIP HEIGHT → only each chip's gamut-icon cutoff changes, never the set,
+    //    so a cheap cutoff-only pass suffices (scheduleGamutCutoff) — no library
+    //    scan. Both are rAF-coalesced; a frame where neither stepped does nothing.
+    // This keeps a continuous (especially vertical) resize on a wide window with a
+    // full chip complement from stalling the frame (canvas included).
     container._matchCellsWidth = w;
     container._matchCellsHeight = h;
+    const chipCount = w ? Math.min(MAX_MATCHES, Math.max(MIN_MATCHES, Math.floor(w / MIN_MATCH_WIDTH))) : 0;
+    const countChanged = chipCount !== container._matchChipCount;
+    const heightChanged = h !== container._matchRenderedHeight;
+    if (!countChanged && !heightChanged) continue;
+    container._matchChipCount = chipCount;
+    container._matchRenderedHeight = h;
     const i = idxOf(container);
-    if (Number.isInteger(i) && i >= 0 && i < S.colors.length) updateSwatchMatches(i);
+    if (!Number.isInteger(i) || i < 0 || i >= S.colors.length) continue;
+    if (countChanged) scheduleMatches([i]);       // set may change → full recompute
+    else scheduleGamutCutoff(i);                   // height-only → cheap cutoff pass
   }
 });
 
@@ -729,8 +780,11 @@ els.swatches.addEventListener('pointerout', ev => {
 // Library filter checkboxes
 
 const libraryPanel = document.getElementById('library-panel');
-if (libraryPanel) {
-  libraryPanel.querySelectorAll('input[type="checkbox"][data-library]').forEach(cb => {
+// The "base" toggle lives in the collapsible section head (#toggle-pantone),
+// outside #library-panel; the per-library checkboxes live inside it. Wire both.
+const libraryCheckboxes = document.querySelectorAll('input[type="checkbox"][data-library]');
+if (libraryCheckboxes.length) {
+  libraryCheckboxes.forEach(cb => {
     cb.addEventListener('change', () => {
       S.libraryFilters[cb.dataset.library] = cb.checked;
       syncLibraryCheckboxState();
@@ -744,9 +798,8 @@ if (libraryPanel) {
 }
 
 function syncLibraryCheckboxState() {
-  if (!libraryPanel) return;
   const baseOn = S.libraryFilters.base;
-  libraryPanel.querySelectorAll('input[type="checkbox"][data-library]').forEach(cb => {
+  libraryCheckboxes.forEach(cb => {
     if (cb.dataset.library === 'base') return;
     cb.disabled = !baseOn;
   });
