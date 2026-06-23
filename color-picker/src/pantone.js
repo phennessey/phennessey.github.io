@@ -365,7 +365,7 @@ function buildDisplayOrder(matches, targetHue, markEntry) {
   const seam = (targetHue + 0.5) % 1;
   const keyOf = m => (hueOf(m) - seam + 1) % 1;
   const visual = matches.slice().sort((a, b) => keyOf(a) - keyOf(b));
-  const displayOrder = visual.slice();
+  const displayOrder = visual.slice().reverse();
 
   return { displayOrder, markDomIdx: displayOrder.indexOf(markEntry) };
 }

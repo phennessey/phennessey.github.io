@@ -746,7 +746,7 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 
 .chip-gamut-warning {
   position: absolute;
-  bottom: var(--swatch-padding);
+  bottom: calc(var(--swatch-padding) - 2px);
   left: 50%;
   transform: translateX(-50%);
   display: none;
