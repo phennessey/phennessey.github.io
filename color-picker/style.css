@@ -826,15 +826,18 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   }
 }
 
-/* Hue-boundary marker: upward-pointing isosceles triangle (13px wide, 7px
-   tall). right: -6px places the apex within 0.5px of the chip's right border
-   using only integer CSS values. */
+/* Hue-boundary marker: upward-pointing isosceles triangle (13px wide, 6.5px
+   tall — height is exactly half the odd width). The apex sits at 50% = 6.5px
+   from the box's left edge. The box is positioned relative to .match-cell, whose
+   right edge carries the chip's 0.5px border-right (occupying cellRight-0.5 to
+   cellRight, so its visual center is cellRight-0.25). right: -6.25px puts the
+   apex on that line's center. Measured to land within 0.001px on all chips. */
 .match-cap {
   position: absolute;
   bottom: 0;
-  right: -6px;
+  right: -6.25px;
   width: 13px;
-  height: 7.5px;
+  height: 6.5px;
   background: currentColor;
   clip-path: polygon(50% 0, 0 100%, 100% 100%);
   color: rgba(255,255,255,0.3);
