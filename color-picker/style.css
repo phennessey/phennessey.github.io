@@ -588,6 +588,14 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 }
 .swatch-container.light .match-cells { box-shadow: 0 -1px 0 rgba(0,0,0,0.1); }
 
+/* While previewing a chip's colour on hover: drop the chip/field divider line
+   and ease the background change (entering and restoring) at 0.1s. */
+.match-cells.chip-hover-preview {
+  box-shadow: none;
+  transition: background-color 0.1s ease;
+}
+.swatch-container.light .match-cells.chip-hover-preview { box-shadow: none; }
+
 .swatches.show-matches .match-cells { display: flex; }
 /* Also show the region when a pantone is promoted, even if chips are hidden.
    With a promotion active, drop the chip/field divider line entirely. */
@@ -718,6 +726,24 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 /* The rightmost chip is the outer edge — no border there. */
 .match-cell.chip-rightmost .chip-fill { border-right: none; }
 
+/* On the hue-marked chip the triangle straddles the right border; replace that
+   border with a line that stops at the triangle's top (its 6px height) so the
+   divider isn't drawn behind the marker. (Skip the rightmost chip — no border.) */
+.match-cell.hue-match:not(.chip-rightmost) .chip-fill { border-right: none; }
+.match-cell.hue-match:not(.chip-rightmost) .chip-fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 5.5px;
+  width: 0.5px;
+  background: rgba(255,255,255,0.2);
+  pointer-events: none;
+}
+.swatch-container.light .match-cell.hue-match:not(.chip-rightmost) .chip-fill::after {
+  background: rgba(0,0,0,0.2);
+}
+
 .chip-gamut-warning {
   position: absolute;
   bottom: var(--swatch-padding);
@@ -847,9 +873,9 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 .match-cap {
   position: absolute;
   bottom: 0;
-  right: -6.75px;
-  width: 14px;
-  height: 7px;
+  right: -5.75px;
+  width: 12px;
+  height: 6px;
   background: currentColor;
   clip-path: polygon(50% 0, 0 100%, 100% 100%);
   color: rgba(255,255,255,0.3);
@@ -859,6 +885,32 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   transition: opacity 0.1s ease;
 }
 .match-cell.hue-match .match-cap { opacity: 1; }
+
+/* Hover dot: a 5px circle centred on the top edge of the chip being hovered
+   (--chip-top is the bar's top offset). Coloured like the chip label's hover
+   state (full-opacity white / black in light mode). */
+.match-cell::after {
+  content: "";
+  position: absolute;
+  top: calc(var(--chip-top, 0%) - 4px);
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.5);
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 3;
+  transition: opacity 0.1s ease;
+}
+.swatch-container.light .match-cell::after { background: rgba(0,0,0,0.5); }
+.match-cell:has(.chip-fill:hover, .chip-gamut-warning:hover)::after { opacity: 1; }
+/* On promotion the chips collapse — kill the hover dot instantly (no fade). */
+.match-cells.has-promotion .match-cell::after {
+  opacity: 0 !important;
+  transition: none;
+}
 
 .swatch-container.light .match-cap { color: rgba(0,0,0,0.3); }
 

@@ -402,16 +402,17 @@ function updateSwatchMatches(index) {
     return;
   }
 
-  // Every swatch fills with as many chips as physically fit (`n`) via a closest-
-  // by-OKLab-distance search; heights are scaled to maximize dynamic range: the
-  // worst match (largest deltaE) sits at SKYLINE_FLOOR and the rest scale toward
-  // full height (closest is tallest). `ratio` is the chip's top offset (0 = top
-  // of strip, full bar); height = 1 - ratio. Chips are ordered by hue and the
-  // triangle flags the chip closest in hue to the swatch — using the swatch's
-  // latent hue angle, so a neutral gray still resolves a hue (the one it last
-  // descended from) rather than snapping.
-  const n = Math.min(visibleMax, MAX_MATCHES);
-  const pool = closestN(c, n);
+  // The vertical scale is GLOBAL, not per-row: heights are always derived from
+  // the full MAX_MATCHES-deep pool — the worst of those sits at SKYLINE_FLOOR
+  // and the rest scale toward full height (closest is tallest). `ratio` is the
+  // chip's top offset (0 = top of strip, full bar); height = 1 - ratio. When
+  // fewer chips physically fit (`visibleMax`) we simply DROP the worst matches
+  // from view; the chips that remain keep the exact heights they'd have at full
+  // width, so resizing the window or adding swatches never re-stretches them.
+  // Chips are ordered by hue and the triangle flags the chip closest in hue to
+  // the swatch — using the swatch's latent hue angle, so a neutral gray still
+  // resolves a hue (the one it last descended from) rather than snapping.
+  const pool = closestN(c, MAX_MATCHES);
   const targetHue = swatchHueAngle(c);
 
   let maxDeltaE = 0;
@@ -420,10 +421,15 @@ function updateSwatchMatches(index) {
     if (dE > maxDeltaE) maxDeltaE = dE;
   }
 
+  // Keep only the closest `visibleMax` for display (pool is closest-first), but
+  // scale every kept chip against the global maxDeltaE above.
+  const keptCount = Math.min(visibleMax, MAX_MATCHES);
   const ratioByEntry = new Map();
   const kept = [];
   const span = 1 - SKYLINE_FLOOR;
-  for (const { entry, distSq } of pool) {
+  for (let i = 0; i < keptCount; i++) {
+    const { entry, distSq } = pool[i];
+    if (!entry) break;
     const ratio = maxDeltaE > 0 ? (Math.sqrt(distSq) / maxDeltaE) * span : 0;
     ratioByEntry.set(entry, ratio);
     kept.push(entry);
@@ -438,12 +444,18 @@ function updateSwatchMatches(index) {
   // the bars. (Owned here, not in updateSwatch, so promote/un-promote — which
   // only call updateSwatchMatches — update the backdrop too.)
   if (matchCellsEl) {
+    let bg;
     if (selected) {
-      matchCellsEl.style.background = pantoneP3Css(selected);
+      bg = pantoneP3Css(selected);
     } else {
       const { p3Css, srgbCss, outOfSRGB } = computeP3AndSRGB(c);
-      matchCellsEl.style.background = outOfSRGB ? p3Css : srgbCss;
+      bg = outOfSRGB ? p3Css : srgbCss;
     }
+    // Remember the resting background; while a chip is being hovered the
+    // strip shows that chip's colour instead (see chip hover preview below),
+    // and restores to this when the pointer leaves.
+    matchCellsEl._baseBg = bg;
+    if (!matchCellsEl._chipHover) matchCellsEl.style.background = bg;
   }
 
   const { displayOrder, markDomIdx } = buildDisplayOrder(kept, targetHue, closestByHue(kept, targetHue));
@@ -674,6 +686,44 @@ els.swatches.addEventListener('pointerover', ev => {
   setStatus(onChip || onPromoted ? GAMUT_STATUS : '');
 });
 els.swatches.addEventListener('pointerleave', () => setStatus(''));
+
+// Hovering a chip body (the bar or its gamut icon — not the empty strip above)
+// previews that chip's colour as the match-strip background; leaving the chip
+// restores the strip's resting background (see updateSwatchMatches, _baseBg).
+function chipBgPreview(ev) {
+  const matchCells = ev.target.closest('.match-cells');
+  if (!matchCells) return;
+  const hit = ev.target.closest('.chip-fill, .chip-gamut-warning');
+  const cell = hit && hit.closest('.match-cell');
+  const name = cell && cell.dataset.pantoneName;
+  if (name) {
+    const entry = findPantoneByName(name);
+    if (entry) {
+      clearTimeout(matchCells._chipHoverTimer);
+      matchCells._chipHover = true;
+      matchCells.classList.add('chip-hover-preview');
+      matchCells.style.background = pantoneP3Css(entry);
+      return;
+    }
+  }
+  endChipPreview(matchCells);
+}
+// Restore the resting background, keeping the preview class on through the
+// 0.1s transition so the restore eases too, then drop the class.
+function endChipPreview(matchCells) {
+  if (!matchCells._chipHover) return;
+  matchCells._chipHover = false;
+  matchCells.style.background = matchCells._baseBg || '';
+  clearTimeout(matchCells._chipHoverTimer);
+  matchCells._chipHoverTimer = setTimeout(() => {
+    if (!matchCells._chipHover) matchCells.classList.remove('chip-hover-preview');
+  }, 110);
+}
+els.swatches.addEventListener('pointermove', chipBgPreview);
+els.swatches.addEventListener('pointerout', ev => {
+  const matchCells = ev.target.closest('.match-cells');
+  if (matchCells && !matchCells.contains(ev.relatedTarget)) endChipPreview(matchCells);
+});
 
 
 // Library filter checkboxes
