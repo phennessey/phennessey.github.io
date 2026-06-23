@@ -626,18 +626,11 @@ els.swatches.addEventListener('pointerdown', ev => {
   if (!ev.target.closest('.match-cells')) return;     // only the pantone region
   if (ev.target.closest('.promoted-cell')) return;     // overlay controls aren't a drag source
 
-  // The pantone region only starts a drag from two places:
-  //   1. a specific chip's fill (the bar) -> drags that chip's pantone, or
-  //   2. the filled background of a promoted swatch -> drags the promoted pantone.
-  // Anywhere else in the region (the empty strip above the bars of a non-promoted
-  // swatch) starts nothing.
-  let entry = null;
-  if (ev.target.closest('.chip-fill')) {
-    const cell = ev.target.closest('.match-cell');
-    entry = cell && findPantoneByName(cell.dataset.pantoneName);
-  } else {
-    entry = pantoneSelections.get(idxOf(container)) || null;
-  }
+  // Drag only starts from the promoted swatch background — chips click to promote
+  // but no longer drag. Anywhere else in the region (empty strip, chip bars)
+  // starts nothing; the click handler on matchRow handles promotion toggling.
+  if (ev.target.closest('.chip-fill')) return;
+  const entry = pantoneSelections.get(idxOf(container)) || null;
   if (!entry) return;
 
   startDrag(ev, {
