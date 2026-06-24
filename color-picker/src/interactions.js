@@ -672,7 +672,9 @@ let bgLevel = Math.round((_initMatch ? parseInt(_initMatch[0]) : 102) / 255 * (B
 
 function applyBgLevel() {
   const hex = Math.round(bgLevel / (BG_LEVELS - 1) * 255).toString(16).padStart(2, '0');
-  document.body.style.backgroundColor = `#${hex}${hex}${hex}`;
+  const bgHex = `#${hex}${hex}${hex}`;
+  document.body.style.backgroundColor = bgHex;
+  document.body.style.setProperty('--body-bg', bgHex);
   document.body.classList.toggle('light-bg', bgLevel / (BG_LEVELS - 1) > MIDDLE_GRAY);
 }
 

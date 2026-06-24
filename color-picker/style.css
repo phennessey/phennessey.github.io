@@ -3,6 +3,7 @@
 /* Base / Layout */
 body {
   --body-margin: 40px;
+  --body-bg: #666;
   background: #666;
   margin: var(--body-margin);
   /* Roboto for everything by inheritance; Roboto Mono is opted into on the hex
@@ -449,7 +450,7 @@ body.light-bg #add-color-btn {
   font-size: 10px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 body.light-bg .library-panel {
@@ -465,8 +466,52 @@ body.light-bg .library-panel {
 }
 
 .library-panel input[type="checkbox"] {
-  margin: 0;
-  accent-color: currentColor;
+  display: none;
+}
+
+/* Library filter switches — label IS the box */
+.libraries label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding: 2px 6px;
+  border-radius: calc(6px * var(--squircle-scale));
+  border: 1px solid rgba(255,255,255,0.38);
+  color: rgba(255,255,255,0.38);
+  background: transparent;
+  white-space: nowrap;
+}
+.libraries label:hover {
+  color: rgba(255,255,255,1);
+  border-color: rgba(255,255,255,1);
+}
+body.light-bg .libraries label {
+  border-color: rgba(0,0,0,0.38);
+  color: rgba(0,0,0,0.38);
+}
+body.light-bg .libraries label:hover {
+  color: rgba(0,0,0,1);
+  border-color: rgba(0,0,0,1);
+}
+.libraries label:has(input:checked) {
+  background: rgba(255,255,255,0.5);
+  border-color: transparent;
+  color: var(--body-bg, #666);
+}
+.libraries label:has(input:checked):hover {
+  background: rgba(255,255,255,1);
+  border-color: transparent;
+  color: var(--body-bg, #666);
+}
+body.light-bg .libraries label:has(input:checked) {
+  background: rgba(0,0,0,0.5);
+  border-color: transparent;
+  color: var(--body-bg, #666);
+}
+body.light-bg .libraries label:has(input:checked):hover {
+  background: rgba(0,0,0,1);
+  border-color: transparent;
+  color: var(--body-bg, #666);
 }
 
 .library-panel label:has(input:disabled) {
@@ -913,6 +958,9 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   pointer-events: none;
   background-image: url('https://raw.githubusercontent.com/phennessey/codepen/refs/heads/main/okhsl_picker/metallic.png');
   background-size: 503px 323px;
+  background-position: 0px 0px;
+  background-repeat: repeat;
+  image-rendering: pixelated;
   mix-blend-mode: overlay;
   opacity: 0.8;
   /* Hidden entirely (not just transparent) on non-metallic chips. mix-blend-mode
