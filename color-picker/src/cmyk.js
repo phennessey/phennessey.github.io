@@ -16,11 +16,16 @@
 // Bradford step by hand (the classic double-adapt bug). The D65 white used for
 // our CIELAB is anchored to @texel/color's own OKLab-white so there is zero
 // scaling drift between the two libraries.
+//
+// Gamut membership (the out-of-gamut flag + the boundary ring) is a SEPARATE
+// concern from the soft-proof appearance above: it's decided against the
+// profile's true reproducible colour solid via a precomputed device-cube LUT
+// (see "True gamut membership" below), not the soft-proof round-trip.
 
 import {
-  convert, OKLab, XYZ, DisplayP3,
+  convert, OKLab, XYZ, DisplayP3, OKLabToOKHSL, DisplayP3Gamut,
 } from "https://esm.sh/@texel/color@1.1.11?bundle";
-import { toOKLab, toe, toeInv, computeP3AndSRGB } from "./color.js";
+import { toOKLab, toe, computeP3AndSRGB } from "./color.js";
 import { els, P } from "./state.js";
 import { requestRender } from "./util.js";
 
@@ -34,14 +39,29 @@ const PROFILE_URLS = {
   fogra39: "profiles/Coated_Fogra39L_VIGC_300.icc",
 };
 
-// A colour whose round-trip (→CMYK→back) lands within this ΔEOK of the original
-// is treated as reproducible; beyond it the profile clipped, i.e. out of gamut.
-// ΔEOK = Euclidean distance in OKLab, which (unlike ΔE76) stays perceptually
-// honest in the saturated/blue region where wide-gamut P3 colours live — so the
-// flag now tracks what the eye sees, not CIE76's blue-blindness. 0.02 avoids
-// false positives from ICC CLUT discretisation near the gamut boundary while
-// still flagging genuinely unrepresentable colours.
-const GAMUT_DE = 0.02;
+// ── True gamut membership via a precomputed LUT ──────────────────────
+//
+// Gamut membership is decided against the profile's ACTUAL reproducible colour
+// solid, not a soft-proof round-trip. We sample the CMYK device cube through the
+// profile's device→Lab table (relative, NO black-point compensation — BPC is a
+// conversion-time remap, not part of the gamut), project each point into the
+// wheel's own OKHSL space, and keep the max saturation per (hue, lightness) cell.
+// A colour is out of gamut iff its OKHSL s exceeds that cell's max — i.e. "no
+// CMYK ink combination reaches this chroma here." The boundary ring reads the
+// same table, so flag and ring are consistent by construction.
+//
+// Why not the round-trip: rel-colorimetric + BPC applied on both legs cancels,
+// so dark out-of-gamut colours falsely round-trip clean, inflating the shadows
+// (worst for shallow-black profiles). The device-cube LUT matches the published
+// gamut comparisons (GRACoL ≈ FOGRA39, SWOP smaller); the round-trip did not.
+const LUT_H = 72;         // hue cells (5°) — coarse enough that every cell is well
+const LUT_L = 40;         // OKHSL-lightness cells   sampled; bilinear lookup + the
+                          // picker's 3-tap smooth recover a clean ring.
+const DEV_FACE = 28;      // Chebyshev samples per face axis (accuracy is grid-
+                          // limited beyond this; keeps the one-time build ~1s)
+const GAMUT_EPS = 0.012;  // s tolerance: covers the LUT's slight (~0.01) under-
+                          // estimate so reproducible colours aren't false-flagged,
+                          // and keeps flag and drawn ring consistent at the edge.
 
 // Public mode state. `active` mirrors the CMYK section open/closed; `ready` is
 // true once a profile is parsed and its transforms are built. `bias` is the
@@ -52,7 +72,9 @@ export const cmyk = { active: false, profileKey: "gracol", ready: false, bias: 0
 
 let fwd = null;  // CIELAB(D65) → CMYK
 let rev = null;  // CMYK → CIELAB(D65)
+let gamutLUT = null;          // Float32Array[LUT_L*LUT_H] of max OKHSL s, active profile
 const profileCache = {};
+const lutCache = {};          // gamut LUT per profile key (built once)
 
 // ── CIELAB(D65) anchored to @texel/color's own white ─────────────────
 const _w = [0, 0, 0];
@@ -100,21 +122,13 @@ function labD65ToXYZ(lab) {
   return [fLabInv(fx) * Xn, fLabInv(fy) * Yn, fLabInv(fz) * Zn];
 }
 
-// Perceptual gamut metric: Euclidean distance in OKLab. Both inputs are
-// CIELAB(D65); convert each through the shared XYZ anchor and measure there so
-// the gamut flag matches perceived difference even for saturated colours.
-const _deA = [0, 0, 0], _deB = [0, 0, 0];
-const dEOK = (a, b) => {
-  labD65ToOk(a, _deA); labD65ToOk(b, _deB);
-  return Math.hypot(_deA[0] - _deB[0], _deA[1] - _deB[1], _deA[2] - _deB[2]);
-};
-
-/** Forward + reverse from a CIELAB(D65) input: the CMYK build, its printable
- *  Lab, and round-trip ΔE. */
+/** Forward + reverse from a CIELAB(D65) input: the CMYK build and its printable
+ *  Lab (the soft-proof appearance). Gamut membership is decided separately by the
+ *  LUT, so no round-trip ΔE is needed here. */
 function convertFromLab(lab) {
   const c    = fwd.transform(CE.color.Lab(lab.L, lab.a, lab.b));   // {C,M,Y,K} 0–100
   const back = rev.transform(CE.color.CMYK(c.C, c.M, c.Y, c.K));   // printable {L,a,b}
-  return { lab, c, dE: dEOK(lab, back), back };
+  return { lab, c, back };
 }
 
 /** Forward + reverse for a picker colour (the raw, unbiased conversion). */
@@ -130,13 +144,9 @@ function convertColor(color) { return convertFromLab(colorToLabD65(color)); }
 // Everything is solved in OKLab (the picker's own space), NOT CIELAB: the two
 // disagree most on blue hue, so locking CIELAB hue would swing blue toward purple.
 //
-// The endpoint is an *in-gamut* hue-locked appearance — chroma capped just inside
-// the gamut — so the biased build is self-consistent: feeding that appearance
-// reproduces the same build. That keeps the soft-proof click idempotent (the
-// snapped colour reproduces the shown CMYK and clears the gamut flag in one go).
-//
-// bias 0 reproduces the exact standard build; from there the input lerps (in
-// OKLab) toward the endpoint = (target L, target hue, max in-gamut chroma there).
+// The endpoint = (target hue, target lightness, max in-gamut chroma there), read
+// from the gamut LUT and held a hair inside the ring. bias 0 reproduces the exact
+// standard build; from there the input lerps (in OKLab) toward that endpoint.
 // In-gamut colours have nothing to trade → no-op.
 
 // CIELAB(D65) ↔ OKLab(D65) through the shared XYZ anchor.
@@ -151,54 +161,21 @@ function okToLabD65(ok) {
   return { L: 116 * fy - 16, a: 500 * (fx - fy), b: 200 * (fy - fz) };
 }
 
-/** Printed appearance (rev∘fwd) of a CIELAB(D65) input. */
-function cofLab(lab) {
-  const c = fwd.transform(CE.color.Lab(lab.L, lab.a, lab.b));
-  return rev.transform(CE.color.CMYK(c.C, c.M, c.Y, c.K));
-}
-
-// Hold the endpoint a hair inside the gamut so the snapped proof reliably clears
-// the out-of-gamut flag (whose threshold is GAMUT_DE) in a single click.
-const BIAS_GAMUT_DE = GAMUT_DE - 0.004;
-
-/** Largest OKLab chroma at a locked lightness + hue whose direct CMYK round-trip
- *  stays inside the gamut — i.e. an appearance the profile reproduces faithfully. */
-function maxChromaOk(L, cos, sin) {
-  let lo = 0, hi = 0.4;
-  for (let i = 0; i < 16; i++) {
-    const m = (lo + hi) / 2;
-    const lab = okToLabD65([L, m * cos, m * sin]);
-    if (dEOK(lab, cofLab(lab)) <= BIAS_GAMUT_DE) lo = m; else hi = m;
-  }
-  return lo;
-}
-
-// The endpoint (standard appearance + hue-locked bright target) depends only on
-// the colour + profile, not the slider, so memoise it across a slider drag.
-const biasCache = new Map();
-function biasEndpoint(raw) {
-  const tgtOk = labD65ToOk(raw.lab);
-  const key = `${cmyk.profileKey}:${tgtOk[0].toFixed(3)}:${tgtOk[1].toFixed(3)}:${tgtOk[2].toFixed(3)}`;
-  let e = biasCache.get(key);
-  if (!e) {
-    const C = Math.hypot(tgtOk[1], tgtOk[2]);
-    const cos = C < 1e-9 ? 1 : tgtOk[1] / C, sin = C < 1e-9 ? 0 : tgtOk[2] / C;
-    const mc = maxChromaOk(tgtOk[0], cos, sin);
-    e = { std: labD65ToOk(raw.back), endp: [tgtOk[0], mc * cos, mc * sin] };
-    if (biasCache.size > 512) biasCache.clear();
-    biasCache.set(key, e);
-  }
-  return e;
-}
-
 /**
- * The CIELAB(D65) input to feed the forward transform after applying the bias
- * (0 = standard … 1 = hue locked at the target hue, lightness raised toward the
- * target). Returns the unchanged Lab at bias 0 or for in-gamut colours.
+ * The CIELAB(D65) input to feed the forward transform after applying the bias.
+ * 0 = standard relative-colorimetric clip (raw.back). Toward 1, lerp (in OKLab)
+ * to an in-gamut endpoint at the TARGET hue + lightness carrying the max chroma
+ * the gamut allows there (from the LUT, held a hair inside the ring) — so hue
+ * stays locked and lightness is raised toward the target, sacrificing only
+ * chroma. Unchanged at bias 0 or for in-gamut colours.
  */
-function biasedLab(raw) {
-  if (cmyk.bias === 0 || raw.dE <= GAMUT_DE) return raw.lab;
-  const { std, endp } = biasEndpoint(raw);
+function biasedLab(raw, color, oog) {
+  if (cmyk.bias === 0 || !oog) return raw.lab;
+  const Lh = toe(color.L);
+  const maxS = Math.max(0, lutLookup(color.h, Lh) - GAMUT_EPS);  // just inside the ring
+  const e = toOKLab(color.h, maxS, Lh);
+  const endp = [e[0], e[1], e[2]];          // copy: toOKLab returns a shared scratch
+  const std = labD65ToOk(raw.back);
   const t = cmyk.bias;
   return okToLabD65([
     std[0] + (endp[0] - std[0]) * t,
@@ -209,21 +186,22 @@ function biasedLab(raw) {
 
 const cl3 = v => Math.max(0, Math.min(1, v)).toFixed(3);
 
-/** Whether a picker colour falls outside the active CMYK profile's gamut. */
+/** Whether a picker colour falls outside the active CMYK profile's true gamut:
+ *  its OKHSL saturation exceeds the max any CMYK ink combination reaches at this
+ *  hue + lightness — i.e. "cannot be reproduced with CMYK ink." */
 export function isOutOfCMYK(color) {
-  if (!engineOK || !cmyk.ready) return false;
-  return convertColor(color).dE > GAMUT_DE;
+  if (!engineOK || !cmyk.ready || !gamutLUT) return false;
+  return color.s > lutLookup(color.h, toe(color.L)) + GAMUT_EPS;
 }
 
 /**
- * Gamut predicate in the wheel's (hue, saturation, toe'd-lightness) space —
- * the CMYK analogue of inSRGB, used by the picker to trace the boundary ring.
- * `lr` is the toe'd reference lightness; convertColor wants the un-toe'd L, so
- * invert it. Returns true when the colour is reproducible by the active profile.
+ * Gamut predicate in the wheel's (hue, saturation, OKHSL-lightness) space — the
+ * CMYK analogue of inSRGB, used by the picker to trace the boundary ring. `lr` is
+ * the OKHSL (toe'd) reference lightness, exactly the LUT's lightness coordinate.
  */
 export function inCMYKGamut(h, s, lr) {
-  if (!engineOK || !cmyk.ready) return true;
-  return convertColor({ h, s, L: toeInv(lr) }).dE <= GAMUT_DE;
+  if (!engineOK || !cmyk.ready || !gamutLUT) return true;
+  return s <= lutLookup(h, lr) + GAMUT_EPS;
 }
 
 /** Push current boundary visibility (mode + checkbox + profile-ready) to the
@@ -253,11 +231,12 @@ export function updateSwatchCMYK(container, color) {
 
   if (!cmyk.ready) return;   // transforms still loading; leave placeholder
 
-  // Flag from the raw (unbiased) ΔE — the icon reflects the true target. Build
-  // and proof fill come from the biased conversion when the slider is engaged.
+  // Flag from true gamut membership (the LUT). Build and proof fill come from the
+  // biased conversion when the slider is engaged on an out-of-gamut colour.
+  const oog = isOutOfCMYK(color);
   const raw = convertColor(color);
-  const { c, back } = (cmyk.bias !== 0 && raw.dE > GAMUT_DE)
-    ? convertFromLab(biasedLab(raw)) : raw;
+  const { c, back } = (cmyk.bias !== 0 && oog)
+    ? convertFromLab(biasedLab(raw, color, oog)) : raw;
   convert(labD65ToXYZ(back), XYZ, DisplayP3, _p3);
   cmykEl.style.background = `color(display-p3 ${cl3(_p3[0])} ${cl3(_p3[1])} ${cl3(_p3[2])})`;
 
@@ -265,7 +244,81 @@ export function updateSwatchCMYK(container, color) {
   const v = cmykEl.querySelector(".cmyk-v");
   if (v && v.textContent !== label) v.textContent = label;
 
-  container.classList.toggle("out-of-cmyk", raw.dE > GAMUT_DE);
+  container.classList.toggle("out-of-cmyk", oog);
+}
+
+// ── Gamut LUT: max OKHSL saturation per (hue, lightness) cell ─────────
+
+/** Bilinear lookup into the active gamut LUT. Hue wraps; lightness clamps.
+ *  Returns the max reproducible OKHSL s at (hue 0–1, OKHSL-lightness 0–1). */
+function lutLookup(hue, Lh) {
+  if (!gamutLUT) return 1;
+  const hf = (((hue % 1) + 1) % 1) * LUT_H;
+  const lf = Math.max(0, Math.min(1, Lh)) * (LUT_L - 1);
+  const h0 = Math.floor(hf) % LUT_H, h1 = (h0 + 1) % LUT_H, ht = hf - Math.floor(hf);
+  const l0 = Math.floor(lf), l1 = Math.min(LUT_L - 1, l0 + 1), lt = lf - l0;
+  const g = (hb, lb) => gamutLUT[lb * LUT_H + hb];
+  const a = g(h0, l0) * (1 - ht) + g(h1, l0) * ht;
+  const b = g(h0, l1) * (1 - ht) + g(h1, l1) * ht;
+  return a * (1 - lt) + b * lt;
+}
+
+/** Fill empty hue cells in each lightness row by circular interpolation between
+ *  the nearest filled neighbours. Rows with NO samples (a lightness the profile
+ *  can't reach at all) are left at 0 — correctly "nothing reproducible here". */
+function fillGaps(data) {
+  for (let lb = 0; lb < LUT_L; lb++) {
+    const row = lb * LUT_H;
+    let any = false;
+    for (let hb = 0; hb < LUT_H; hb++) if (data[row + hb] > 0) { any = true; break; }
+    if (!any) continue;
+    for (let hb = 0; hb < LUT_H; hb++) {
+      if (data[row + hb] > 0) continue;
+      let dPrev = 0, prevV = 0, dNext = 0, nextV = 0;
+      for (let k = 1; k <= LUT_H; k++) { const j = (hb - k + LUT_H) % LUT_H; if (data[row + j] > 0) { dPrev = k; prevV = data[row + j]; break; } }
+      for (let k = 1; k <= LUT_H; k++) { const j = (hb + k) % LUT_H; if (data[row + j] > 0) { dNext = k; nextV = data[row + j]; break; } }
+      data[row + hb] = (prevV * dNext + nextV * dPrev) / (dPrev + dNext);
+    }
+  }
+}
+
+/** Build the true-gamut LUT: sample the CMYK device cube through the profile's
+ *  device→Lab table (relative, no BPC), project to OKHSL, keep max s per cell.
+ *
+ *  Only the cube's SURFACE is sampled — the 8 3-faces where one channel is pinned
+ *  to 0 or 100. The gamut boundary is the image of the cube boundary, so every
+ *  max-chroma point lives on a face; full-interior sampling wastes the budget on
+ *  low-chroma points and underestimates the surface at the same cost.
+ *
+ *  Ink levels use Chebyshev spacing (denser near 0% and 100%), where the gamut
+ *  surface moves fastest — uniform spacing badly undersampled the light tints.
+ *  OKHSL s is capped at 1: it goes numerically unstable (s ≫ 1) near pure white,
+ *  and CMYK lives within Display-P3 so 1 is the meaningful ceiling. */
+function buildGamutLUT(profile) {
+  const src = new CE.Transform({ dataFormat: "object", BPC: false });
+  src.create(profile, "*LabD65", CE.eIntent.relative);   // CMYK device → Lab(D65)
+  const data = new Float32Array(LUT_H * LUT_L);
+  const ok = [0, 0, 0], hsl = [0, 0, 0];
+  const add = (C, M, Y, K) => {
+    const lab = src.transform(CE.color.CMYK(C, M, Y, K));
+    convert(labD65ToXYZ(lab), XYZ, OKLab, ok);
+    OKLabToOKHSL(ok, DisplayP3Gamut, hsl);               // [H 0–360, s, L 0–1]
+    const s = Math.min(1, hsl[1]);
+    const hb = ((Math.floor(hsl[0] / 360 * LUT_H) % LUT_H) + LUT_H) % LUT_H;
+    const lb = Math.max(0, Math.min(LUT_L - 1, Math.round(hsl[2] * (LUT_L - 1))));
+    const idx = lb * LUT_H + hb;
+    if (s > data[idx]) data[idx] = s;
+  };
+  const N = DEV_FACE, v = i => 50 * (1 - Math.cos(Math.PI * i / N));  // Chebyshev 0–100
+  for (let a = 0; a <= N; a++) for (let b = 0; b <= N; b++) for (let c = 0; c <= N; c++) {
+    const A = v(a), B = v(b), C = v(c);
+    add(0, A, B, C); add(100, A, B, C);                  // C pinned
+    add(A, 0, B, C); add(A, 100, B, C);                  // M pinned
+    add(A, B, 0, C); add(A, B, 100, C);                  // Y pinned
+    add(A, B, C, 0); add(A, B, C, 100);                  // K pinned
+  }
+  fillGaps(data);
+  return data;
 }
 
 // ── Profile loading + transform building ─────────────────────────────
@@ -286,6 +339,7 @@ async function buildTransforms(key) {
   const I = CE.eIntent.relative, O = { dataFormat: "object", BPC: true };
   fwd = new CE.Transform(O); fwd.create("*LabD65", p, I);
   rev = new CE.Transform(O); rev.create(p, "*LabD65", I);
+  gamutLUT = lutCache[key] || (lutCache[key] = buildGamutLUT(p));
 }
 
 /** Switch the active CMYK profile (async parse), then repaint. */
@@ -293,7 +347,6 @@ export async function setCMYKProfile(key) {
   if (!engineOK) return;
   cmyk.profileKey = key;
   cmyk.ready = false;
-  biasCache.clear();   // gamut (and thus hue-locked endpoints) differ per profile
   try {
     await buildTransforms(key);
     cmyk.ready = true;
