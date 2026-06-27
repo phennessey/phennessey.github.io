@@ -5,6 +5,7 @@ import { MIDDLE_GRAY, MAX_COLORS, GAMUT_ICON_SVG, CLOSE_ICON_SVG } from './const
 import { S, P, els, pantoneSelections } from './state.js';
 import { idxOf } from './picker.js';
 import { computeP3AndSRGB } from './color.js';
+import { updateSwatchCMYK, isOutOfCMYK } from './cmyk.js';
 import { buildMatchCells, matchRowObserver, updateSwatchMatches } from './pantone.js';
 import { setActive, toggleMultiSelect, activateSwatch, exitMultiSelect } from './selection.js';
 import { syncModKeys, requestRender } from './util.js';
@@ -37,6 +38,8 @@ function updateSwatch(index) {
 
   container.classList.toggle('out-of-srgb', outOfSRGB);
   container.classList.toggle('light', S.colors[index].L > MIDDLE_GRAY);
+
+  updateSwatchCMYK(container, S.colors[index]);
 }
 
 function createSwatchDOM(index) {
@@ -50,17 +53,25 @@ function createSwatchDOM(index) {
 
   container.innerHTML = `
     <div class="swatch-inner">
-      <div class="color-stack">
-        <div class="color-swatch srgb" style="background:${srgbCss}">
-          <span class="icon delete-swatch">${CLOSE_ICON_SVG}</span>
-          <div class="swatch-top-bar">
-            <div class="swatch-readout srgb">${hex}</div>
+      <div class="color-row">
+        <div class="color-stack">
+          <div class="color-swatch srgb" style="background:${srgbCss}">
+            <span class="icon delete-swatch">${CLOSE_ICON_SVG}</span>
+            <div class="swatch-top-bar">
+              <div class="swatch-readout srgb">${hex}</div>
+            </div>
+          </div>
+          <div class="color-swatch p3" style="background:${p3Css}">
+            <div class="swatch-top-bar">
+              <span class="icon gamut-warning">${GAMUT_ICON_SVG}</span>
+              <span class="p3-readout"><span class="p3-tag">P3</span><span class="p3-v"></span><span class="p3-v"></span><span class="p3-v"></span></span>
+            </div>
           </div>
         </div>
-        <div class="color-swatch p3" style="background:${p3Css}">
+        <div class="color-swatch cmyk">
           <div class="swatch-top-bar">
-            <span class="icon gamut-warning">${GAMUT_ICON_SVG}</span>
-            <span class="p3-readout"><span class="p3-tag">P3</span><span class="p3-v"></span><span class="p3-v"></span><span class="p3-v"></span></span>
+            <span class="icon gamut-warning cmyk-gamut">${GAMUT_ICON_SVG}</span>
+            <span class="cmyk-readout"><span class="cmyk-tag">CMYK</span><span class="cmyk-v">0-0-0-0</span></span>
           </div>
         </div>
       </div>
@@ -137,6 +148,29 @@ function wireSwatch(container) {
     });
   });
 
+  // CMYK gamut icon: reduce chroma (OKHSL saturation) at the same hue/lightness
+  // until the colour falls inside the CMYK gamut — the largest in-gamut s. Mirrors
+  // the sRGB gamut icon above.
+  container.querySelector('.cmyk-gamut')?.addEventListener('click', e => {
+    e.stopPropagation();
+    const ci = idxOf(container), { h, L } = S.colors[ci];
+    let lo = 0, hi = S.colors[ci].s;
+    for (let i = 0; i < 16; i++) {
+      const mid = (lo + hi) / 2;
+      if (isOutOfCMYK({ h, s: mid, L })) hi = mid; else lo = mid;
+    }
+    S.colors[ci] = { ...S.colors[ci], h, s: lo, L };
+    if (pantoneSelections.has(ci)) {
+      pantoneSelections.delete(ci);
+      updateSwatchMatches(ci);
+    }
+    if (ci === S.activeIndex) P.invalidateCache();
+    updateSwatch(ci);
+    P.render();
+    flushPendingWheelSnapshot();
+    recordSnapshot();
+  });
+
   container.querySelector('.delete-swatch').addEventListener('click', e => {
     e.stopPropagation();
     if (S.colors.length <= 1) return;
@@ -172,11 +206,7 @@ function wireSwatch(container) {
     if (e.shiftKey || e.metaKey) toggleMultiSelect(idxOf(container));
     else setActive(idxOf(container));
   }, true);
-
-  container.addEventListener('pointerenter', () =>
-    swatchEl(idxOf(container))?.classList.toggle('hovered', true));
-  container.addEventListener('pointerleave', () =>
-    swatchEl(idxOf(container))?.classList.toggle('hovered', false));
+  // Hover highlight is pure CSS (.swatch-container:hover) — no JS class needed.
 }
 
 

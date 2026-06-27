@@ -238,6 +238,8 @@ body.light-bg .top-ui {
      course instead of the box snapping to content size early. */
   max-width: 120px;
 }
+/* CMYK section holds a wide ICC profile dropdown — needs more room. */
+.section-cmyk.open { max-width: 240px; }
 .collapsible.open .section-label { display: block; }
 .collapsible.open .section-body { display: flex; }
 .collapsible.open .section-vlabel { opacity: 0; pointer-events: none; }
@@ -446,6 +448,12 @@ body.light-bg #add-color-btn {
   color: rgba(255,255,255,0.7);
 }
 
+.libraries-label {
+  font-size: 11px;
+  color: var(--label-color-active);
+  white-space: nowrap;
+}
+
 .libraries {
   font-size: 10px;
   display: flex;
@@ -591,18 +599,72 @@ body.light-bg .libraries label:has(input:checked):hover {
   font-size: 0;
 }
 
+/* The colour region. A horizontal row so a CMYK proof can sit beside the
+   sRGB/P3 stack when CMYK mode is active; with CMYK off it holds only the
+   stack, which then fills the full width (identical to the original layout). */
+.color-row {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+}
+
 .color-stack {
-  display: contents;
+  position: relative;   /* containing block for the out-of-srgb sRGB strip */
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .color-swatch {
   position: relative;
   flex: 1 1 0;
   min-height: 0;
+  min-width: 0;
 }
 
 .color-swatch.p3 { display: none; }
 .swatch-container.out-of-srgb .color-swatch.p3 { display: block; }
+
+/* CMYK proof region — revealed only in CMYK mode. It always lives inside
+   .color-row; the side/bottom split below is pure CSS (no JS element moves).
+   "Matches visible" = the libraries are on (.show-matches) OR a promoted Pantone
+   exists ANYWHERE (.swatches:has(.match-cells.has-promotion)). The promotion test
+   is at the .swatches level, not per-swatch, so all swatches share one layout —
+   one promotion anywhere flips every swatch into side mode (top-right CMYK). */
+.color-swatch.cmyk { display: none; }
+.swatches.cmyk-active .color-swatch.cmyk { display: block; }
+
+/* Side mode (default when CMYK is on): .color-row stays a row, so the CMYK swatch
+   is the right half; chips occupy .match-row below. The top-bar anchors LEFT and
+   reverses so the label reads first, icon trails. */
+.swatches.cmyk-active.show-matches .color-swatch.cmyk .swatch-top-bar,
+.swatches.cmyk-active:has(.match-cells.has-promotion) .color-swatch.cmyk .swatch-top-bar {
+  left: var(--swatch-padding);
+  right: auto;
+  flex-direction: row-reverse;
+}
+/* Row-reverse puts the gamut icon to the RIGHT of the value, so move its 4px
+   gap to the left side to match the icon↔P3-label spacing. */
+.swatches.cmyk-active.show-matches .color-swatch.cmyk .gamut-warning,
+.swatches.cmyk-active:has(.match-cells.has-promotion) .color-swatch.cmyk .gamut-warning {
+  padding-right: 0;
+  padding-left: 4px;
+}
+
+/* Bottom mode (no matches anywhere): .color-row becomes a column, so the CMYK
+   swatch stacks under the colour and takes the bottom 50% (the chip space).
+   Top-bar keeps its default top-right anchor. */
+.swatches.cmyk-active:not(.show-matches):not(:has(.match-cells.has-promotion)) .color-row {
+  flex-direction: column;
+}
+.swatches.cmyk-active:not(.show-matches):not(:has(.match-cells.has-promotion)) .color-swatch.cmyk {
+  flex: 0 0 50%;
+  min-height: 0;
+  min-width: 0;
+}
 
 .swatch-container.out-of-srgb .color-swatch.srgb {
   position: absolute;
@@ -637,7 +699,7 @@ body.light-bg .swatch-container::before {
 
 .swatch-container.selected::before { opacity: 0.6; }
 .swatch-container.multi-selected::before { opacity: 0.6; }
-.swatch-container.hovered:not(.selected):not(.multi-selected)::before { opacity: 0.1; }
+.swatch-container:hover:not(.selected):not(.multi-selected)::before { opacity: 0.1; }
 
 /* Swatch readouts */
 .swatch-readout {
@@ -650,14 +712,6 @@ body.light-bg .swatch-container::before {
 .swatch-container { container-type: inline-size; }
 
 .swatch-container.light .swatch-readout { color: rgba(0,0,0,0.5); }
-
-/* Hex readout brightens when the color region is hovered. */
-.swatch-container:has(.color-swatch:hover) .swatch-readout {
-  color: rgba(255,255,255,1);
-}
-.swatch-container.light:has(.color-swatch:hover) .swatch-readout {
-  color: rgba(0,0,0,1);
-}
 
 .swatches.none-selected .swatch-readout,
 .swatches.none-selected .icon { visibility: hidden; }
@@ -711,7 +765,9 @@ body.light-bg .swatch-container::before {
   width: calc(10px * 18 / 16);
   padding-right: 4px;
 }
-.swatch-container.out-of-srgb .gamut-warning { display: block; }
+.swatch-container.out-of-srgb .color-swatch.p3 .gamut-warning { display: block; }
+/* The CMYK gamut icon is driven by CMYK gamut, not sRGB. */
+.swatch-container.out-of-cmyk .cmyk-gamut { display: block; }
 
 
 
@@ -1150,9 +1206,13 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 body.swatch-dragging,
 body.swatch-dragging * { cursor: grabbing !important; }
 
-/* Pointer-driven focus rings produce stray borders on click; suppress them but
-   keep keyboard focus (:focus-visible) for accessibility. */
-*:focus:not(:focus-visible) { outline: none; }
+/* Suppress all focus outlines and browser-default control decoration (focus
+   rings, tap highlights, the Firefox inner dotted border on buttons/selects).
+   Decorative outlines elsewhere are drawn on non-:focus selectors, so untouched. */
+*:focus, *:focus-visible { outline: none; }
+* { -webkit-tap-highlight-color: transparent; }
+::-moz-focus-inner { border: 0; padding: 0; }
+.cmyk-profile-select:focus { box-shadow: none; }
 
 /* While dragging the disc or a swatch, nothing may become selected — otherwise
    a hex readout / the hex textarea gets highlighted mid-drag and lingers. */
@@ -1199,3 +1259,139 @@ body.disc-dragging,   body.disc-dragging * {
   color: rgba(0,0,0,1);
 }
 .swatches.none-selected .p3-readout       { visibility: hidden; }
+
+/* CMYK readout (label "CMYK c-m-y-k") — mirrors the P3 readout, but is shown
+   whenever CMYK mode is on (its swatch region is hidden otherwise). */
+.cmyk-readout {
+  display: flex;
+  flex-flow: row nowrap;
+  justify-content: flex-end;
+  gap: 0 4px;
+  user-select: none;
+  font-size: 10px;
+  line-height: 13px;
+  color: rgba(255,255,255,0.5);
+  pointer-events: none;
+}
+.cmyk-readout > span { white-space: nowrap; }
+@container (max-width: 150px) {
+  .cmyk-readout { flex-direction: column; align-items: flex-end; line-height: 11px; }
+}
+.swatch-container.light .cmyk-readout { color: rgba(0,0,0,0.5); }
+.swatches.none-selected .cmyk-readout { visibility: hidden; }
+
+/* CMYK section: ICC profile picker */
+.cmyk-body { flex-direction: column; gap: 6px; align-items: flex-start; }
+.cmyk-profile-row { display: flex; align-items: center; gap: 8px; }
+/* Floating UI text: white/black per page lightness, like other section labels. */
+.cmyk-profile-label { font-size: 11px; color: var(--label-color-active); white-space: nowrap; }
+
+/* Custom dropdown: outlined rounded rect with a CSS chevron, no native chrome.
+   Outline, text, and arrow all follow the page-lightness UI colour. */
+.cmyk-profile-select-wrap { position: relative; display: inline-flex; }
+.cmyk-profile-select {
+  font: inherit;
+  font-size: 12px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  color: var(--label-color-active);
+  border: 1px solid rgba(255,255,255,0.2);   /* match other UI outlines */
+  border-radius: 6px;
+  padding: 3px 24px 3px 8px;
+  cursor: pointer;
+}
+body.light-bg .cmyk-profile-select { border-color: rgba(0,0,0,0.2); }
+.cmyk-profile-select-wrap::after {       /* downward chevron */
+  content: "";
+  position: absolute;
+  right: 9px; top: 50%;
+  width: 6px; height: 6px;
+  pointer-events: none;
+  border-right: 1.5px solid var(--label-color-active);
+  border-bottom: 1.5px solid var(--label-color-active);
+  transform: translateY(-65%) rotate(45deg);
+}
+/* "Show CMYK gamut boundary" checkbox — UI text colour, native check tinted. */
+.cmyk-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--label-color-active);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.cmyk-check input { margin: 0; cursor: pointer; accent-color: var(--label-color-active); }
+
+.cmyk-bias {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 6px;
+  /* Track line and thumb follow the page lightness. */
+  --bias-line: rgba(255,255,255,0.25);
+  --bias-fg:   rgba(255,255,255,0.95);
+}
+body.light-bg .cmyk-bias {
+  --bias-line: rgba(0,0,0,0.25);
+  --bias-fg:   rgba(0,0,0,0.85);
+}
+
+/* Wrapper carries the 1px track line; the input sits on top providing only the
+   circular thumb (which rests at the left = standard clipping). */
+.cmyk-bias-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 14px;
+}
+.cmyk-bias-track::before {                 /* 1px track line */
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 1px;
+  transform: translateY(-50%);
+  background: var(--bias-line);
+}
+
+.cmyk-bias-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 14px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.cmyk-bias-slider:focus { outline: none; }
+.cmyk-bias-slider::-webkit-slider-runnable-track { height: 14px; background: transparent; }
+.cmyk-bias-slider::-moz-range-track { height: 14px; background: transparent; }
+.cmyk-bias-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 11px; height: 11px;
+  margin-top: 1.5px;                        /* centre the 11px thumb on the 14px track */
+  border-radius: 50%;
+  border: none;
+  background: var(--bias-fg);
+}
+.cmyk-bias-slider::-moz-range-thumb {
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bias-fg);
+}
+
+.cmyk-bias-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--label-color);
+  white-space: nowrap;
+}

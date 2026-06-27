@@ -13,6 +13,11 @@ import {
 
 export const TAU = 2 * Math.PI;
 
+// CMYK gamut-ring tracing: dense hue sampling for the sharp features at extreme
+// lightness; few bisections because radial precision saturates early (see
+// cmykBoundaryPath).
+const CMYK_BOUNDARY_STEPS = 360, CMYK_BOUNDARY_ITERS = 11;
+
 // Scratch array for pixel rendering (reused across calls).
 const _p3 = [0, 0, 0];
 
@@ -257,6 +262,14 @@ export function createPicker(S, cfg) {
   });
   discOverlay.appendChild(gamutBoundary);
 
+  // CMYK gamut boundary — same colour logic as the sRGB ring but a slightly
+  // thicker line so the two are distinguishable. Hidden until opted into.
+  const cmykBoundary = svgEl('path', {
+    id: 'cmyk-boundary', fill: 'none', stroke: '#000', 'stroke-width': '1.25',
+    'stroke-linejoin': 'round', 'pointer-events': 'none', opacity: '0',
+  });
+  discOverlay.appendChild(cmykBoundary);
+
   const discHueLine = svgEl('line', {
     fill: 'none', 'stroke-width': '1', 'stroke-opacity': '0.3', 'pointer-events': 'none', opacity: '0',
   });
@@ -309,11 +322,14 @@ export function createPicker(S, cfg) {
   let discImg = null, discL = -1;
   let lightbarKey = null;
   let gamutLr = -1, gamutD = '';
+  // CMYK boundary: injected predicate, visibility, and an lr-keyed path cache.
+  let cmykBoundaryFn = null, cmykShow = false, cmykLr = -1, cmykD = '';
 
   function invalidateCache() {
     discImg = null; discL = -1;
     lightbarKey = null;
     gamutLr = -1;
+    cmykLr = -1;
   }
 
   const handles = [];
@@ -379,6 +395,50 @@ export function createPicker(S, cfg) {
       gamutLr = lr;
       gamutBoundary.setAttribute('d', gamutD);
     }
+    updateCMYKBoundary(stroke, opacity, lr);
+  }
+
+  // CMYK boundary ring. Shares the sRGB ring's stroke colour/opacity but draws a
+  // thicker line. The path is cached on lr; the cache is invalidated externally
+  // when the active profile changes.
+  function updateCMYKBoundary(stroke, opacity, lr) {
+    if (!cmykShow || !cmykBoundaryFn) { cmykBoundary.setAttribute('opacity', '0'); return; }
+    cmykBoundary.setAttribute('opacity', '1');
+    cmykBoundary.setAttribute('stroke', stroke);
+    cmykBoundary.setAttribute('stroke-opacity', opacity);
+    if (lr !== cmykLr) {
+      cmykD = cmykBoundaryPath(lr);
+      cmykLr = lr;
+      cmykBoundary.setAttribute('d', cmykD);
+    }
+  }
+
+  // Trace the CMYK gamut ring at toe'd lightness `lr`. The ICC predicate is far
+  // costlier than inSRGB and carries CLUT-discretisation noise that peaks at
+  // extreme lightness, so three choices keep the line smooth without wasting ICC
+  // calls: (1) sample hue densely — the boundary has sharp features at the
+  // extremes that a coarse ring renders jagged; (2) only ~11 bisections — radial
+  // precision saturates well before that (measured: more iterations change the
+  // path by < 1e-5), so extra calls buy nothing; (3) one closed-ring 3-tap
+  // smooth to settle the residual noise floor (matches a brute-force 480-sample
+  // ring at ~half the ICC calls).
+  function cmykBoundaryPath(lr) {
+    const N = CMYK_BOUNDARY_STEPS;
+    const r = new Array(N);
+    for (let i = 0; i < N; i++) {
+      const h = i / N;
+      let lo = 0, hi = 1;
+      for (let it = 0; it < CMYK_BOUNDARY_ITERS; it++) {
+        const m = (lo + hi) * 0.5;
+        if (cmykBoundaryFn(h, m, lr)) lo = m; else hi = m;
+      }
+      r[i] = hi;
+    }
+    const s = new Array(N);
+    for (let i = 0; i < N; i++) {
+      s[i] = 0.25 * r[(i - 1 + N) % N] + 0.5 * r[i] + 0.25 * r[(i + 1) % N];
+    }
+    return polarPath(N, h => s[Math.round(h * N) % N] * DISC_R, DISC_R);
   }
 
   // ── Lightbar drawing ─────────────────────────────────────────────
@@ -574,5 +634,9 @@ export function createPicker(S, cfg) {
     createHandle, createLightHandle, setHandleActive,
     updateMesh, clearMesh,
     hideHueLine() { discHueLine.setAttribute('opacity', '0'); },
+    // CMYK gamut-boundary overlay (predicate injected by cmyk.js).
+    setCMYKBoundaryFn(fn) { cmykBoundaryFn = fn; },
+    setCMYKBoundaryVisible(on) { cmykShow = on; },
+    invalidateCMYKBoundary() { cmykLr = -1; },
   };
 }

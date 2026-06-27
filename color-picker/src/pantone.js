@@ -385,10 +385,11 @@ function updateSwatchMatches(index) {
   const visibleMax = visibleMaxForRow(container);
 
   let selected = pantoneSelections.get(index) || null;
-  if (selected && !isCategoryEnabled(selected.category)) {
-    pantoneSelections.delete(index);
-    selected = null;
-  }
+  // A promotion whose library is currently turned off stays STORED (so toggling
+  // the library back on restores it, and the toggle records no history) but is
+  // hidden — rendered as if un-promoted. Only explicit edits/depromotions, which
+  // delete it outright, count as demotions.
+  if (selected && !isCategoryEnabled(selected.category)) selected = null;
 
   const hideAllChips = () => {
     for (const cell of cells) cell.style.display = 'none';
@@ -791,6 +792,9 @@ if (libraryCheckboxes.length) {
       updateDots();
       updateMatchesVisibility();
       updateAllSwatchMatches();
+      // CMYK swatch layout depends on Pantone visibility (bottom vs side mode),
+      // so trigger a render whenever library state changes.
+      P.render();
     });
   });
 

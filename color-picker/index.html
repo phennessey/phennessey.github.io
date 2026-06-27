@@ -45,6 +45,7 @@
       </div>
       <div class="section-vlabel">Pantone</div>
       <div class="section-body library-panel" id="library-panel">
+        <div class="libraries-label">Additional libraries</div>
         <div class="libraries">
           <label><input type="checkbox" data-library="pastel"> Pastel</label>
           <label><input type="checkbox" data-library="neon"> Neon</label>
@@ -66,7 +67,33 @@
         <label class="section-label" for="toggle-cmyk">CMYK</label>
       </div>
       <div class="section-vlabel">CMYK</div>
-      <div class="section-body cmyk-body"></div>
+      <div class="section-body cmyk-body">
+        <div class="cmyk-profile-row">
+          <label class="cmyk-profile-label" for="cmyk-profile">ICC profile</label>
+          <div class="cmyk-profile-select-wrap">
+            <select class="cmyk-profile-select" id="cmyk-profile">
+              <option value="gracol">GRACoL 2006</option>
+              <option value="swop">U.S. SWOP v2</option>
+              <option value="fogra39">FOGRA39</option>
+            </select>
+          </div>
+        </div>
+        <div class="cmyk-bias">
+          <div class="cmyk-bias-track">
+            <input type="range" class="cmyk-bias-slider" id="cmyk-bias"
+                   min="0" max="100" value="0" step="1"
+                   aria-label="Out-of-gamut bias: standard to closer lightness">
+          </div>
+          <div class="cmyk-bias-labels">
+            <span>Standard</span>
+            <span>Closer lightness</span>
+          </div>
+        </div>
+        <label class="cmyk-check">
+          <input type="checkbox" id="cmyk-show-boundary">
+          <span>Show CMYK gamut boundary</span>
+        </label>
+      </div>
     </div>
 
     <div class="section-divider"></div>
@@ -86,6 +113,9 @@
   <div class="swatches"></div>
   <div class="status-region" id="status-region"></div>
 
+  <!-- Vendored Little-CMS-class ICC engine (UMD global `jsColorEngine`), loaded
+       before the module so the CMYK feature can use it synchronously. -->
+  <script src="./lib/jsColorEngineWeb.js"></script>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>
