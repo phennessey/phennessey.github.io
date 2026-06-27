@@ -16,6 +16,7 @@ import { updateBackground, updateMesh, setActive } from './selection.js';
 import { syncHexField, hexTextarea } from './hex.js';
 import { recordSnapshot } from './history.js';
 import { applyBgLevel } from './interactions.js';
+import { setCMYKActive } from './cmyk.js';
 
 
 // Render patch
@@ -69,6 +70,8 @@ document.querySelectorAll('.section-toggle').forEach(cb => {
     }
   };
   cb.addEventListener('change', sync);
+  // CMYK section open/closed drives CMYK "mode" (convert + show per-swatch).
+  if (cb.id === 'toggle-cmyk') cb.addEventListener('change', () => setCMYKActive(cb.checked));
   sync();
   // While collapsed, a click ANYWHERE in the narrow column (triangle, the gap
   // below it, the vertical label) opens the section — no dead zones. When open
