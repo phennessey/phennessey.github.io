@@ -595,7 +595,7 @@ function buildMatchCells(container) {
     if (i === 0) cell.classList.add('chip-rightmost');
     cell.style.display = 'none';
     const cap = document.createElement('div');
-    cap.className = 'match-cap';
+    cap.className = 'hue-marker';
     cell.appendChild(cap);
     // The colour bar: background + border only. Label lives in a sibling
     // .chip-label-wrap so it can be masked independently without fading
@@ -800,9 +800,28 @@ els.swatches.addEventListener('pointerout', ev => {
 });
 
 
-// Library filter checkboxes
+// Library filter checkboxes + pantone option checkboxes
 
 const libraryPanel = document.getElementById('library-panel');
+
+const metallicTextureCb = document.getElementById('toggle-metallic-texture');
+if (metallicTextureCb) {
+  metallicTextureCb.addEventListener('change', () => {
+    els.swatches.classList.toggle('metallic-texture', metallicTextureCb.checked);
+  });
+}
+
+const hideOnPromoteCb = document.getElementById('toggle-hide-on-promote');
+if (hideOnPromoteCb) {
+  // Initialise to match the checkbox's default (checked).
+  els.swatches.classList.toggle('hide-chips-on-promote', hideOnPromoteCb.checked);
+  hideOnPromoteCb.addEventListener('change', () => {
+    // Animate chips in/out on every promoted row.
+    els.swatches.querySelectorAll('.match-cells.has-promotion').forEach(startChipTransition);
+    els.swatches.classList.toggle('hide-chips-on-promote', hideOnPromoteCb.checked);
+  });
+}
+
 // The "base" toggle lives in the collapsible section head (#toggle-pantone),
 // outside #library-panel; the per-library checkboxes live inside it. Wire both.
 const libraryCheckboxes = document.querySelectorAll('input[type="checkbox"][data-library]');

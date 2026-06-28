@@ -51,6 +51,9 @@ body {
      section is active (open). */
   --label-color: rgba(255,255,255,0.4);
   --label-color-active: rgba(255,255,255,0.78);
+  /* Body text inside open sections — sub-headers, labels, checkboxes. */
+  --ui-label: rgba(255,255,255,0.6);
+  --ui-label-hover: rgba(255,255,255,0.9);
   /* Vertical inset for the tool sections/dividers so labels + content don't
      touch the frame. Added on top of the frame's 4px pad (≈20px from frame),
      while the color map keeps its 4px concentric gap. */
@@ -82,6 +85,8 @@ body.light-bg .top-ui {
   outline-color: rgba(0,0,0,0.2);
   --label-color: rgba(0,0,0,0.5);
   --label-color-active: rgba(0,0,0,0.8);
+  --ui-label: rgba(0,0,0,0.6);
+  --ui-label-hover: rgba(0,0,0,0.9);
 }
 
 /* COLOR MAP panel — keeps the .picker-wrap hooks the JS targets (lightness
@@ -240,6 +245,8 @@ body.light-bg .top-ui {
 }
 /* CMYK section holds a wide ICC profile dropdown — needs more room. */
 .section-cmyk.open { max-width: 240px; }
+/* Pantone options text is wider than the default 120px cap. */
+.section-pantone.open { max-width: 240px; }
 .collapsible.open .section-label { display: block; }
 .collapsible.open .section-body { display: flex; }
 .collapsible.open .section-vlabel { opacity: 0; pointer-events: none; }
@@ -441,29 +448,26 @@ body.light-bg #add-color-btn {
   flex-direction: column;
   justify-content: flex-start;
   gap: 4px;
-  padding: 8px 0;
+  padding: 4px 10px 8px 0;
   font-size: 11px;
   line-height: 1.4;
   user-select: none;
-  color: rgba(255,255,255,0.7);
+  color: var(--ui-label);
 }
 
 .libraries-label {
   font-size: 11px;
-  color: var(--label-color-active);
+  color: var(--ui-label);
   white-space: nowrap;
 }
 
 .libraries {
   font-size: 10px;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: max-content;
   gap: 4px;
 }
 
-body.light-bg .library-panel {
-  color: rgba(0,0,0,0.7);
-}
 
 .library-panel label {
   display: flex;
@@ -482,24 +486,24 @@ body.light-bg .library-panel {
   display: inline-flex;
   align-items: center;
   gap: 0;
-  padding: 2px 6px;
-  border-radius: calc(6px * var(--squircle-scale));
+  padding: 3px 6px;
+  border-radius: 6px;
   border: 1px solid rgba(255,255,255,0.38);
   color: rgba(255,255,255,0.38);
   background: transparent;
   white-space: nowrap;
 }
 .libraries label:hover {
-  color: rgba(255,255,255,1);
-  border-color: rgba(255,255,255,1);
+  color: var(--ui-label-hover);
+  border-color: var(--ui-label-hover);
 }
 body.light-bg .libraries label {
   border-color: rgba(0,0,0,0.38);
   color: rgba(0,0,0,0.38);
 }
 body.light-bg .libraries label:hover {
-  color: rgba(0,0,0,1);
-  border-color: rgba(0,0,0,1);
+  color: var(--ui-label-hover);
+  border-color: var(--ui-label-hover);
 }
 .libraries label:has(input:checked) {
   background: rgba(255,255,255,0.5);
@@ -525,6 +529,33 @@ body.light-bg .libraries label:has(input:checked):hover {
 .library-panel label:has(input:disabled) {
   opacity: 0.35;
   cursor: default;
+}
+
+.pantone-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 10px;
+  line-height: 1.26;
+  color: var(--ui-label);
+}
+.pantone-options label {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  cursor: pointer;
+}
+.pantone-options label:hover {
+  color: var(--ui-label-hover);
+}
+.pantone-options input[type="checkbox"] {
+  display: revert;
+  width: 11px;
+  height: 11px;
+  accent-color: rgba(255,255,255,0.7);
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 /* Global chip-cutoff slider. */
@@ -816,7 +847,7 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   position: relative;
   cursor: pointer;     /* the field activates the swatch on click (promotion area) */
   /* No overflow clip here: each .chip-fill is bottom-anchored within its own
-     full-height cell so bars never spill, and the .match-cap (●) sits just
+     full-height cell so bars never spill, and the .hue-marker (●) sits just
      above the strip and must stay visible. The swatch-inner squircle handles
      the rounded bottom corners.
      Background (the swatch's own colour) is set in JS so the field reads as
@@ -952,8 +983,8 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 }
 
 /* When a chip is promoted, bars and label wraps collapse; caps fade via opacity rule. */
-.match-cells.has-promotion .chip-fill,
-.match-cells.has-promotion .chip-label-wrap {
+.swatches.hide-chips-on-promote .match-cells.has-promotion .chip-fill,
+.swatches.hide-chips-on-promote .match-cells.has-promotion .chip-label-wrap {
   top: 100%;
 }
 
@@ -1034,14 +1065,14 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   display: none;
 }
 
-.match-cell.metallic .noise-overlay {
+.swatches.metallic-texture .match-cell.metallic .noise-overlay {
   display: block;
 }
 
 /* Field-level metallic texture (first child of .match-cells, so it sits under the
    chips): shown over the colour field while a metallic chip is hovered or a
    metallic Pantone is promoted. */
-.match-cells.metallic-field > .match-field-noise {
+.swatches.metallic-texture .match-cells.metallic-field > .match-field-noise {
   display: block;
 }
 
@@ -1057,8 +1088,8 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 
 /* When a promotion is active, label wraps and gamut icons in chips fade out
    faster than the bars collapse (0.1s vs 0.2s), so they vanish cleanly. */
-.match-cells.has-promotion .chip-label-wrap,
-.match-cells.has-promotion .chip-gamut-warning { opacity: 0; }
+.swatches.hide-chips-on-promote .match-cells.has-promotion .chip-label-wrap,
+.swatches.hide-chips-on-promote .match-cells.has-promotion .chip-gamut-warning { opacity: 0; }
 
 /* Shared status line below the swatch region — pulled out of the flex flow so
    the swatches fill flush to the body bottom (= 40px from viewport edge). Sits
@@ -1133,7 +1164,7 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
    edge carries the chip's 0.5px border-right (occupying cellRight-0.5 to
    cellRight, so its visual center is cellRight-0.25). right: -6.75px puts the
    apex on that line's center. Measured to land within 0.001px on all chips. */
-.match-cap {
+.hue-marker {
   position: absolute;
   bottom: 0;
   right: -5.75px;
@@ -1147,10 +1178,10 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   opacity: 0;
   transition: opacity 0.1s ease;
 }
-.match-cell.hue-match .match-cap { opacity: 1; }
+.match-cell.hue-match .hue-marker { opacity: 1; }
 
 /* Hover cap: a solid upward triangle (same 12×6 shape as the hue-marker
-   .match-cap) sitting on the top edge of the chip being hovered (--chip-top is
+   .hue-marker) sitting on the top edge of the chip being hovered (--chip-top is
    the bar's top offset). Coloured like the chip label's hover state. */
 .match-cell::after {
   content: "";
@@ -1164,24 +1195,31 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   opacity: 0;
   pointer-events: none;
   z-index: 3;
-  transition: opacity 0.1s ease;
+  transition: opacity 0.3s ease;
 }
 .swatch-container.light .match-cell::after { background: rgba(0,0,0,0.2); }
 .match-cell:has(.chip-fill:hover, .chip-gamut-warning:hover)::after { opacity: 1; }
 /* On promotion the chips collapse — kill the hover dot instantly (no fade). */
-.match-cells.has-promotion .match-cell::after {
+.swatches.hide-chips-on-promote .match-cells.has-promotion .match-cell::after {
   opacity: 0 !important;
   transition: none;
 }
+/* Keep the ::after triangle persistently visible on the promoted chip. */
+.match-cells.has-promotion .match-cell.promoted-match::after { opacity: 1; }
+/* Hide it instantly at the start of any chip transition; fades back in (0.1s) when done. */
+.match-cells.chips-transitioning .match-cell.promoted-match::after {
+  opacity: 0;
+  transition: opacity 0s;
+}
 
-.swatch-container.light .match-cap { color: rgba(0,0,0,0.3); }
+.swatch-container.light .hue-marker { color: rgba(0,0,0,0.3); }
 
-.swatches.none-selected .match-cap { opacity: 0; }
+.swatches.none-selected .hue-marker { opacity: 0; }
 .swatches.none-selected .match-label { visibility: hidden; }
 
-/* Hide during promotion and on the promoted chip itself. */
-.match-cells.has-promotion .match-cap,
-.match-cell.promoted-match .match-cap { opacity: 0; }
+/* Hide the hue-marker caps on all chips during promotion (original behaviour). */
+.match-cells.has-promotion .hue-marker,
+.match-cell.promoted-match .hue-marker { opacity: 0; }
 
 /* Out-of-P3 caution beside the promoted name (top-right overlay): small, left of
    the label. Keeps a pointer cursor on hover. */
@@ -1295,50 +1333,55 @@ body.disc-dragging,   body.disc-dragging * {
 .swatches.none-selected .cmyk-readout { visibility: hidden; }
 
 /* CMYK section: ICC profile picker */
-.cmyk-body { flex-direction: column; gap: 6px; align-items: flex-start; }
-.cmyk-profile-row { display: flex; align-items: center; gap: 8px; }
-/* Floating UI text: white/black per page lightness, like other section labels. */
-.cmyk-profile-label { font-size: 11px; color: var(--label-color-active); white-space: nowrap; }
+.cmyk-body { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 4px 10px 0 0; line-height: 1.4; font-size: 11px; }
+/* Inner wrapper: single max-content grid column so the select's intrinsic size
+   drives the width and the slider below stretches to match. */
+.cmyk-controls { display: flex; flex-direction: column; gap: 6px; max-width: 100px; }
+.cmyk-profile-row { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.cmyk-profile-label { font-size: 11px; color: var(--ui-label); white-space: nowrap; }
 
 /* Custom dropdown: outlined rounded rect with a CSS chevron, no native chrome.
    Outline, text, and arrow all follow the page-lightness UI colour. */
 .cmyk-profile-select-wrap { position: relative; display: inline-flex; }
 .cmyk-profile-select {
   font: inherit;
-  font-size: 12px;
+  font-size: 10px;
   -webkit-appearance: none;
   appearance: none;
   background: transparent;
-  color: var(--label-color-active);
-  border: 1px solid rgba(255,255,255,0.2);   /* match other UI outlines */
+  color: var(--ui-label);
+  border: 1px solid rgba(255,255,255,0.38);
   border-radius: 6px;
   padding: 3px 24px 3px 8px;
+  width: 100%;
+  box-sizing: border-box;
   cursor: pointer;
 }
-body.light-bg .cmyk-profile-select { border-color: rgba(0,0,0,0.2); }
+body.light-bg .cmyk-profile-select { border-color: rgba(0,0,0,0.38); }
 .cmyk-profile-select-wrap::after {       /* downward chevron */
   content: "";
   position: absolute;
   right: 9px; top: 50%;
   width: 6px; height: 6px;
   pointer-events: none;
-  border-right: 1.5px solid var(--label-color-active);
-  border-bottom: 1.5px solid var(--label-color-active);
+  border-right: 1.5px solid var(--ui-label);
+  border-bottom: 1.5px solid var(--ui-label);
   transform: translateY(-65%) rotate(45deg);
 }
 /* "Show CMYK gamut boundary" checkbox — UI text colour, native check tinted. */
 .cmyk-check {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  align-self: flex-start;
   gap: 6px;
   margin-top: 8px;
   font-size: 11px;
-  color: var(--label-color-active);
-  white-space: nowrap;
+  line-height: 1.26;
+  color: var(--ui-label);
   cursor: pointer;
   user-select: none;
 }
-.cmyk-check input { margin: 0; cursor: pointer; accent-color: var(--label-color-active); }
+.cmyk-check input { margin: 0; cursor: pointer; accent-color: var(--ui-label); }
 
 .cmyk-bias {
   width: 100%;
@@ -1406,6 +1449,5 @@ body.light-bg .cmyk-bias {
   display: flex;
   justify-content: space-between;
   font-size: 10px;
-  color: var(--label-color);
-  white-space: nowrap;
+  color: var(--ui-label);
 }

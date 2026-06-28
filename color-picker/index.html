@@ -53,6 +53,10 @@
           <label><input type="checkbox" data-library="xgc"> Extended gamut</label>
           <label><input type="checkbox" data-library="metallic"> Metallic</label>
         </div>
+        <div class="pantone-options">
+          <label><input type="checkbox" id="toggle-metallic-texture"> Simulate texture<br>for metallic inks</label>
+          <label><input type="checkbox" id="toggle-hide-on-promote" checked> Hide matches<br>after promotion</label>
+        </div>
       </div>
     </div>
 
@@ -68,30 +72,31 @@
       </div>
       <div class="section-vlabel">CMYK</div>
       <div class="section-body cmyk-body">
-        <div class="cmyk-profile-row">
-          <label class="cmyk-profile-label" for="cmyk-profile">ICC profile</label>
-          <div class="cmyk-profile-select-wrap">
-            <select class="cmyk-profile-select" id="cmyk-profile">
-              <option value="gracol">GRACoL 2006</option>
-              <option value="swop">U.S. SWOP v2</option>
-              <option value="fogra39">FOGRA39</option>
-            </select>
+        <div class="cmyk-controls">
+          <div class="cmyk-profile-row">
+            <label class="cmyk-profile-label" for="cmyk-profile">ICC profile</label>
+            <div class="cmyk-profile-select-wrap">
+              <select class="cmyk-profile-select" id="cmyk-profile">
+                <option value="gracol">GRACoL 2006</option>
+                <option value="swop">U.S. SWOP v2</option>
+                <option value="fogra39">FOGRA39</option>
+              </select>
+            </div>
           </div>
-        </div>
-        <div class="cmyk-bias">
-          <div class="cmyk-bias-track">
-            <input type="range" class="cmyk-bias-slider" id="cmyk-bias"
-                   min="0" max="100" value="0" step="1"
-                   aria-label="Out-of-gamut bias: standard to closer lightness">
-          </div>
-          <div class="cmyk-bias-labels">
-            <span>Standard</span>
-            <span>Closer lightness</span>
+          <div class="cmyk-bias">
+            <div class="cmyk-bias-track">
+              <input type="range" class="cmyk-bias-slider" id="cmyk-bias"
+                     min="0" max="100" value="0" step="1"
+                     aria-label="Out-of-gamut bias: standard to closer lightness">
+            </div>
+            <div class="cmyk-bias-labels">
+              <span>Match lightness</span>
+            </div>
           </div>
         </div>
         <label class="cmyk-check">
           <input type="checkbox" id="cmyk-show-boundary">
-          <span>Show CMYK gamut boundary</span>
+          <span>Show CMYK<br>gamut boundary</span>
         </label>
       </div>
     </div>
