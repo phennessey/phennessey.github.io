@@ -776,7 +776,7 @@ body.light-bg .swatch-container::before {
 .icon {
   position: absolute;
   height: 13px;
-  color: rgba(255,255,255,0.5);
+  color: rgba(255,255,255,0.3);
   cursor: pointer;
   pointer-events: auto;
   z-index: 1;
@@ -791,7 +791,7 @@ body.light-bg .swatch-container::before {
 
 .icon svg { width: 100%; height: 100%; }
 .icon:hover { color: rgba(255,255,255,1); }
-.swatch-container.light .icon { color: rgba(0,0,0,0.5); }
+.swatch-container.light .icon { color: rgba(0,0,0,0.3); }
 .swatch-container.light .icon:hover { color: rgba(0,0,0,1); }
 .swatch-container.light .region-badge { background: rgba(0,0,0,0.3); }
 
@@ -921,11 +921,11 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
    box itself); no fade — it's instantly on or off, at full alpha when shown. */
 .promoted-close {
   flex-shrink: 0;
-  height: 11px;
-  width: 11px;   /* explicit width (square 16×16 icon) — Safari won't size an
+  height: 12px;
+  width: 12px;   /* explicit width (square 16×16 icon) — Safari won't size an
                     auto-width box from the SVG's aspect ratio, so it must be set */
   align-self: center;
-  margin-top: -0.5px;
+  margin-top: 0.5px;
   opacity: 0;    /* reserve layout space; revealed on hover (was display:none) */
   pointer-events: auto;
   cursor: pointer;

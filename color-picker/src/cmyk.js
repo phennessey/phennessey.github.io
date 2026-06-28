@@ -6,11 +6,21 @@
 // swatch as a soft proof. CMYK "mode" is active while the CMYK tool section
 // is open (see main.js).
 //
-// Pipeline (validated to reproduce Photoshop's relative-colorimetric + BPC
-// conversion exactly for in-sRGB colours — see cmyk-test/ spike):
+// Pipeline — two paths, chosen by whether the colour is inside sRGB:
 //
-//   OKLab → XYZ(D65) [@texel/color] → CIELAB(D65) → jsColorEngine '*LabD65'
-//         → ICC CMYK profile (BToA, relative colorimetric + BPC) → C M Y K
+//   in-sRGB:  quantised 8-bit hex → jsColorEngine '*sRGB'
+//                → ICC CMYK profile (BToA, relative colorimetric + BPC) → C M Y K
+//   out-of-sRGB: OKLab → XYZ(D65) [@texel/color] → CIELAB(D65) → '*LabD65'
+//                → ICC CMYK profile (BToA, relative colorimetric + BPC) → C M Y K
+//
+// CRITICAL: in-sRGB colours MUST go through the engine's native '*sRGB' profile,
+// not the hand-rolled CIELAB(D65) → '*LabD65' path. The '*sRGB' profile reproduces
+// Adobe's exact sRGB→CMYK readout (Photoshop/InDesign, relative-colorimetric + BPC
+// — e.g. #9628ff → 70-85-0-0 in GRACoL2006); the '*LabD65' path drifts a few points
+// (→ 65-88-0-0) because feeding "D65 Lab → D50 PCS" adapts differently than the sRGB
+// profile's own primaries/adaptation. The '*sRGB' path is the validated reference
+// (see cmyk-test/ spike). '*LabD65' is only a fallback for colours OUTSIDE sRGB,
+// which the engine has no RGB device profile for (no '*P3').
 //
 // jsColorEngine owns the D65→D50 PCS adaptation internally, so we never do a
 // Bradford step by hand (the classic double-adapt bug). The D65 white used for
@@ -70,7 +80,8 @@ const GAMUT_EPS = 0.012;  // s tolerance: covers the LUT's slight (~0.01) under-
 // lightness toward it (sacrificing chroma, never hue).
 export const cmyk = { active: false, profileKey: "gracol", ready: false, bias: 0, showBoundary: false };
 
-let fwd = null;  // CIELAB(D65) → CMYK
+let fwd = null;  // CIELAB(D65) → CMYK  (out-of-sRGB colours only)
+let fwdSRGB = null;  // native *sRGB → CMYK (in-sRGB colours; matches Adobe exactly)
 let rev = null;  // CMYK → CIELAB(D65)
 let gamutLUT = null;          // Float32Array[LUT_L*LUT_H] of max OKHSL s, active profile
 const profileCache = {};
@@ -97,8 +108,8 @@ const linearize = v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
  * the CMYK values match Photoshop's readout for the same hex code exactly.
  * Only fall back to the continuous P3 path for colours outside sRGB.
  */
-function colorToLabD65(color) {
-  const { hex, outOfSRGB } = computeP3AndSRGB(color);
+function colorToLabD65(color, info) {
+  const { hex, outOfSRGB } = info || computeP3AndSRGB(color);
   if (!outOfSRGB) {
     const n = parseInt(hex.slice(1), 16);
     const r = linearize(((n >> 16) & 0xFF) / 255);
@@ -131,8 +142,22 @@ function convertFromLab(lab) {
   return { lab, c, back };
 }
 
-/** Forward + reverse for a picker colour (the raw, unbiased conversion). */
-function convertColor(color) { return convertFromLab(colorToLabD65(color)); }
+/** Forward + reverse for a picker colour (the raw, unbiased conversion).
+ *  In-sRGB colours convert through the engine's native '*sRGB' profile (Adobe-exact);
+ *  only colours outside sRGB fall back to the CIELAB(D65) → '*LabD65' path. */
+function convertColor(color) {
+  const info = computeP3AndSRGB(color);
+  const lab = colorToLabD65(color, info);
+  let c;
+  if (!info.outOfSRGB && fwdSRGB) {
+    const n = parseInt(info.hex.slice(1), 16);
+    c = fwdSRGB.transform(CE.color.RGB((n >> 16) & 0xFF, (n >> 8) & 0xFF, n & 0xFF));
+  } else {
+    c = fwd.transform(CE.color.Lab(lab.L, lab.a, lab.b));
+  }
+  const back = rev.transform(CE.color.CMYK(c.C, c.M, c.Y, c.K));
+  return { lab, c, back };
+}
 
 // ── Out-of-gamut bias: hue-locked, brightness toward target ──────────
 //
@@ -340,6 +365,7 @@ async function buildTransforms(key) {
   const p = await loadProfile(key);
   const I = CE.eIntent.relative, O = { dataFormat: "object", BPC: true };
   fwd = new CE.Transform(O); fwd.create("*LabD65", p, I);
+  fwdSRGB = new CE.Transform(O); fwdSRGB.create("*sRGB", p, I);
   rev = new CE.Transform(O); rev.create(p, "*LabD65", I);
   gamutLUT = lutCache[key] || (lutCache[key] = buildGamutLUT(p));
 }
