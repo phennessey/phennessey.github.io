@@ -34,9 +34,9 @@ const engineOK = !!(CE && CE.Transform && CE.Profile && CE.color);
 if (!engineOK) console.error("jsColorEngine not loaded — CMYK feature disabled.");
 
 const PROFILE_URLS = {
-  gracol:  "profiles/GRACoL2006_Coated1v2.icc",
-  swop:    "profiles/SWOP2006_Coated3v2.icc",
-  fogra39: "profiles/Coated_Fogra39L_VIGC_300.icc",
+  gracol:  "lib/profiles/GRACoL2006_Coated1v2.icc",
+  swop:    "lib/profiles/SWOP2006_Coated3v2.icc",
+  fogra39: "lib/profiles/Coated_Fogra39L_VIGC_300.icc",
 };
 
 // ── True gamut membership via a precomputed LUT ──────────────────────

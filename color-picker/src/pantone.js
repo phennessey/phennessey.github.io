@@ -15,7 +15,7 @@ import { OKLabToOKHSL, OKHSLToOKLab, DisplayP3Gamut, convert, OKLab, DisplayP3 }
 import { swatchEl } from './swatches.js';
 import { flushPendingWheelSnapshot, recordSnapshot } from './history.js';
 
-const PANTONE_URL = new URL('../Pantone_OKLAB.txt', import.meta.url);
+const PANTONE_URL = new URL('../lib/Pantone_OKLAB.txt', import.meta.url);
 
 function clearPromotedOnEdit() {
   const targets = S.isMultiMode() ? S.multiSelect
@@ -287,10 +287,21 @@ function visibleMaxForRow(container) {
   return Math.max(MIN_MATCHES, Math.floor(w / MIN_MATCH_WIDTH));
 }
 
+// Field metallic texture is on when a metallic chip is hovered OR a metallic
+// Pantone is promoted; either flag drives the .metallic-field class.
+function syncFieldMetallic(matchCells) {
+  if (!matchCells) return;
+  matchCells.classList.toggle('metallic-field', !!(matchCells._metalHover || matchCells._metalPromoted));
+}
+
 function renderPromoted(cell, p) {
   if (!cell) return;
   const matchCells = cell.parentElement;
   const warn = cell.querySelector('.promoted-gamut-warning');
+  if (matchCells) {
+    matchCells._metalPromoted = !!(p && p.category === 'metallic');
+    syncFieldMetallic(matchCells);
+  }
   if (p) {
     cell.dataset.pantoneName = p.name;
     renderPantoneLabel(cell.querySelector('.match-label'), p.name);
@@ -539,6 +550,13 @@ function buildMatchCells(container) {
   const matchCells = document.createElement('div');
   matchCells.className = 'match-cells';
 
+  // Field-level metallic texture: overlays the colour field (behind the chips)
+  // while a metallic chip is hovered or a metallic Pantone is promoted. First
+  // child so it sits under the chips — only the open field reads as metallic.
+  const fieldNoise = document.createElement('div');
+  fieldNoise.className = 'noise-overlay match-field-noise';
+  matchCells.appendChild(fieldNoise);
+
   const promotedCell = document.createElement('div');
   promotedCell.className = 'promoted-cell';
   const depromote = ev => {
@@ -755,6 +773,8 @@ function chipBgPreview(ev) {
       matchCells._chipHover = true;
       matchCells.classList.add('chip-hover-preview');
       matchCells.style.background = pantoneP3Css(entry);
+      matchCells._metalHover = entry.category === 'metallic';
+      syncFieldMetallic(matchCells);
       return;
     }
   }
@@ -765,6 +785,8 @@ function chipBgPreview(ev) {
 function endChipPreview(matchCells) {
   if (!matchCells._chipHover) return;
   matchCells._chipHover = false;
+  matchCells._metalHover = false;
+  syncFieldMetallic(matchCells);       // texture stays only if a metallic is promoted
   matchCells.style.background = matchCells._baseBg || '';
   clearTimeout(matchCells._chipHoverTimer);
   matchCells._chipHoverTimer = setTimeout(() => {

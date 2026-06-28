@@ -23,11 +23,14 @@ function takeSnapshot() {
   }));
 }
 
+// Selection is not undoable, so it's excluded here: selecting a different swatch
+// (with no colour/order/promotion change) must NOT create a history entry. The
+// per-swatch `selected` flag is still recorded — but only to restore a multi-edit
+// group on undo/redo (see restoreSnapshot).
 function snapshotsEqual(a, b) {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
     if (a[i].h !== b[i].h || a[i].s !== b[i].s || a[i].L !== b[i].L
-        || a[i].selected !== b[i].selected
         || a[i].pantoneName !== b[i].pantoneName) return false;
   }
   return true;
@@ -73,6 +76,11 @@ document.addEventListener('pointerup', () => {
 });
 
 function restoreSnapshot(snap) {
+  // Selection is not undoable: remember the current selection so the revert can
+  // keep it. The one exception is a multi-edit snapshot, which restores its group.
+  const prevActive = S.activeIndex;
+  const prevMulti  = new Set(S.multiSelect);
+
   exitMultiSelect();
 
   if (S.activeIndex < S.colors.length) deactivateSwatch(S.activeIndex);
@@ -122,20 +130,33 @@ function restoreSnapshot(snap) {
   reindex();
   S.colors.forEach((_, i) => updateSwatch(i));
 
-  const selectedIndices = snap.reduce((acc, s, i) => { if (s.selected) acc.push(i); return acc; }, []);
-
-  if (selectedIndices.length === 0) {
-    els.swatches.classList.add('none-selected');
-    requestRender();
-  } else if (selectedIndices.length === 1) {
-    setActive(selectedIndices[0]);
-  } else {
-    for (const i of selectedIndices) S.multiSelect.add(i);
-    S.activeIndex = selectedIndices[0];
+  // Selection. By default keep whatever was selected before the undo/redo so the
+  // revert doesn't move the user's selection. The one exception: a multi-swatch
+  // edit restores its own group, so undoing/redoing a multi change keeps that
+  // group selected. (Indices are clamped — a reverted add/remove can shrink the
+  // palette.)
+  const applyMulti = (indices) => {
+    for (const i of indices) S.multiSelect.add(i);
+    S.activeIndex = indices[0];
     setHandles(S.activeIndex, true);
     els.swatches.classList.remove('none-selected');
     applyMultiVisuals();
     computeFrozenEdges();
+    requestRender();
+  };
+
+  const snapMulti = snap.reduce((acc, s, i) => { if (s.selected) acc.push(i); return acc; }, [])
+                        .filter(i => i < S.colors.length);
+  const prevMultiValid = [...prevMulti].filter(i => i < S.colors.length);
+
+  if (snapMulti.length > 1) {
+    applyMulti(snapMulti);                 // restore the multi-edit's group
+  } else if (prevMultiValid.length > 1) {
+    applyMulti(prevMultiValid);            // preserve an existing multi-selection
+  } else if (prevActive >= 0 && prevActive < S.colors.length) {
+    setActive(prevActive);                 // preserve the single selection
+  } else {
+    els.swatches.classList.add('none-selected');
     requestRender();
   }
 
