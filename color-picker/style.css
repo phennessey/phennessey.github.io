@@ -943,7 +943,10 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
   white-space: nowrap;
   text-align: left;
   pointer-events: none;
+  /* Rest alpha matches the sRGB/P3/CMYK readouts (0.3), not the base label's 0.5. */
+  color: rgba(255,255,255,0.3);
 }
+.swatch-container.light .promoted-cell .match-label { color: rgba(0,0,0,0.3); }
 
 
 .match-cell {
@@ -1128,7 +1131,7 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
   transition: color 0.1s ease, opacity 0.1s ease;
 }
 
-/* Match chips sit dimmer at rest than the promoted label (which stays 0.5). */
+/* Match chips rest at 0.3, like the readouts and the promoted name. */
 .match-cell .match-label { color: rgba(255,255,255,0.3); text-align: center; }
 
 /* Hovering anywhere on the chip (the bar or its gamut icon) brightens the label;
@@ -1325,6 +1328,12 @@ body.disc-dragging,   body.disc-dragging * {
 }
 .swatch-container.light .cmyk-readout { color: rgba(0,0,0,0.3); }
 .swatches.none-selected .cmyk-readout { visibility: hidden; }
+
+/* "CB" badge: a second region badge beside "CMYK", shown only when the build is
+   substituted from the promoted Pantone's own Color Bridge values (.cmyk-bridge,
+   set in updateSwatchCMYK). Hidden otherwise so the CMYK badge stands alone. */
+.cmyk-readout .cb-tag { display: none; }
+.swatch-container.cmyk-bridge .cmyk-readout .cb-tag { display: inline-block; }
 
 /* CMYK section: ICC profile picker */
 .cmyk-body { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 4px 10px 0 0; line-height: 1.4; font-size: 11px; }

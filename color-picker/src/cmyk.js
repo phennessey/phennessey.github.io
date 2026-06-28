@@ -47,7 +47,7 @@ import {
   convert, OKLab, XYZ, DisplayP3, sRGB, OKLabToOKHSL, DisplayP3Gamut,
 } from "https://esm.sh/@texel/color@1.1.11?bundle";
 import { toOKLab, toe, computeP3AndSRGB } from "./color.js";
-import { els, P } from "./state.js";
+import { els, P, pantoneSelections } from "./state.js";
 import { requestRender } from "./util.js";
 
 const CE = window.jsColorEngine;
@@ -89,7 +89,7 @@ const GAMUT_EPS = 0.012;  // s tolerance: covers the LUT's slight (~0.01) under-
 // out-of-gamut clipping preference in [0, 1]: 0 = standard relative-colorimetric
 // clip, increasing toward 1 locks the printed hue to the target's and raises
 // lightness toward it (sacrificing chroma, never hue).
-export const cmyk = { active: false, profileKey: "gracol", ready: false, bias: 0, showBoundary: false };
+export const cmyk = { active: false, profileKey: "gracol", ready: false, bias: 0, showBoundary: false, useColorBridge: false };
 
 let fwd = null;  // CIELAB(D65) → CMYK  (out-of-sRGB colours only)
 let fwdSRGB = null;  // native *sRGB → CMYK (in-sRGB colours; matches Adobe exactly)
@@ -251,7 +251,13 @@ function syncBoundary() {
 /**
  * Paint a swatch's CMYK region: the proof fill (CMYK→display-P3), the
  * "C-M-Y-K" label, and the out-of-gamut flag. No-op unless CMYK mode is active
- * and a profile is ready.
+ * and a profile is ready. `index` is the swatch index, used to look up a
+ * promoted Pantone for the Color Bridge substitution below.
+ *
+ * Color Bridge: when "Use Pantone Color Bridge values" is on and this swatch's
+ * promoted Pantone carries a Color Bridge build, the ICC conversion is bypassed
+ * — the label shows Pantone's own CMYK and the fill is painted from Pantone's
+ * published soft-proof hex. Such swatches get the .cmyk-bridge class (→ "CB" badge).
  *
  * The CMYK swatch always lives inside .color-row; the side/bottom split is pure
  * CSS, keyed off `.show-matches` and a .swatches-level (not per-swatch)
@@ -261,37 +267,53 @@ function syncBoundary() {
  *   • neither                                    → bottom mode: .color-row is a
  *                                    column, CMYK the bottom half (chip space).
  */
-export function updateSwatchCMYK(container, color) {
+export function updateSwatchCMYK(container, color, index) {
   if (!engineOK || !cmyk.active) return;
   const cmykEl = container.querySelector(".color-swatch.cmyk");
   if (!cmykEl) return;
 
   if (!cmyk.ready) return;   // transforms still loading; leave placeholder
 
-  // Flag from true gamut membership (the LUT). The CMYK build comes from the
-  // biased conversion when the slider is engaged on an out-of-gamut colour.
-  const oog = isOutOfCMYK(color);
-  const raw = convertColor(color);
-  const c = (cmyk.bias !== 0 && oog)
-    ? convertFromLab(biasedLab(raw, color, oog)).c : raw.c;
-  // Soft-proof appearance: reverse the FINAL CMYK build through the engine's own
-  // native '*sRGB' profile — the symmetric inverse of the forward '*sRGB' path,
-  // so the proof is Adobe-exact (and matches the sRGB swatch for in-gamut colours)
-  // — then express it in the P3 swatch container. We do NOT hand-roll
-  // CMYK→*LabD65→XYZ→P3: that drifts badly (e.g. #4D7AAF proofs ~19/255 too little
-  // red). The engine reconciles its own PCS Lab back to RGB correctly; our D65
-  // Lab→XYZ interpretation does not — the same lesson as the forward gotcha above.
-  const proof = revSRGB.transform(CE.color.CMYK(c.C, c.M, c.Y, c.K));
-  convert([proof.R / 255, proof.G / 255, proof.B / 255], sRGB, DisplayP3, _p3);
-  const cmykBg = `color(display-p3 ${cl3(_p3[0])} ${cl3(_p3[1])} ${cl3(_p3[2])})`;
+  // Color Bridge substitution: option on + this swatch has a promoted Pantone
+  // that ships its own Color Bridge build → bypass the ICC pathway entirely.
+  const promoted = index != null ? pantoneSelections.get(index) : null;
+  const bridge = cmyk.useColorBridge && promoted && promoted.cbCMYK && promoted.cbHex
+    ? promoted : null;
+
+  let label, cmykBg, oog;
+  if (bridge) {
+    const [C, M, Y, K] = bridge.cbCMYK;
+    label = `${C}-${M}-${Y}-${K}`;          // Pantone's own recipe, verbatim
+    cmykBg = bridge.cbHex;                   // Pantone's published soft-proof (sRGB hex)
+    oog = false;                             // a real Pantone build is in-gamut by definition
+  } else {
+    // Flag from true gamut membership (the LUT). The CMYK build comes from the
+    // biased conversion when the slider is engaged on an out-of-gamut colour.
+    oog = isOutOfCMYK(color);
+    const raw = convertColor(color);
+    const c = (cmyk.bias !== 0 && oog)
+      ? convertFromLab(biasedLab(raw, color, oog)).c : raw.c;
+    // Soft-proof appearance: reverse the FINAL CMYK build through the engine's own
+    // native '*sRGB' profile — the symmetric inverse of the forward '*sRGB' path,
+    // so the proof is Adobe-exact (and matches the sRGB swatch for in-gamut colours)
+    // — then express it in the P3 swatch container. We do NOT hand-roll
+    // CMYK→*LabD65→XYZ→P3: that drifts badly (e.g. #4D7AAF proofs ~19/255 too little
+    // red). The engine reconciles its own PCS Lab back to RGB correctly; our D65
+    // Lab→XYZ interpretation does not — the same lesson as the forward gotcha above.
+    const proof = revSRGB.transform(CE.color.CMYK(c.C, c.M, c.Y, c.K));
+    convert([proof.R / 255, proof.G / 255, proof.B / 255], sRGB, DisplayP3, _p3);
+    cmykBg = `color(display-p3 ${cl3(_p3[0])} ${cl3(_p3[1])} ${cl3(_p3[2])})`;
+    label = `${Math.round(c.C)}-${Math.round(c.M)}-${Math.round(c.Y)}-${Math.round(c.K)}`;
+  }
+
   cmykEl.style.background = cmykBg;
   cmykEl.style.setProperty('--region-bg', cmykBg);
 
-  const label = `${Math.round(c.C)}-${Math.round(c.M)}-${Math.round(c.Y)}-${Math.round(c.K)}`;
   const v = cmykEl.querySelector(".cmyk-v");
   if (v && v.textContent !== label) v.textContent = label;
 
   container.classList.toggle("out-of-cmyk", oog);
+  container.classList.toggle("cmyk-bridge", !!bridge);   // shows the "CB" badge
 }
 
 // ── Gamut LUT: max OKHSL saturation per (hue, lightness) cell ─────────
@@ -439,5 +461,18 @@ if (engineOK && boundaryToggle) {
   boundaryToggle.addEventListener("change", () => {
     cmyk.showBoundary = boundaryToggle.checked;
     syncBoundary();
+  });
+}
+
+// "Use Pantone Color Bridge values when possible": when on, a swatch whose
+// promoted Pantone carries a Color Bridge build shows that build verbatim
+// instead of the ICC conversion (see updateSwatchCMYK). A repaint re-evaluates
+// every swatch, so it picks up / drops the substitution immediately.
+const bridgeToggle = document.getElementById("cmyk-use-bridge");
+if (engineOK && bridgeToggle) {
+  cmyk.useColorBridge = bridgeToggle.checked;
+  bridgeToggle.addEventListener("change", () => {
+    cmyk.useColorBridge = bridgeToggle.checked;
+    if (cmyk.active) requestRender();
   });
 }

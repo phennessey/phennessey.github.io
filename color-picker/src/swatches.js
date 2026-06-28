@@ -43,7 +43,7 @@ function updateSwatch(index) {
   container.classList.toggle('out-of-srgb', outOfSRGB);
   container.classList.toggle('light', S.colors[index].L > MIDDLE_GRAY);
 
-  updateSwatchCMYK(container, S.colors[index]);
+  updateSwatchCMYK(container, S.colors[index], index);
 }
 
 function createSwatchDOM(index) {
@@ -74,7 +74,7 @@ function createSwatchDOM(index) {
         </div>
         <div class="color-swatch cmyk">
           <div class="swatch-top-bar">
-            <span class="cmyk-readout"><span class="cmyk-tag region-badge">CMYK</span><span class="cmyk-v">0-0-0-0</span><span class="icon gamut-warning cmyk-gamut">${GAMUT_ICON_SVG}</span></span>
+            <span class="cmyk-readout"><span class="cmyk-tag region-badge">CMYK</span><span class="cb-tag region-badge">CB</span><span class="cmyk-v">0-0-0-0</span><span class="icon gamut-warning cmyk-gamut">${GAMUT_ICON_SVG}</span></span>
           </div>
         </div>
       </div>
