@@ -16,7 +16,7 @@ import { updateBackground, updateMesh, setActive } from './selection.js';
 import { syncHexField, hexTextarea } from './hex.js';
 import { recordSnapshot } from './history.js';
 import { applyBgLevel } from './interactions.js';
-import { setCMYKActive } from './cmyk.js';
+import { setCMYKActive, setCMYKProfile, cmyk } from './cmyk.js';
 
 
 // Render patch
@@ -96,3 +96,8 @@ P.render();
 updateAddButton();
 recordSnapshot();
 loadPantoneLibrary();
+
+// Pre-warm the default CMYK profile (transforms + gamut LUT) in the background so
+// the first CMYK-section open is instant — no fetch/build delay. The build runs
+// after the profile fetch resolves, so it doesn't block the initial paint.
+setCMYKProfile(cmyk.profileKey);

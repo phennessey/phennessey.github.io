@@ -395,17 +395,25 @@ export function createPicker(S, cfg) {
       gamutLr = lr;
       gamutBoundary.setAttribute('d', gamutD);
     }
-    updateCMYKBoundary(stroke, opacity, lr);
+    updateCMYKBoundary(stroke, opacity, lr, L);
   }
 
   // CMYK boundary ring. Shares the sRGB ring's stroke colour/opacity but draws a
   // thicker line. The path is cached on lr; the cache is invalidated externally
   // when the active profile changes.
-  function updateCMYKBoundary(stroke, opacity, lr) {
+  // Near the lightness extremes the gamut is tiny and the trace turns jagged and
+  // unhelpful, so ramp the ring's alpha to 0 there. Each end is independent: alpha
+  // is 0 at the "out" lightness and reaches full at the "full" lightness.
+  const FADE_LO_OUT = 0.07, FADE_LO_FULL = 0.15;   // black end: 0 at 7%, full at 15% (slider position = lr)
+  const FADE_HI_FULL = 0.90, FADE_HI_OUT = 1.00;   // white end: full at 90%, 0 at 100%
+  function updateCMYKBoundary(stroke, opacity, lr, L) {
     if (!cmykShow || !cmykBoundaryFn) { cmykBoundary.setAttribute('opacity', '0'); return; }
-    cmykBoundary.setAttribute('opacity', '1');
+    const lo = (lr - FADE_LO_OUT) / (FADE_LO_FULL - FADE_LO_OUT);
+    const hi = (FADE_HI_OUT - lr) / (FADE_HI_OUT - FADE_HI_FULL);
+    const fade = Math.max(0, Math.min(1, lo, hi));
+    cmykBoundary.setAttribute('opacity', fade > 0 ? '1' : '0');
     cmykBoundary.setAttribute('stroke', stroke);
-    cmykBoundary.setAttribute('stroke-opacity', opacity);
+    cmykBoundary.setAttribute('stroke-opacity', (parseFloat(opacity) * fade).toFixed(3));
     if (lr !== cmykLr) {
       cmykD = cmykBoundaryPath(lr);
       cmykLr = lr;

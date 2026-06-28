@@ -378,7 +378,7 @@ body.light-bg .hex-input:focus {
 .handle {
   pointer-events: auto;
   cursor: pointer;
-  opacity: 0.3;
+  opacity: 0.1;
   transition: opacity 0.15s ease;
 }
 
@@ -814,6 +814,7 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   min-height: 0;
   flex-direction: row-reverse;   /* first DOM cell appears rightmost */
   position: relative;
+  cursor: pointer;     /* the field activates the swatch on click (promotion area) */
   /* No overflow clip here: each .chip-fill is bottom-anchored within its own
      full-height cell so bars never spill, and the .match-cap (●) sits just
      above the strip and must stay visible. The swatch-inner squircle handles
@@ -874,9 +875,9 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   color: rgba(0,0,0,0.5);
 }
 
-/* De-promote box next to the promoted name. Fully hidden until the user hovers
-   the name (or the box itself); no fade — it's instantly on or off, at full
-   alpha when shown. */
+/* De-promote box next to the promoted name. Always laid out (so the label's
+   position never shifts), but invisible until the user hovers the name (or the
+   box itself); no fade — it's instantly on or off, at full alpha when shown. */
 .promoted-close {
   position: relative;
   top: 0.5px;    /* nudge down to align with the label */
@@ -885,7 +886,7 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   width: 11px;   /* explicit width (square 16×16 icon) — Safari won't size an
                     auto-width box from the SVG's aspect ratio, so it must be set */
   padding-right: 4px;
-  display: none;
+  opacity: 0;    /* reserve layout space; revealed on hover (was display:none) */
   pointer-events: auto;
   cursor: pointer;
   color: rgba(255,255,255,1);
@@ -895,7 +896,7 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
    :hover fires only over the name / caution / close box — one selector reveals
    the close box across that whole group (drag from name to box never drops it). */
 .promoted-cell:hover .promoted-close {
-  display: block;
+  opacity: 1;
 }
 
 .promoted-cell .match-label {
@@ -903,13 +904,19 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   cursor: pointer;
 }
 
+/* In CMYK mode a promoted swatch centres its Pantone label — the CMYK swatch
+   takes the side/bottom, so the default top-right anchor would crowd it. */
+.swatches.cmyk-active .swatch-container:has(.match-cells.has-promotion) .promoted-cell {
+  left: 0;
+  justify-content: center;
+}
+
 .match-cell {
   flex: 1 1 0;
   min-width: 0;
   position: relative;     /* full strip height; the bar anchors to its bottom */
   container-type: inline-size;
-  cursor: default;        /* the empty strip above the bar isn't the chip; only
-                             .chip-fill (the bar) shows the pointer cursor */
+  cursor: pointer;        /* the whole pantone strip activates the swatch on click */
 }
 
 /* The colour bar within a chip column. Anchored to the strip bottom; its top
@@ -1028,6 +1035,13 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 }
 
 .match-cell.metallic .noise-overlay {
+  display: block;
+}
+
+/* Field-level metallic texture (first child of .match-cells, so it sits under the
+   chips): shown over the colour field while a metallic chip is hovered or a
+   metallic Pantone is promoted. */
+.match-cells.metallic-field > .match-field-noise {
   display: block;
 }
 
