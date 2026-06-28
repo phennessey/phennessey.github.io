@@ -6,6 +6,17 @@
 // swatch as a soft proof. CMYK "mode" is active while the CMYK tool section
 // is open (see main.js).
 //
+// SOFT-PROOF APPEARANCE: the swatch fill reverses the final CMYK build through
+// the engine's own native '*sRGB' profile (CMYK → '*sRGB'), the symmetric inverse
+// of the forward '*sRGB' path, then expresses that sRGB in the P3 swatch container.
+// This is the validated reference (cmyk-test/ spike) and matches Adobe's on-screen
+// proof exactly. Do NOT hand-roll CMYK → '*LabD65' → XYZ → Display-P3: that path
+// drifts badly (#4D7AAF proofs ~19/255 too little red) because our D65 Lab→XYZ
+// interpretation isn't interchangeable with the engine's PCS-Lab adaptation — the
+// same lesson as the forward '*sRGB' gotcha below. (As a soft proof on an sRGB-or-
+// wider display this also clips CMYK colours that exceed sRGB to the display gamut,
+// exactly as Adobe does; gamut membership is flagged separately by the LUT.)
+//
 // Pipeline — two paths, chosen by whether the colour is inside sRGB:
 //
 //   in-sRGB:  quantised 8-bit hex → jsColorEngine '*sRGB'
@@ -33,7 +44,7 @@
 // (see "True gamut membership" below), not the soft-proof round-trip.
 
 import {
-  convert, OKLab, XYZ, DisplayP3, OKLabToOKHSL, DisplayP3Gamut,
+  convert, OKLab, XYZ, DisplayP3, sRGB, OKLabToOKHSL, DisplayP3Gamut,
 } from "https://esm.sh/@texel/color@1.1.11?bundle";
 import { toOKLab, toe, computeP3AndSRGB } from "./color.js";
 import { els, P } from "./state.js";
@@ -82,7 +93,8 @@ export const cmyk = { active: false, profileKey: "gracol", ready: false, bias: 0
 
 let fwd = null;  // CIELAB(D65) → CMYK  (out-of-sRGB colours only)
 let fwdSRGB = null;  // native *sRGB → CMYK (in-sRGB colours; matches Adobe exactly)
-let rev = null;  // CMYK → CIELAB(D65)
+let rev = null;  // CMYK → CIELAB(D65)  (bias math only — see updateSwatchCMYK)
+let revSRGB = null;  // native CMYK → *sRGB (soft-proof appearance; Adobe-exact)
 let gamutLUT = null;          // Float32Array[LUT_L*LUT_H] of max OKHSL s, active profile
 const profileCache = {};
 const lutCache = {};          // gamut LUT per profile key (built once)
@@ -256,13 +268,21 @@ export function updateSwatchCMYK(container, color) {
 
   if (!cmyk.ready) return;   // transforms still loading; leave placeholder
 
-  // Flag from true gamut membership (the LUT). Build and proof fill come from the
+  // Flag from true gamut membership (the LUT). The CMYK build comes from the
   // biased conversion when the slider is engaged on an out-of-gamut colour.
   const oog = isOutOfCMYK(color);
   const raw = convertColor(color);
-  const { c, back } = (cmyk.bias !== 0 && oog)
-    ? convertFromLab(biasedLab(raw, color, oog)) : raw;
-  convert(labD65ToXYZ(back), XYZ, DisplayP3, _p3);
+  const c = (cmyk.bias !== 0 && oog)
+    ? convertFromLab(biasedLab(raw, color, oog)).c : raw.c;
+  // Soft-proof appearance: reverse the FINAL CMYK build through the engine's own
+  // native '*sRGB' profile — the symmetric inverse of the forward '*sRGB' path,
+  // so the proof is Adobe-exact (and matches the sRGB swatch for in-gamut colours)
+  // — then express it in the P3 swatch container. We do NOT hand-roll
+  // CMYK→*LabD65→XYZ→P3: that drifts badly (e.g. #4D7AAF proofs ~19/255 too little
+  // red). The engine reconciles its own PCS Lab back to RGB correctly; our D65
+  // Lab→XYZ interpretation does not — the same lesson as the forward gotcha above.
+  const proof = revSRGB.transform(CE.color.CMYK(c.C, c.M, c.Y, c.K));
+  convert([proof.R / 255, proof.G / 255, proof.B / 255], sRGB, DisplayP3, _p3);
   const cmykBg = `color(display-p3 ${cl3(_p3[0])} ${cl3(_p3[1])} ${cl3(_p3[2])})`;
   cmykEl.style.background = cmykBg;
   cmykEl.style.setProperty('--region-bg', cmykBg);
@@ -367,6 +387,7 @@ async function buildTransforms(key) {
   fwd = new CE.Transform(O); fwd.create("*LabD65", p, I);
   fwdSRGB = new CE.Transform(O); fwdSRGB.create("*sRGB", p, I);
   rev = new CE.Transform(O); rev.create(p, "*LabD65", I);
+  revSRGB = new CE.Transform(O); revSRGB.create(p, "*sRGB", I);
   gamutLUT = lutCache[key] || (lutCache[key] = buildGamutLUT(p));
 }
 
