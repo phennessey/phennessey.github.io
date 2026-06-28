@@ -12,7 +12,7 @@ import { S, P, els, pantoneSelections } from './state.js';
 import { TAU, svgEl, idxOf } from './picker.js';
 import { toe, toOKLab, computeP3AndSRGB } from './color.js';
 import { OKLabToOKHSL, OKHSLToOKLab, DisplayP3Gamut, convert, OKLab, DisplayP3 } from 'https://esm.sh/@texel/color@1.1.11?bundle';
-import { swatchEl } from './swatches.js';
+import { swatchEl, updateSwatch } from './swatches.js';
 import { flushPendingWheelSnapshot, recordSnapshot } from './history.js';
 
 const PANTONE_URL = new URL('../lib/Pantone_OKLAB.txt', import.meta.url);
@@ -77,13 +77,26 @@ async function loadPantoneLibrary() {
   const p3Check = [0, 0, 0];
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
-    const tab = line.indexOf('\t');
-    if (tab < 0) continue;
-    const name = line.slice(0, tab).trim();
-    const rest = line.slice(tab + 1).trim();
+    // Tab-separated columns: name, [OKLab], [C,M,Y,K], #hex. The last two are
+    // Pantone's own Color Bridge build + its published soft-proof hex, present
+    // ONLY for coated-process colours; every other library leaves them empty
+    // (the merged file still tabs them out, so split() yields blank strings).
+    const parts = line.split('\t');
+    if (parts.length < 2) continue;
+    const name = parts[0].trim();
     let lab;
-    try { lab = JSON.parse(rest); } catch { continue; }
+    try { lab = JSON.parse(parts[1].trim()); } catch { continue; }
     if (!Array.isArray(lab) || lab.length !== 3) continue;
+
+    // Color Bridge CMYK + hex, when this colour has them. Empty/whitespace
+    // columns (most of the library) → null, i.e. "no Pantone build available".
+    let cbCMYK = null, cbHex = null;
+    const cmykRaw = (parts[2] || '').trim();
+    if (cmykRaw) {
+      try { const a = JSON.parse(cmykRaw); if (Array.isArray(a) && a.length === 4) cbCMYK = a; } catch {}
+    }
+    const hexRaw = (parts[3] || '').trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(hexRaw)) cbHex = hexRaw.toUpperCase();
 
     const hsl = [0, 0, 0];
     OKLabToOKHSL(lab, DisplayP3Gamut, hsl);
@@ -97,7 +110,7 @@ async function loadPantoneLibrary() {
                  || p3Check[1] < -1e-4 || p3Check[1] > 1 + 1e-4
                  || p3Check[2] < -1e-4 || p3Check[2] > 1 + 1e-4;
 
-    pantoneData.push({ name, category: categoryOf(name), L, a: lab[1], b: lab[2], h, s, outOfP3, el: null });
+    pantoneData.push({ name, category: categoryOf(name), L, a: lab[1], b: lab[2], h, s, outOfP3, cbCMYK, cbHex, el: null });
   }
 
   buildDots();
@@ -569,6 +582,7 @@ function buildMatchCells(container) {
     pantoneSelections.delete(i);
     updateSwatchMatches(i);
     updateDots();
+    updateSwatch(i);   // refresh CMYK region (Color Bridge substitution depends on promotion)
     flushPendingWheelSnapshot();
     recordSnapshot();
   };
@@ -740,6 +754,7 @@ function wireMatchRowClick(matchRow, container) {
     else pantoneSelections.set(i, entry);
     updateSwatchMatches(i);
     updateDots();
+    updateSwatch(i);   // refresh CMYK region (Color Bridge substitution depends on promotion)
     flushPendingWheelSnapshot();
     recordSnapshot();
   });
