@@ -534,7 +534,7 @@ body.light-bg .libraries label:has(input:checked):hover {
 .pantone-options {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   margin-top: 8px;
   font-size: 10px;
   line-height: 1.26;
@@ -551,6 +551,7 @@ body.light-bg .libraries label:has(input:checked):hover {
 }
 .pantone-options input[type="checkbox"] {
   display: revert;
+  margin: 0;
   width: 11px;
   height: 11px;
   accent-color: rgba(255,255,255,0.7);
@@ -669,21 +670,7 @@ body.light-bg .libraries label:has(input:checked):hover {
 .swatches.cmyk-active .color-swatch.cmyk { display: block; }
 
 /* Side mode (default when CMYK is on): .color-row stays a row, so the CMYK swatch
-   is the right half; chips occupy .match-row below. The top-bar anchors LEFT and
-   reverses so the label reads first, icon trails. */
-.swatches.cmyk-active.show-matches .color-swatch.cmyk .swatch-top-bar,
-.swatches.cmyk-active:has(.match-cells.has-promotion) .color-swatch.cmyk .swatch-top-bar {
-  left: var(--swatch-padding);
-  right: auto;
-  flex-direction: row-reverse;
-}
-/* Row-reverse puts the gamut icon to the RIGHT of the value, so move its 4px
-   gap to the left side to match the icon↔P3-label spacing. */
-.swatches.cmyk-active.show-matches .color-swatch.cmyk .gamut-warning,
-.swatches.cmyk-active:has(.match-cells.has-promotion) .color-swatch.cmyk .gamut-warning {
-  padding-right: 0;
-  padding-left: 4px;
-}
+   is the right half; chips occupy .match-row below. */
 
 /* Bottom mode (no matches anywhere): .color-row becomes a column, so the CMYK
    swatch stacks under the colour and takes the bottom 50% (the chip space).
@@ -735,14 +722,14 @@ body.light-bg .swatch-container::before {
 /* Swatch readouts */
 .swatch-readout {
   font-size: 10px;
-  color: rgba(255,255,255,0.5);
+  color: rgba(255,255,255,0.3);
   user-select: none;
   transition: color 0.1s ease;
 }
 
 .swatch-container { container-type: inline-size; }
 
-.swatch-container.light .swatch-readout { color: rgba(0,0,0,0.5); }
+.swatch-container.light .swatch-readout { color: rgba(0,0,0,0.3); }
 
 .swatches.none-selected .swatch-readout,
 .swatches.none-selected .icon { visibility: hidden; }
@@ -750,12 +737,33 @@ body.light-bg .swatch-container::before {
 /* Flex strip at the top-right of each swatch. Used for both the sRGB
    top bar (delete + hex) and the P3 top bar (gamut icon + p3 readout).
    Absolutely positioned so it floats over the color region. */
+/* Rounded-rect region labels. White background; text takes on the swatch
+   background colour via --region-bg so it reads as a "knockout" stamp. */
+.region-badge {
+  display: inline-block;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.3);
+  border-radius: 4px;
+  padding: 1px 4px;
+
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+  color: var(--region-bg, rgba(0,0,0,0.5));
+  user-select: none;
+  pointer-events: none;
+}
+
 .swatch-top-bar {
   position: absolute;
   top: var(--swatch-padding);
-  right: var(--swatch-padding);
+  left: var(--swatch-padding);
   display: flex;
-  align-items: center;
+  align-items: baseline;
+  gap: 4px;
+  /* Leave room for the delete button at the right. */
+  padding-right: 20px;
   z-index: 1;
 }
 
@@ -774,8 +782,9 @@ body.light-bg .swatch-container::before {
   z-index: 1;
 }
 
-/* Icons inside a swatch-top-bar flow in the flex row instead. */
-.swatch-top-bar .icon {
+/* Icons inside a swatch-top-bar or promoted-cell flow in the flex row. */
+.swatch-top-bar .icon,
+.promoted-cell .icon {
   position: static;
   flex-shrink: 0;
 }
@@ -784,17 +793,17 @@ body.light-bg .swatch-container::before {
 .icon:hover { color: rgba(255,255,255,1); }
 .swatch-container.light .icon { color: rgba(0,0,0,0.5); }
 .swatch-container.light .icon:hover { color: rgba(0,0,0,1); }
+.swatch-container.light .region-badge { background: rgba(0,0,0,0.3); }
 
 .gamut-warning {
   display: none;
-  top: var(--swatch-padding);
-  right: var(--swatch-padding);
-  height: 10px;
+  height: 11px;
   /* Explicit width (= height × the 18/16 viewBox aspect). The inline SVG has no
      width/height attrs, so without this Safari resolves the icon box's width
      differently from Chrome and the glyph drifts far left of the readout. */
-  width: calc(10px * 18 / 16);
-  padding-right: 4px;
+  width: calc(11px * 18 / 16);
+  margin-top: 0px;
+  align-self: center;
 }
 .swatch-container.out-of-srgb .color-swatch.p3 .gamut-warning { display: block; }
 /* The CMYK gamut icon is driven by CMYK gamut, not sRGB. */
@@ -802,21 +811,19 @@ body.light-bg .swatch-container::before {
 
 
 
-/* Delete icon sits in the top-bar flex directly left of the hex readout.
-   Always occupies its layout slot; fades in on hover so the readout's
-   position never shifts. */
+/* Delete icon sits at the top-right of the sRGB region; fades in on hover. */
 .delete-swatch {
   top: var(--swatch-padding);
-  left: var(--swatch-padding);
+  right: var(--swatch-padding);
   width: 14px;
   height: 14px;
   opacity: 0;
   transition: opacity 0.1s ease;
 }
-/* Close box (top-left of the swatch) fades in while the swatch is hovered. */
-.swatch-container:has(.color-swatch:hover) .delete-swatch { opacity: 1; }
+.swatch-container:hover .delete-swatch { opacity: 1; }
 
 body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
+body.swatch-dragging .promoted-close { opacity: 0 !important; }
 
 /* When only one swatch remains, delete is a no-op. */
 .swatches > .swatch-container:only-child .delete-swatch {
@@ -886,10 +893,12 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 .promoted-cell {
   position: absolute;
   top: 0;
+  left: 0;
   right: 0;
   z-index: 2;
   display: flex;
-  align-items: center;
+  align-items: baseline;
+  gap: 4px;
   padding: var(--swatch-padding);
   pointer-events: none;
   color: rgba(255,255,255,0.5);
@@ -900,6 +909,7 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 .match-cells.has-promotion .promoted-cell {
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;
   transition: opacity 0.2s ease;
 }
 .swatch-container.light .promoted-cell {
@@ -910,13 +920,12 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
    position never shifts), but invisible until the user hovers the name (or the
    box itself); no fade — it's instantly on or off, at full alpha when shown. */
 .promoted-close {
-  position: relative;
-  top: 0.5px;    /* nudge down to align with the label */
   flex-shrink: 0;
   height: 11px;
   width: 11px;   /* explicit width (square 16×16 icon) — Safari won't size an
                     auto-width box from the SVG's aspect ratio, so it must be set */
-  padding-right: 4px;
+  align-self: center;
+  margin-top: -0.5px;
   opacity: 0;    /* reserve layout space; revealed on hover (was display:none) */
   pointer-events: auto;
   cursor: pointer;
@@ -931,16 +940,11 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 }
 
 .promoted-cell .match-label {
-  pointer-events: auto;
-  cursor: pointer;
+  white-space: nowrap;
+  text-align: left;
+  pointer-events: none;
 }
 
-/* In CMYK mode a promoted swatch centres its Pantone label — the CMYK swatch
-   takes the side/bottom, so the default top-right anchor would crowd it. */
-.swatches.cmyk-active .swatch-container:has(.match-cells.has-promotion) .promoted-cell {
-  left: 0;
-  justify-content: center;
-}
 
 .match-cell {
   flex: 1 1 0;
@@ -1038,11 +1042,11 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
    not the empty strip above the bar); the promoted caution brightens with the
    whole promoted-cell group — name, caution, or close box. */
 .match-cell:has(.chip-fill:hover, .chip-gamut-warning:hover) .chip-gamut-warning,
-.promoted-cell:hover .promoted-gamut-warning {
+.promoted-gamut-warning:hover {
   color: rgba(255,255,255,1);
 }
 .swatch-container.light .match-cell:has(.chip-fill:hover, .chip-gamut-warning:hover) .chip-gamut-warning,
-.swatch-container.light .promoted-cell:hover .promoted-gamut-warning {
+.swatch-container.light .promoted-gamut-warning:hover {
   color: rgba(0,0,0,1);
 }
 
@@ -1134,10 +1138,6 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
   color: rgba(255,255,255,1);
 }
 
-.promoted-cell:hover .match-label {
-  color: rgba(255,255,255,1);
-}
-.swatch-container.light .promoted-cell:hover .match-label { color: rgba(0,0,0,1); }
 
 .swatch-container.light .match-label { color: rgba(0,0,0,0.5); }
 .swatch-container.light .match-cell .match-label { color: rgba(0,0,0,0.3); }
@@ -1224,12 +1224,11 @@ body.swatch-dragging .swatch-container .delete-swatch { opacity: 0 !important; }
 /* Out-of-P3 caution beside the promoted name (top-right overlay): small, left of
    the label. Keeps a pointer cursor on hover. */
 .promoted-gamut-warning {
-  position: relative;
-  top: 0.5px;    /* nudge down to align with the label */
   flex-shrink: 0;
-  height: 10px;                  /* 1px shorter */
-  width: calc(10px * 18 / 16);   /* keep the 18:16 aspect ratio */
-  padding-right: 4px;
+  height: 11px;
+  width: calc(11px * 18 / 16);
+  margin-top: 0.5px;
+  align-self: center;
   pointer-events: auto;
   cursor: pointer;
 }
@@ -1278,14 +1277,14 @@ body.disc-dragging,   body.disc-dragging * {
 .p3-readout {
   display: none;            /* -> flex when out-of-srgb */
   flex-flow: row nowrap;
+  align-items: baseline;
   justify-content: flex-end;
   gap: 0 4px;
   user-select: none;
   font-size: 10px;
   line-height: 13px;
-  color: rgba(255,255,255,0.5);
-  pointer-events: auto;
-  cursor: pointer;
+  color: rgba(255,255,255,0.3);
+  pointer-events: none;
   transition: color 0.1s ease;
 }
 .p3-readout > span { white-space: nowrap; }
@@ -1301,15 +1300,9 @@ body.disc-dragging,   body.disc-dragging * {
 }
 
 .swatch-container.out-of-srgb .p3-readout { display: flex; }
-.swatch-container.light .p3-readout       { color: rgba(0,0,0,0.5); }
+.swatch-container.light .p3-readout       { color: rgba(0,0,0,0.3); }
 .swatches.none-selected .p3-readout       { visibility: hidden; }
 
-.color-swatch.p3 .swatch-top-bar:has(.p3-readout:hover, .gamut-warning:hover) .p3-readout {
-  color: rgba(255,255,255,1);
-}
-.swatch-container.light .color-swatch.p3 .swatch-top-bar:has(.p3-readout:hover, .gamut-warning:hover) .p3-readout {
-  color: rgba(0,0,0,1);
-}
 .swatches.none-selected .p3-readout       { visibility: hidden; }
 
 /* CMYK readout (label "CMYK c-m-y-k") — mirrors the P3 readout, but is shown
@@ -1317,19 +1310,20 @@ body.disc-dragging,   body.disc-dragging * {
 .cmyk-readout {
   display: flex;
   flex-flow: row nowrap;
+  align-items: baseline;
   justify-content: flex-end;
   gap: 0 4px;
   user-select: none;
   font-size: 10px;
   line-height: 13px;
-  color: rgba(255,255,255,0.5);
+  color: rgba(255,255,255,0.3);
   pointer-events: none;
 }
 .cmyk-readout > span { white-space: nowrap; }
 @container (max-width: 150px) {
   .cmyk-readout { flex-direction: column; align-items: flex-end; line-height: 11px; }
 }
-.swatch-container.light .cmyk-readout { color: rgba(0,0,0,0.5); }
+.swatch-container.light .cmyk-readout { color: rgba(0,0,0,0.3); }
 .swatches.none-selected .cmyk-readout { visibility: hidden; }
 
 /* CMYK section: ICC profile picker */

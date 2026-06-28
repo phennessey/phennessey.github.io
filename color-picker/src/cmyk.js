@@ -238,7 +238,9 @@ export function updateSwatchCMYK(container, color) {
   const { c, back } = (cmyk.bias !== 0 && oog)
     ? convertFromLab(biasedLab(raw, color, oog)) : raw;
   convert(labD65ToXYZ(back), XYZ, DisplayP3, _p3);
-  cmykEl.style.background = `color(display-p3 ${cl3(_p3[0])} ${cl3(_p3[1])} ${cl3(_p3[2])})`;
+  const cmykBg = `color(display-p3 ${cl3(_p3[0])} ${cl3(_p3[1])} ${cl3(_p3[2])})`;
+  cmykEl.style.background = cmykBg;
+  cmykEl.style.setProperty('--region-bg', cmykBg);
 
   const label = `${Math.round(c.C)}-${Math.round(c.M)}-${Math.round(c.Y)}-${Math.round(c.K)}`;
   const v = cmykEl.querySelector(".cmyk-v");

@@ -20,8 +20,12 @@ function updateSwatch(index) {
   if (!container) return;
   const { p3Css, p3Str, srgbCss, hex, outOfSRGB } = computeP3AndSRGB(S.colors[index]);
 
-  container.querySelector('.color-swatch.srgb').style.background = srgbCss;
-  container.querySelector('.color-swatch.p3').style.background   = p3Css;
+  const srgbSwatchEl = container.querySelector('.color-swatch.srgb');
+  srgbSwatchEl.style.background = srgbCss;
+  srgbSwatchEl.style.setProperty('--region-bg', srgbCss);
+  const p3SwatchEl = container.querySelector('.color-swatch.p3');
+  p3SwatchEl.style.background = p3Css;
+  p3SwatchEl.style.setProperty('--region-bg', p3Css);
   // The chip strip's backdrop (swatch colour, or promoted Pantone colour) is
   // owned by updateSwatchMatches, which knows the promotion state.
 
@@ -53,25 +57,24 @@ function createSwatchDOM(index) {
 
   container.innerHTML = `
     <div class="swatch-inner">
+      <span class="icon delete-swatch">${CLOSE_ICON_SVG}</span>
       <div class="color-row">
         <div class="color-stack">
-          <div class="color-swatch srgb" style="background:${srgbCss}">
-            <span class="icon delete-swatch">${CLOSE_ICON_SVG}</span>
+          <div class="color-swatch srgb" style="background:${srgbCss};--region-bg:${srgbCss}">
             <div class="swatch-top-bar">
+              <span class="region-badge">sRGB</span>
               <div class="swatch-readout srgb">${hex}</div>
             </div>
           </div>
-          <div class="color-swatch p3" style="background:${p3Css}">
+          <div class="color-swatch p3" style="background:${p3Css};--region-bg:${p3Css}">
             <div class="swatch-top-bar">
-              <span class="icon gamut-warning">${GAMUT_ICON_SVG}</span>
-              <span class="p3-readout"><span class="p3-tag">P3</span><span class="p3-v"></span><span class="p3-v"></span><span class="p3-v"></span></span>
+              <span class="p3-readout"><span class="p3-tag region-badge">P3</span><span class="p3-v"></span><span class="p3-v"></span><span class="p3-v"></span><span class="icon gamut-warning">${GAMUT_ICON_SVG}</span></span>
             </div>
           </div>
         </div>
         <div class="color-swatch cmyk">
           <div class="swatch-top-bar">
-            <span class="icon gamut-warning cmyk-gamut">${GAMUT_ICON_SVG}</span>
-            <span class="cmyk-readout"><span class="cmyk-tag">CMYK</span><span class="cmyk-v">0-0-0-0</span></span>
+            <span class="cmyk-readout"><span class="cmyk-tag region-badge">CMYK</span><span class="cmyk-v">0-0-0-0</span><span class="icon gamut-warning cmyk-gamut">${GAMUT_ICON_SVG}</span></span>
           </div>
         </div>
       </div>
@@ -126,7 +129,7 @@ function addLastDuplicate() {
 }
 
 function wireSwatch(container) {
-  [container.querySelector('.gamut-warning'), container.querySelector('.p3-readout')].forEach(el => {
+  [container.querySelector('.gamut-warning')].forEach(el => {
     el?.addEventListener('click', e => {
       e.stopPropagation();
       const ci = idxOf(container), { h, L } = S.colors[ci];

@@ -471,7 +471,10 @@ function updateSwatchMatches(index) {
     // strip shows that chip's colour instead (see chip hover preview below),
     // and restores to this when the pointer leaves.
     matchCellsEl._baseBg = bg;
-    if (!matchCellsEl._chipHover) matchCellsEl.style.background = bg;
+    if (!matchCellsEl._chipHover) {
+      matchCellsEl.style.background = bg;
+      matchCellsEl.style.setProperty('--region-bg', bg);
+    }
   }
 
   const { displayOrder, markDomIdx } = buildDisplayOrder(kept, targetHue, closestByHue(kept, targetHue));
@@ -569,22 +572,26 @@ function buildMatchCells(container) {
     flushPendingWheelSnapshot();
     recordSnapshot();
   };
-  const promotedClose = document.createElement('span');
-  promotedClose.className = 'icon promoted-close';
-  promotedClose.innerHTML = CLOSE_ICON_SVG;
-  promotedClose.addEventListener('click', depromote);
-  promotedCell.appendChild(promotedClose);
-  // Out-of-P3 caution beside the promoted name (close · caution · name). Shown
-  // only when the promoted pantone is out of gamut (toggled in renderPromoted).
+  // Badge left of the name
+  const promotedBadge = document.createElement('span');
+  promotedBadge.className = 'region-badge';
+  promotedBadge.textContent = 'Pantone';
+  promotedCell.appendChild(promotedBadge);
+  const promotedLabel = document.createElement('div');
+  promotedLabel.className = 'match-label';
+  promotedCell.appendChild(promotedLabel);
+  // Out-of-P3 caution to the right of the name
   const promotedWarn = document.createElement('span');
   promotedWarn.className = 'icon promoted-gamut-warning';
   promotedWarn.innerHTML = GAMUT_ICON_SVG;
   promotedWarn.style.display = 'none';
   promotedCell.appendChild(promotedWarn);
-  const promotedLabel = document.createElement('div');
-  promotedLabel.className = 'match-label';
-  promotedLabel.addEventListener('click', depromote);   // clicking the name also de-promotes
-  promotedCell.appendChild(promotedLabel);
+  // Close button at the far right
+  const promotedClose = document.createElement('span');
+  promotedClose.className = 'icon promoted-close';
+  promotedClose.innerHTML = CLOSE_ICON_SVG;
+  promotedClose.addEventListener('click', depromote);
+  promotedCell.appendChild(promotedClose);
   matchCells.appendChild(promotedCell);
 
   for (let i = 0; i < MAX_MATCHES; i++) {
@@ -752,7 +759,7 @@ els.swatches.addEventListener('pointerover', ev => {
   // pantone is out of gamut, surfaces the note.
   const chipHit = ev.target.closest('.chip-fill, .chip-gamut-warning');
   const onChip = chipHit && chipHit.closest('.match-cell.out-of-p3');
-  const onPromoted = ev.target.closest('.promoted-cell.out-of-p3');
+  const onPromoted = ev.target.closest('.promoted-gamut-warning');
   setStatus(onChip || onPromoted ? GAMUT_STATUS : '');
 });
 els.swatches.addEventListener('pointerleave', () => setStatus(''));
