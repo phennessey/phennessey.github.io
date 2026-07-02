@@ -4,8 +4,8 @@
 // The colour wheel / lightbar renderer and the createPicker factory.
 // Pure colour-space math lives in color.js.
 
-import { convert, OKLab, DisplayP3 } from "https://esm.sh/@texel/color@1.1.11?bundle";
 import {
+  convert, OKLab, DisplayP3,
   toe, toOKLab, to255, clamp01, sForChroma, chromaOf, inSRGB, cuspL,
 } from './color.js';
 

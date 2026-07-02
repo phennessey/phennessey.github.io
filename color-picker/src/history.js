@@ -1,10 +1,12 @@
 // Undo/redo: snapshotting swatch state and restoring it.
 
 import { HISTORY_LIMIT, WHEEL_DEBOUNCE_MS } from './constants.js';
-import { S, P, els, pantoneSelections } from './state.js';
-import { exitMultiSelect, deactivateSwatch, setActive, setHandles, applyMultiVisuals, computeFrozenEdges } from './selection.js';
-import { removeColorAt, createSwatchDOM, reindex, updateSwatch, wireSwatch, updateAddButton, swatchEl } from './swatches.js';
-import { findPantoneByName, syncLibraryCheckboxState, updateMatchesVisibility, libraryPanel } from './pantone.js';
+import { S, els, pantoneSelections } from './state.js';
+import {
+  setPalette, reindex, updateSwatch, updateAddButton, swatchEl,
+  exitMultiSelect, deactivateSwatch, setActive, setHandles, applyMultiVisuals, computeFrozenEdges,
+} from './swatches.js';
+import { findPantoneByName, syncLibraryCheckboxState, updateMatchesVisibility } from './pantone.js';
 import { requestRender } from './util.js';
 import { hexTextarea } from './hex.js';
 
@@ -88,17 +90,7 @@ function restoreSnapshot(snap) {
 
   pantoneSelections.clear();
 
-  while (S.colors.length > snap.length) removeColorAt(S.colors.length - 1);
-
-  for (let i = 0; i < S.colors.length; i++) {
-    S.colors[i] = { h: snap[i].h, s: snap[i].s, L: snap[i].L };
-  }
-  for (let i = S.colors.length; i < snap.length; i++) {
-    S.colors.push({ h: snap[i].h, s: snap[i].s, L: snap[i].L });
-    P.createHandle(i);
-    P.createLightHandle(i);
-    wireSwatch(createSwatchDOM(i));
-  }
+  setPalette(snap);
 
   const neededCategories = new Set();
   for (let i = 0; i < snap.length; i++) {

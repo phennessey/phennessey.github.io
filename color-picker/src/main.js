@@ -10,9 +10,8 @@
 // the initial setup.
 
 import { S, P, els } from './state.js';
-import { updateSwatch, createSwatchDOM, wireSwatch, swatchEl, updateAddButton } from './swatches.js';
+import { updateSwatch, createSwatchDOM, wireSwatch, swatchEl, updateAddButton, updateBackground, updateMesh, setActive } from './swatches.js';
 import { updateSwatchMatches, updateDots, scheduleMatches, loadPantoneLibrary } from './pantone.js';
-import { updateBackground, updateMesh, setActive } from './selection.js';
 import { syncHexField, hexTextarea } from './hex.js';
 import { recordSnapshot } from './history.js';
 import { applyBgLevel } from './interactions.js';
