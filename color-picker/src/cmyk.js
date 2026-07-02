@@ -6,37 +6,39 @@
 // swatch as a soft proof. CMYK "mode" is active while the CMYK tool section
 // is open (see main.js).
 //
-// SOFT-PROOF APPEARANCE: the swatch fill reverses the final CMYK build through
-// the engine's own native '*sRGB' profile (CMYK → '*sRGB'), the symmetric inverse
-// of the forward '*sRGB' path, then expresses that sRGB in the P3 swatch container.
-// This is the validated reference (cmyk-test/ spike) and matches Adobe's on-screen
-// proof exactly. Do NOT hand-roll CMYK → '*LabD65' → XYZ → Display-P3: that path
-// drifts badly (#4D7AAF proofs ~19/255 too little red) because our D65 Lab→XYZ
-// interpretation isn't interchangeable with the engine's PCS-Lab adaptation — the
-// same lesson as the forward '*sRGB' gotcha below. (As a soft proof on an sRGB-or-
-// wider display this also clips CMYK colours that exceed sRGB to the display gamut,
-// exactly as Adobe does; gamut membership is flagged separately by the LUT.)
+// SOFT-PROOF APPEARANCE: the swatch fill reverses the final CMYK build to the
+// engine's NATIVE PCS — ICC CIELAB(D50) via '*LabD50' — then goes CIELAB(D50) →
+// XYZ(D50) → Bradford D50→D65 → Display-P3 (@texel). Because CMYK is always inside
+// P3, this renders every printable colour exactly, in-gamut or not, and — unlike a
+// CMYK → '*sRGB' reverse — it does NOT clip builds that print outside sRGB but
+// inside P3 (the cyan/green edge), so the CMYK swatch matches the P3 region as a P3
+// pipeline should. Validated over the whole device cube: it reproduces the engine's
+// own CMYK → '*sRGB' (Adobe-exact) to <1/255 for every in-sRGB build.
 //
-// Pipeline — two paths, chosen by whether the colour is inside sRGB:
+// The reverse MUST use the raw '*LabD50' PCS, NOT '*LabD65': the engine's '*LabD65'
+// pre-adapts D50→D65 with its own CAT, and reinterpreting that with a texel-D65
+// white double-adapts (the old "~19/255 too little red" drift on #4D7AAF). Using
+// the untouched D50 PCS plus one explicit Bradford removes the ambiguity. Gamut
+// membership is still flagged separately by the LUT.
+//
+// Pipeline — forward build has two paths, chosen by whether the colour is in sRGB:
 //
 //   in-sRGB:  quantised 8-bit hex → jsColorEngine '*sRGB'
 //                → ICC CMYK profile (BToA, relative colorimetric + BPC) → C M Y K
-//   out-of-sRGB: OKLab → XYZ(D65) [@texel/color] → CIELAB(D65) → '*LabD65'
+//   out-of-sRGB: OKLab → XYZ(D65) [@texel] → Bradford D65→D50 → CIELAB(D50, the
+//                engine's native PCS) → '*LabD50'
 //                → ICC CMYK profile (BToA, relative colorimetric + BPC) → C M Y K
 //
-// CRITICAL: in-sRGB colours MUST go through the engine's native '*sRGB' profile,
-// not the hand-rolled CIELAB(D65) → '*LabD65' path. The '*sRGB' profile reproduces
-// Adobe's exact sRGB→CMYK readout (Photoshop/InDesign, relative-colorimetric + BPC
-// — e.g. #9628ff → 70-85-0-0 in GRACoL2006); the '*LabD65' path drifts a few points
-// (→ 65-88-0-0) because feeding "D65 Lab → D50 PCS" adapts differently than the sRGB
-// profile's own primaries/adaptation. The '*sRGB' path is the validated reference
-// (see cmyk-test/ spike). '*LabD65' is only a fallback for colours OUTSIDE sRGB,
-// which the engine has no RGB device profile for (no '*P3').
-//
-// jsColorEngine owns the D65→D50 PCS adaptation internally, so we never do a
-// Bradford step by hand (the classic double-adapt bug). The D65 white used for
-// our CIELAB is anchored to @texel/color's own OKLab-white so there is zero
-// scaling drift between the two libraries.
+// CRITICAL — never use '*LabD65' for either direction: the engine's '*LabD65'
+// pre-adapts the D50 PCS to D65 with its own CAT, so feeding/reading it against
+// @texel's D65 white double-adapts and drifts (forward #9628ff → 65-88-0-0 vs the
+// correct 70-85-0-0; reverse #4D7AAF proofs ~17/255 too little red). We instead
+// hand the engine its RAW native PCS ('*LabD50') and do ONE explicit Bradford
+// D65↔D50 ourselves — drift-free (validated over the whole device cube to <1/255
+// vs the '*sRGB' path where they overlap). For in-sRGB colours the forward build
+// still prefers '*sRGB' (fed 8-bit RGB) because it reproduces Adobe's exact
+// sRGB→CMYK readout; '*LabD50' is the fallback for colours OUTSIDE sRGB, which the
+// engine has no RGB device profile for (no '*P3').
 //
 // Gamut membership (the out-of-gamut flag + the boundary ring) is a SEPARATE
 // concern from the soft-proof appearance above: it's decided against the
@@ -44,7 +46,7 @@
 // (see "True gamut membership" below), not the soft-proof round-trip.
 
 import {
-  convert, OKLab, XYZ, DisplayP3, sRGB, OKLabToOKHSL, DisplayP3Gamut,
+  convert, OKLab, XYZ, DisplayP3, OKLabToOKHSL, DisplayP3Gamut,
   toOKLab, toe, computeP3AndSRGB,
 } from "./color.js";
 import { els, P, pantoneSelections } from "./state.js";
@@ -91,21 +93,39 @@ const GAMUT_EPS = 0.012;  // s tolerance: covers the LUT's slight (~0.01) under-
 // lightness toward it (sacrificing chroma, never hue).
 export const cmyk = { active: false, profileKey: "gracol", ready: false, bias: 0, showBoundary: false, useColorBridge: false };
 
-let fwd = null;  // CIELAB(D65) → CMYK  (out-of-sRGB colours only)
+let fwd = null;  // CIELAB(D50, native PCS) → CMYK  (out-of-sRGB colours only)
 let fwdSRGB = null;  // native *sRGB → CMYK (in-sRGB colours; matches Adobe exactly)
-let rev = null;  // CMYK → CIELAB(D65)  (bias math only — see updateSwatchCMYK)
-let revSRGB = null;  // native CMYK → *sRGB (soft-proof appearance; Adobe-exact)
+let revLab50 = null;  // CMYK → native PCS CIELAB(D50): soft-proof P3 fill + bias `back`
 let gamutLUT = null;          // Float32Array[LUT_L*LUT_H] of max OKHSL s, active profile
 const profileCache = {};
 const lutCache = {};          // gamut LUT per profile key (built once)
 
-// ── CIELAB(D65) anchored to @texel/color's own white ─────────────────
-const _w = [0, 0, 0];
-if (engineOK) convert([1, 0, 0], OKLab, XYZ, _w);
-const Xn = _w[0] || 0.9504559, Yn = _w[1] || 1, Zn = _w[2] || 1.0890578;
+// ── Native PCS = CIELAB(D50). Every engine Lab interchange (forward build,
+//    soft-proof reverse, bias `back`, gamut LUT) uses the engine's raw D50 PCS;
+//    we Bradford-adapt to/from XYZ(D65) ourselves in ONE step so it stays
+//    interchangeable with @texel's D65 primaries. Using the engine's pre-adapted
+//    '*LabD65' plus a texel-D65 reinterpretation double-adapts and drifts — see
+//    the header block.
 const EPS = 216 / 24389, KAP = 24389 / 27;
 const fLab    = t => (t > EPS ? Math.cbrt(t) : (KAP * t + 16) / 116);
 const fLabInv = f => { const f3 = f * f * f; return f3 > EPS ? f3 : (116 * f - 16) / KAP; };
+
+const PCS_D50 = [0.96422, 1, 0.82521];   // engine's ICC PCS white
+const BRADFORD_D50_D65 = [
+  [ 0.9555766, -0.0230393,  0.0631636],
+  [-0.0282895,  1.0099416,  0.0210077],
+  [ 0.0122982, -0.0204830,  1.3299098],
+];
+const BRADFORD_D65_D50 = [
+  [ 1.0478112,  0.0228866, -0.0501270],
+  [ 0.0295424,  0.9904844, -0.0170491],
+  [-0.0092345,  0.0150436,  0.7521316],
+];
+const mul3 = (M, v) => [
+  M[0][0] * v[0] + M[0][1] * v[1] + M[0][2] * v[2],
+  M[1][0] * v[0] + M[1][1] * v[1] + M[1][2] * v[2],
+  M[2][0] * v[0] + M[2][1] * v[1] + M[2][2] * v[2],
+];
 
 const _xyz   = [0, 0, 0];
 const _p3    = [0, 0, 0];
@@ -113,14 +133,30 @@ const _p3    = [0, 0, 0];
 // sRGB gamma → linear (IEC 61966-2-1)
 const linearize = v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
 
+/** XYZ(D65) → CIELAB(D50, native PCS): Bradford to the PCS D50 white, then Lab. */
+function xyzD65ToLabD50(xyz65) {
+  const [X, Y, Z] = mul3(BRADFORD_D65_D50, xyz65);
+  const fx = fLab(X / PCS_D50[0]), fy = fLab(Y / PCS_D50[1]), fz = fLab(Z / PCS_D50[2]);
+  return { L: 116 * fy - 16, a: 500 * (fx - fy), b: 200 * (fy - fz) };
+}
+
+/** CIELAB(D50, native PCS) {L,a,b} → XYZ(D65): Bradford D50→D65. @texel then
+ *  takes XYZ(D65) to Display-P3 / OKLab. */
+function labD50ToXYZd65(L, a, b) {
+  const fy = (L + 16) / 116, fx = fy + a / 500, fz = fy - b / 200;
+  const xyz50 = [fLabInv(fx) * PCS_D50[0], fLabInv(fy) * PCS_D50[1], fLabInv(fz) * PCS_D50[2]];
+  return mul3(BRADFORD_D50_D65, xyz50);
+}
+
 /**
- * Picker colour {h,s,L} → CIELAB(D65) {L,a,b}.
+ * Picker colour {h,s,L} → CIELAB(D50, the engine's native PCS) {L,a,b}.
  *
  * When the colour is within sRGB, derive XYZ from the quantised 8-bit hex so
  * the CMYK values match Photoshop's readout for the same hex code exactly.
- * Only fall back to the continuous P3 path for colours outside sRGB.
+ * Only fall back to the continuous P3 path for colours outside sRGB. Either way
+ * we land in XYZ(D65), then Bradford to the PCS D50 white.
  */
-function colorToLabD65(color, info) {
+function colorToLab(color, info) {
   const { hex, outOfSRGB } = info || computeP3AndSRGB(color);
   if (!outOfSRGB) {
     const n = parseInt(hex.slice(1), 16);
@@ -135,31 +171,24 @@ function colorToLabD65(color, info) {
     const lab = toOKLab(color.h, color.s, toe(color.L));
     convert(lab, OKLab, XYZ, _xyz);
   }
-  const fx = fLab(_xyz[0] / Xn), fy = fLab(_xyz[1] / Yn), fz = fLab(_xyz[2] / Zn);
-  return { L: 116 * fy - 16, a: 500 * (fx - fy), b: 200 * (fy - fz) };
+  return xyzD65ToLabD50(_xyz);
 }
 
-/** CIELAB(D65) {L,a,b} → XYZ (D65) array. */
-function labD65ToXYZ(lab) {
-  const fy = (lab.L + 16) / 116, fx = fy + lab.a / 500, fz = fy - lab.b / 200;
-  return [fLabInv(fx) * Xn, fLabInv(fy) * Yn, fLabInv(fz) * Zn];
-}
-
-/** Forward + reverse from a CIELAB(D65) input: the CMYK build and its printable
+/** Forward + reverse from a CIELAB(D50) input: the CMYK build and its printable
  *  Lab (the soft-proof appearance). Gamut membership is decided separately by the
  *  LUT, so no round-trip ΔE is needed here. */
 function convertFromLab(lab) {
-  const c    = fwd.transform(CE.color.Lab(lab.L, lab.a, lab.b));   // {C,M,Y,K} 0–100
-  const back = rev.transform(CE.color.CMYK(c.C, c.M, c.Y, c.K));   // printable {L,a,b}
+  const c    = fwd.transform(CE.color.Lab(lab.L, lab.a, lab.b));       // {C,M,Y,K} 0–100
+  const back = revLab50.transform(CE.color.CMYK(c.C, c.M, c.Y, c.K));  // printable {L,a,b}
   return { lab, c, back };
 }
 
 /** Forward + reverse for a picker colour (the raw, unbiased conversion).
  *  In-sRGB colours convert through the engine's native '*sRGB' profile (Adobe-exact);
- *  only colours outside sRGB fall back to the CIELAB(D65) → '*LabD65' path. */
+ *  only colours outside sRGB fall back to the native D50 PCS ('*LabD50') path. */
 function convertColor(color) {
   const info = computeP3AndSRGB(color);
-  const lab = colorToLabD65(color, info);
+  const lab = colorToLab(color, info);
   let c;
   if (!info.outOfSRGB && fwdSRGB) {
     const n = parseInt(info.hex.slice(1), 16);
@@ -167,7 +196,7 @@ function convertColor(color) {
   } else {
     c = fwd.transform(CE.color.Lab(lab.L, lab.a, lab.b));
   }
-  const back = rev.transform(CE.color.CMYK(c.C, c.M, c.Y, c.K));
+  const back = revLab50.transform(CE.color.CMYK(c.C, c.M, c.Y, c.K));
   return { lab, c, back };
 }
 
@@ -186,20 +215,19 @@ function convertColor(color) {
 // standard build; from there the input lerps (in OKLab) toward that endpoint.
 // In-gamut colours have nothing to trade → no-op.
 
-// CIELAB(D65) ↔ OKLab(D65) through the shared XYZ anchor.
-function labD65ToOk(lab, out = [0, 0, 0]) {
-  convert(labD65ToXYZ(lab), XYZ, OKLab, out);
+// CIELAB(D50, native PCS) ↔ OKLab through XYZ(D65).
+function labD50ToOk(lab, out = [0, 0, 0]) {
+  convert(labD50ToXYZd65(lab.L, lab.a, lab.b), XYZ, OKLab, out);
   return out;
 }
 const _okxyz = [0, 0, 0];
-function okToLabD65(ok) {
+function okToLabD50(ok) {
   convert(ok, OKLab, XYZ, _okxyz);
-  const fx = fLab(_okxyz[0] / Xn), fy = fLab(_okxyz[1] / Yn), fz = fLab(_okxyz[2] / Zn);
-  return { L: 116 * fy - 16, a: 500 * (fx - fy), b: 200 * (fy - fz) };
+  return xyzD65ToLabD50(_okxyz);
 }
 
 /**
- * The CIELAB(D65) input to feed the forward transform after applying the bias.
+ * The CIELAB(D50) input to feed the forward transform after applying the bias.
  * 0 = standard relative-colorimetric clip (raw.back). Toward 1, lerp (in OKLab)
  * to an in-gamut endpoint at the TARGET hue + lightness carrying the max chroma
  * the gamut allows there (from the LUT, held a hair inside the ring) — so hue
@@ -212,9 +240,9 @@ function biasedLab(raw, color, oog) {
   const maxS = Math.max(0, lutLookup(color.h, Lh) - GAMUT_EPS);  // just inside the ring
   const e = toOKLab(color.h, maxS, Lh);
   const endp = [e[0], e[1], e[2]];          // copy: toOKLab returns a shared scratch
-  const std = labD65ToOk(raw.back);
+  const std = labD50ToOk(raw.back);
   const t = cmyk.bias;
-  return okToLabD65([
+  return okToLabD50([
     std[0] + (endp[0] - std[0]) * t,
     std[1] + (endp[1] - std[1]) * t,
     std[2] + (endp[2] - std[2]) * t,
@@ -293,15 +321,14 @@ export function updateSwatchCMYK(container, color, index) {
     const raw = convertColor(color);
     const c = (cmyk.bias !== 0 && oog)
       ? convertFromLab(biasedLab(raw, color, oog)).c : raw.c;
-    // Soft-proof appearance: reverse the FINAL CMYK build through the engine's own
-    // native '*sRGB' profile — the symmetric inverse of the forward '*sRGB' path,
-    // so the proof is Adobe-exact (and matches the sRGB swatch for in-gamut colours)
-    // — then express it in the P3 swatch container. We do NOT hand-roll
-    // CMYK→*LabD65→XYZ→P3: that drifts badly (e.g. #4D7AAF proofs ~19/255 too little
-    // red). The engine reconciles its own PCS Lab back to RGB correctly; our D65
-    // Lab→XYZ interpretation does not — the same lesson as the forward gotcha above.
-    const proof = revSRGB.transform(CE.color.CMYK(c.C, c.M, c.Y, c.K));
-    convert([proof.R / 255, proof.G / 255, proof.B / 255], sRGB, DisplayP3, _p3);
+    // Soft-proof appearance: reverse the FINAL CMYK build to the engine's native
+    // PCS CIELAB(D50), then CIELAB(D50) → XYZ(D65) → Display-P3. This matches the
+    // engine's own CMYK→'*sRGB' (Adobe-exact) to <1/255 for in-sRGB builds, and
+    // renders builds outside sRGB but inside P3 at their true P3 chroma instead of
+    // clipping them to the sRGB box — so the CMYK swatch agrees with the P3 region.
+    // See the header block for why '*LabD50' (raw PCS), not '*LabD65', is used.
+    const proof = revLab50.transform(CE.color.CMYK(c.C, c.M, c.Y, c.K));
+    convert(labD50ToXYZd65(proof.L, proof.a, proof.b), XYZ, DisplayP3, _p3);
     cmykBg = `color(display-p3 ${cl3(_p3[0])} ${cl3(_p3[1])} ${cl3(_p3[2])})`;
     label = `${Math.round(c.C)}-${Math.round(c.M)}-${Math.round(c.Y)}-${Math.round(c.K)}`;
   }
@@ -365,12 +392,12 @@ function fillGaps(data) {
  *  and CMYK lives within Display-P3 so 1 is the meaningful ceiling. */
 function buildGamutLUT(profile) {
   const src = new CE.Transform({ dataFormat: "object", BPC: false });
-  src.create(profile, "*LabD65", CE.eIntent.relative);   // CMYK device → Lab(D65)
+  src.create(profile, "*LabD50", CE.eIntent.relative);   // CMYK device → Lab(D50, native PCS)
   const data = new Float32Array(LUT_H * LUT_L);
   const ok = [0, 0, 0], hsl = [0, 0, 0];
   const add = (C, M, Y, K) => {
     const lab = src.transform(CE.color.CMYK(C, M, Y, K));
-    convert(labD65ToXYZ(lab), XYZ, OKLab, ok);
+    convert(labD50ToXYZd65(lab.L, lab.a, lab.b), XYZ, OKLab, ok);
     OKLabToOKHSL(ok, DisplayP3Gamut, hsl);               // [H 0–360, s, L 0–1]
     const s = Math.min(1, hsl[1]);
     const hb = ((Math.floor(hsl[0] / 360 * LUT_H) % LUT_H) + LUT_H) % LUT_H;
@@ -406,10 +433,9 @@ async function loadProfile(key) {
 async function buildTransforms(key) {
   const p = await loadProfile(key);
   const I = CE.eIntent.relative, O = { dataFormat: "object", BPC: true };
-  fwd = new CE.Transform(O); fwd.create("*LabD65", p, I);
+  fwd = new CE.Transform(O); fwd.create("*LabD50", p, I);
   fwdSRGB = new CE.Transform(O); fwdSRGB.create("*sRGB", p, I);
-  rev = new CE.Transform(O); rev.create(p, "*LabD65", I);
-  revSRGB = new CE.Transform(O); revSRGB.create(p, "*sRGB", I);
+  revLab50 = new CE.Transform(O); revLab50.create(p, "*LabD50", I);
   gamutLUT = lutCache[key] || (lutCache[key] = buildGamutLUT(p));
 }
 

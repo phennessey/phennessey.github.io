@@ -699,7 +699,11 @@ body.light-bg .swatch-container::before {
 
 .swatch-container.light .swatch-readout { color: rgba(0,0,0,0.3); }
 
+/* When no swatch is selected, hide all per-swatch readouts, icons, and region
+   badges uniformly. .region-badge is the single source of truth for every badge
+   (sRGB, P3, CMYK, CB, Pantone) so no badge needs its own inline hide rule. */
 .swatches.none-selected .swatch-readout,
+.swatches.none-selected .region-badge,
 .swatches.none-selected .icon { visibility: hidden; }
 
 /* Flex strip at the top-right of each swatch. Used for both the sRGB
