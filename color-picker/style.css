@@ -870,7 +870,10 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
   z-index: 2;
   display: flex;
   align-items: baseline;
-  gap: 4px;
+  /* gap:0, not 4px — a flex gap is dead (un-hoverable) space between items. The
+     4px spacing is recreated as padding INSIDE each item below (box-sizing stays
+     content-box, so glyphs don't move) so adjacent hit boxes touch seamlessly. */
+  gap: 0;
   padding: var(--swatch-padding);
   pointer-events: none;
   color: rgba(255,255,255,0.5);
@@ -881,16 +884,29 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
 .match-cells.has-promotion .promoted-cell {
   opacity: 1;
   visibility: visible;
-  pointer-events: auto;
   transition: opacity 0.2s ease;
+}
+/* The cell stays pointer-events:none (full-width absolute bar) so its empty area
+   isn't a hover target; only the real content — badge, name, caution, close —
+   opts back in. Hovering any of those still triggers .promoted-cell:hover (which
+   reveals the close box) because :hover applies to a hovered child's ancestors. */
+.match-cells.has-promotion .promoted-cell .region-badge,
+.match-cells.has-promotion .promoted-cell .match-label { pointer-events: auto; }
+/* The gamut icon bridges to the close box on its right (its left is met by the
+   label's right padding). box-sizing:content-box keeps the glyph from shrinking.
+   The close box is last, so its left edge already touches the previous hit box. */
+.promoted-cell .promoted-gamut-warning {
+  box-sizing: content-box;
+  padding-right: 4px;
 }
 .swatch-container.light .promoted-cell {
   color: rgba(0,0,0,0.5);
 }
 
 /* De-promote box next to the promoted name. Always laid out (so the label's
-   position never shifts), but invisible until the user hovers the name (or the
-   box itself); no fade — it's instantly on or off, at full alpha when shown. */
+   position never shifts), but invisible until the user hovers the group. Colour
+   is left to the .icon rules, so — like the swatch close box (.delete-swatch) —
+   it sits at 0.3 alpha when revealed and only reaches full alpha on direct hover. */
 .promoted-close {
   flex-shrink: 0;
   height: 12px;
@@ -901,11 +917,9 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
   opacity: 0;    /* reserve layout space; revealed on hover (was display:none) */
   pointer-events: auto;
   cursor: pointer;
-  color: rgba(255,255,255,1);
 }
-.swatch-container.light .promoted-close { color: rgba(0,0,0,1); }
-/* The promoted-cell is pointer-events:none with interactive children, so
-   :hover fires only over the name / caution / close box — one selector reveals
+/* The promoted-cell is pointer-events:none with interactive children, so :hover
+   fires only over the badge / name / caution / close box — one selector reveals
    the close box across that whole group (drag from name to box never drops it). */
 .promoted-cell:hover .promoted-close {
   opacity: 1;
@@ -917,6 +931,10 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
   pointer-events: none;
   /* Rest alpha matches the sRGB/P3/CMYK readouts (0.3), not the base label's 0.5. */
   color: rgba(255,255,255,0.3);
+  /* Recreate the former 4px flex gap as padding so the hit box touches the badge
+     (left) and the gamut/close icon (right) with no dead space between. */
+  box-sizing: content-box;
+  padding: 0 4px;
 }
 .swatch-container.light .promoted-cell .match-label { color: rgba(0,0,0,0.3); }
 
