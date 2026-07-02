@@ -45,8 +45,8 @@
 
 import {
   convert, OKLab, XYZ, DisplayP3, sRGB, OKLabToOKHSL, DisplayP3Gamut,
-} from "https://esm.sh/@texel/color@1.1.11?bundle";
-import { toOKLab, toe, computeP3AndSRGB } from "./color.js";
+  toOKLab, toe, computeP3AndSRGB,
+} from "./color.js";
 import { els, P, pantoneSelections } from "./state.js";
 import { requestRender } from "./util.js";
 

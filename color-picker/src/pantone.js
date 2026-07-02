@@ -10,8 +10,10 @@ import {
 } from './constants.js';
 import { S, P, els, pantoneSelections } from './state.js';
 import { TAU, svgEl, idxOf } from './picker.js';
-import { toe, toOKLab, computeP3AndSRGB } from './color.js';
-import { OKLabToOKHSL, OKHSLToOKLab, DisplayP3Gamut, convert, OKLab, DisplayP3 } from 'https://esm.sh/@texel/color@1.1.11?bundle';
+import {
+  toe, toOKLab, computeP3AndSRGB,
+  OKLabToOKHSL, OKHSLToOKLab, DisplayP3Gamut, convert, OKLab, DisplayP3,
+} from './color.js';
 import { swatchEl, updateSwatch } from './swatches.js';
 import { flushPendingWheelSnapshot, recordSnapshot } from './history.js';
 
@@ -824,8 +826,6 @@ els.swatches.addEventListener('pointerout', ev => {
 
 // Library filter checkboxes + pantone option checkboxes
 
-const libraryPanel = document.getElementById('library-panel');
-
 const metallicTextureCb = document.getElementById('toggle-metallic-texture');
 if (metallicTextureCb) {
   metallicTextureCb.addEventListener('change', () => {
@@ -881,5 +881,5 @@ function updateMatchesVisibility() {
 export {
   clearPromotedOnEdit, loadPantoneLibrary, updateSwatchMatches, updateDots,
   scheduleMatches, updateMatchesVisibility, syncLibraryCheckboxState,
-  findPantoneByName, pantoneP3Css, buildMatchCells, matchRowObserver, libraryPanel,
+  findPantoneByName, pantoneP3Css, buildMatchCells, matchRowObserver,
 };

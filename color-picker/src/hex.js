@@ -2,10 +2,9 @@
 // entered hex lists back into the palette.
 
 import { MAX_COLORS } from './constants.js';
-import { S, P, pantoneSelections } from './state.js';
+import { S, pantoneSelections } from './state.js';
 import { srgbToOKHSL } from './color.js';
-import { swatchEl, removeColorAt, createSwatchDOM, wireSwatch, reindex, updateSwatch, updateAddButton } from './swatches.js';
-import { exitMultiSelect, setActive } from './selection.js';
+import { swatchEl, setPalette, reindex, updateSwatch, updateAddButton, exitMultiSelect, setActive } from './swatches.js';
 import { updateSwatchMatches } from './pantone.js';
 import { flushPendingWheelSnapshot, recordSnapshot } from './history.js';
 
@@ -42,17 +41,7 @@ function applyHexInput(rgbList) {
   pantoneSelections.clear();
   for (const k of priorPromotedKeys) updateSwatchMatches(k);
 
-  while (S.colors.length > rgbList.length) removeColorAt(S.colors.length - 1);
-
-  for (let i = 0; i < Math.min(S.colors.length, rgbList.length); i++) {
-    S.colors[i] = { ...srgbToOKHSL(...rgbList[i]) };
-  }
-  for (let i = S.colors.length; i < rgbList.length; i++) {
-    S.colors.push({ ...srgbToOKHSL(...rgbList[i]) });
-    P.createHandle(i);
-    P.createLightHandle(i);
-    wireSwatch(createSwatchDOM(i));
-  }
+  setPalette(rgbList.map(rgb => srgbToOKHSL(...rgb)));
 
   S.activeIndex = -1;
   reindex();

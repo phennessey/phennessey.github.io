@@ -243,9 +243,9 @@ body.light-bg .top-ui {
      course instead of the box snapping to content size early. */
   max-width: 120px;
 }
-/* CMYK section holds a wide ICC profile dropdown — needs more room. */
-.section-cmyk.open { max-width: 240px; }
-/* Pantone options text is wider than the default 120px cap. */
+/* CMYK holds a wide ICC profile dropdown; Pantone's options text is wider
+   than the default 120px cap — both need more room. */
+.section-cmyk.open,
 .section-pantone.open { max-width: 240px; }
 .collapsible.open .section-label { display: block; }
 .collapsible.open .section-body { display: flex; }
@@ -505,26 +505,20 @@ body.light-bg .libraries label:hover {
   color: var(--ui-label-hover);
   border-color: var(--ui-label-hover);
 }
-.libraries label:has(input:checked) {
-  background: rgba(255,255,255,0.5);
-  border-color: transparent;
-  color: var(--body-bg, #666);
-}
-.libraries label:has(input:checked):hover {
-  background: rgba(255,255,255,1);
-  border-color: transparent;
-  color: var(--body-bg, #666);
-}
-body.light-bg .libraries label:has(input:checked) {
-  background: rgba(0,0,0,0.5);
-  border-color: transparent;
-  color: var(--body-bg, #666);
-}
+/* Checked pill: knocked-out text over a filled background. The shared
+   declarations are grouped (incl. the light-bg/:hover selectors, so they keep
+   beating the label:hover border/colour rules above); only the fill differs. */
+.libraries label:has(input:checked),
+.libraries label:has(input:checked):hover,
+body.light-bg .libraries label:has(input:checked),
 body.light-bg .libraries label:has(input:checked):hover {
-  background: rgba(0,0,0,1);
   border-color: transparent;
   color: var(--body-bg, #666);
 }
+.libraries label:has(input:checked) { background: rgba(255,255,255,0.5); }
+.libraries label:has(input:checked):hover { background: rgba(255,255,255,1); }
+body.light-bg .libraries label:has(input:checked) { background: rgba(0,0,0,0.5); }
+body.light-bg .libraries label:has(input:checked):hover { background: rgba(0,0,0,1); }
 
 .library-panel label:has(input:disabled) {
   opacity: 0.35;
@@ -558,32 +552,6 @@ body.light-bg .libraries label:has(input:checked):hover {
   cursor: pointer;
   flex-shrink: 0;
 }
-
-/* Global chip-cutoff slider. */
-.deltae-control {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px;
-}
-.deltae-name { flex: 0 0 auto; }
-.deltae-slider {
-  flex: 1 1 auto;
-  min-width: 0;
-  margin: 0;
-  accent-color: currentColor;
-  cursor: pointer;
-}
-.deltae-slider:disabled { opacity: 0.35; cursor: default; }
-.deltae-value {
-  font-family: 'Roboto Mono', monospace;
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.7;
-  white-space: nowrap;
-}
-.library-panel:has(.deltae-slider:disabled) .deltae-name,
-.library-panel:has(.deltae-slider:disabled) .deltae-value { opacity: 0.35; }
 
 /* Swatches */
 .swatches {
@@ -1276,40 +1244,10 @@ body.disc-dragging,   body.disc-dragging * {
   user-select: none !important;
 }
 
-/* P3 Readout */
-.p3-readout {
-  display: none;            /* -> flex when out-of-srgb */
-  flex-flow: row nowrap;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: 0 4px;
-  user-select: none;
-  font-size: 10px;
-  line-height: 13px;
-  color: rgba(255,255,255,0.3);
-  pointer-events: none;
-  transition: color 0.1s ease;
-}
-.p3-readout > span { white-space: nowrap; }
-
-/* Narrow swatch: stack the readout as four lines (P3 / r / g / b) instead
-   of letting one line overflow. The swatch-container is the size container. */
-@container (max-width: 150px) {
-  .p3-readout {
-    flex-direction: column;
-    align-items: flex-end;
-    line-height: 11px;
-  }
-}
-
-.swatch-container.out-of-srgb .p3-readout { display: flex; }
-.swatch-container.light .p3-readout       { color: rgba(0,0,0,0.3); }
-.swatches.none-selected .p3-readout       { visibility: hidden; }
-
-.swatches.none-selected .p3-readout       { visibility: hidden; }
-
-/* CMYK readout (label "CMYK c-m-y-k") — mirrors the P3 readout, but is shown
-   whenever CMYK mode is on (its swatch region is hidden otherwise). */
+/* P3 + CMYK readouts share one style. Only their reveal differs: P3 shows when
+   the colour is out-of-srgb; CMYK shows whenever CMYK mode is on (its whole
+   swatch region is hidden otherwise). */
+.p3-readout,
 .cmyk-readout {
   display: flex;
   flex-flow: row nowrap;
@@ -1322,11 +1260,28 @@ body.disc-dragging,   body.disc-dragging * {
   color: rgba(255,255,255,0.3);
   pointer-events: none;
 }
-.cmyk-readout > span { white-space: nowrap; }
-@container (max-width: 150px) {
-  .cmyk-readout { flex-direction: column; align-items: flex-end; line-height: 11px; }
+.p3-readout {
+  display: none;            /* -> flex when out-of-srgb */
+  transition: color 0.1s ease;
 }
+.p3-readout > span,
+.cmyk-readout > span { white-space: nowrap; }
+
+/* Narrow swatch: stack the readout as four lines (P3 / r / g / b) instead
+   of letting one line overflow. The swatch-container is the size container. */
+@container (max-width: 150px) {
+  .p3-readout,
+  .cmyk-readout {
+    flex-direction: column;
+    align-items: flex-end;
+    line-height: 11px;
+  }
+}
+
+.swatch-container.out-of-srgb .p3-readout { display: flex; }
+.swatch-container.light .p3-readout,
 .swatch-container.light .cmyk-readout { color: rgba(0,0,0,0.3); }
+.swatches.none-selected .p3-readout,
 .swatches.none-selected .cmyk-readout { visibility: hidden; }
 
 /* "CB" badge: a second region badge beside "CMYK", shown only when the build is

@@ -11,6 +11,7 @@ import {
   OKLabToOKHSL,
   OKLab,
   OKLCH,
+  XYZ,
   DisplayP3,
   sRGB,
   DisplayP3Gamut,
@@ -19,6 +20,11 @@ import {
   findCuspOKLCH,
   MapToL,
 } from "https://esm.sh/@texel/color@1.1.11?bundle";
+
+// Single home for the vendored @texel/color dependency: every other module
+// imports these through color.js, so the pinned version above is the only
+// place the URL lives.
+export { convert, OKHSLToOKLab, OKLabToOKHSL, OKLab, XYZ, DisplayP3, sRGB, DisplayP3Gamut };
 
 // ── Numeric helpers ──────────────────────────────────────────────────
 

@@ -1,13 +1,14 @@
-// Swatch DOM: building/updating swatch elements, the +/delete buttons,
-// and wiring per-swatch click/drag interactions.
+// Swatch DOM & selection: building/updating swatch elements, the +/delete
+// buttons, wiring per-swatch click/drag interactions, and active/multi-select
+// state — selection visuals, the mesh that connects multi-selected handles,
+// and the picker-background tint.
 
 import { MIDDLE_GRAY, MAX_COLORS, GAMUT_ICON_SVG, CLOSE_ICON_SVG } from './constants.js';
-import { S, P, els, pantoneSelections } from './state.js';
-import { idxOf } from './picker.js';
-import { computeP3AndSRGB } from './color.js';
+import { S, P, els, pantoneSelections, handlePos } from './state.js';
+import { idxOf, meshEdgesFor } from './picker.js';
+import { computeP3AndSRGB, neutralP3 } from './color.js';
 import { updateSwatchCMYK, isOutOfCMYK } from './cmyk.js';
 import { buildMatchCells, matchRowObserver, updateSwatchMatches } from './pantone.js';
-import { setActive, toggleMultiSelect, activateSwatch, exitMultiSelect } from './selection.js';
 import { syncModKeys, requestRender } from './util.js';
 import { flushPendingWheelSnapshot, recordSnapshot } from './history.js';
 
@@ -112,6 +113,22 @@ function removeColorAt(i) {
   for (const [k, p] of remapped) pantoneSelections.set(k, p);
 }
 
+// Rebuild the palette to match `list` (colour descriptors {h,s,L}): trim
+// extra swatches, overwrite the ones that remain, and create handles + swatch
+// DOM for any new indices. Callers own selection, promotion and history.
+function setPalette(list) {
+  while (S.colors.length > list.length) removeColorAt(S.colors.length - 1);
+  for (let i = 0; i < S.colors.length; i++) {
+    S.colors[i] = { h: list[i].h, s: list[i].s, L: list[i].L };
+  }
+  for (let i = S.colors.length; i < list.length; i++) {
+    S.colors.push({ h: list[i].h, s: list[i].s, L: list[i].L });
+    P.createHandle(i);
+    P.createLightHandle(i);
+    wireSwatch(createSwatchDOM(i));
+  }
+}
+
 
 // Swatch management
 
@@ -128,50 +145,41 @@ function addLastDuplicate() {
   return i;
 }
 
+// Shared behaviour of the two gamut icons: binary-search the largest OKHSL
+// saturation (same hue/lightness) still inside the gamut per `isOut`, apply
+// it, drop any promoted Pantone, repaint, and snapshot. `hi` is the search's
+// upper bound — 1 for sRGB, the current s for CMYK.
+function pullIntoGamut(container, isOut, hi) {
+  const ci = idxOf(container), { h, L } = S.colors[ci];
+  let lo = 0;
+  for (let i = 0; i < 16; i++) {
+    const mid = (lo + hi) / 2;
+    if (isOut({ h, s: mid, L })) hi = mid; else lo = mid;
+  }
+  S.colors[ci] = { ...S.colors[ci], h, s: lo, L };
+  if (pantoneSelections.has(ci)) {
+    pantoneSelections.delete(ci);
+    updateSwatchMatches(ci);
+  }
+  if (ci === S.activeIndex) P.invalidateCache();
+  updateSwatch(ci);
+  P.render();
+  flushPendingWheelSnapshot();
+  recordSnapshot();
+}
+
 function wireSwatch(container) {
-  [container.querySelector('.gamut-warning')].forEach(el => {
-    el?.addEventListener('click', e => {
-      e.stopPropagation();
-      const ci = idxOf(container), { h, L } = S.colors[ci];
-      let lo = 0, hi = 1;
-      for (let i = 0; i < 16; i++) {
-        const mid = (lo + hi) / 2;
-        if (computeP3AndSRGB({ h, s: mid, L }).outOfSRGB) hi = mid; else lo = mid;
-      }
-      S.colors[ci] = { ...S.colors[ci], h, s: lo, L };
-      if (pantoneSelections.has(ci)) {
-        pantoneSelections.delete(ci);
-        updateSwatchMatches(ci);
-      }
-      if (ci === S.activeIndex) P.invalidateCache();
-      updateSwatch(ci);
-      P.render();
-      flushPendingWheelSnapshot();
-      recordSnapshot();
-    });
+  // sRGB gamut icon (the first .gamut-warning in the swatch is the P3 bar's):
+  // reduce chroma at the same hue/lightness until the colour falls inside sRGB.
+  container.querySelector('.gamut-warning')?.addEventListener('click', e => {
+    e.stopPropagation();
+    pullIntoGamut(container, c => computeP3AndSRGB(c).outOfSRGB, 1);
   });
 
-  // CMYK gamut icon: reduce chroma (OKHSL saturation) at the same hue/lightness
-  // until the colour falls inside the CMYK gamut — the largest in-gamut s. Mirrors
-  // the sRGB gamut icon above.
+  // CMYK gamut icon: same gesture against the CMYK gamut.
   container.querySelector('.cmyk-gamut')?.addEventListener('click', e => {
     e.stopPropagation();
-    const ci = idxOf(container), { h, L } = S.colors[ci];
-    let lo = 0, hi = S.colors[ci].s;
-    for (let i = 0; i < 16; i++) {
-      const mid = (lo + hi) / 2;
-      if (isOutOfCMYK({ h, s: mid, L })) hi = mid; else lo = mid;
-    }
-    S.colors[ci] = { ...S.colors[ci], h, s: lo, L };
-    if (pantoneSelections.has(ci)) {
-      pantoneSelections.delete(ci);
-      updateSwatchMatches(ci);
-    }
-    if (ci === S.activeIndex) P.invalidateCache();
-    updateSwatch(ci);
-    P.render();
-    flushPendingWheelSnapshot();
-    recordSnapshot();
+    pullIntoGamut(container, isOutOfCMYK, S.colors[idxOf(container)].s);
   });
 
   container.querySelector('.delete-swatch').addEventListener('click', e => {
@@ -228,4 +236,129 @@ addBtn?.addEventListener('click', e => {
 
 
 
-export { swatchEl, updateSwatch, createSwatchDOM, reindex, removeColorAt, wireSwatch, updateAddButton };
+// Multi-select visuals
+
+function clearMultiVisuals() {
+  els.swatches.querySelectorAll('.swatch-container.multi-selected')
+    .forEach(el => el.classList.remove('multi-selected'));
+  P.handles.forEach(h => h.classList.remove('multi'));
+  P.lightHandles.forEach(h => h.classList.remove('multi'));
+}
+
+function applyMultiVisuals() {
+  for (const i of S.multiSelect) {
+    swatchEl(i)?.classList.add('multi-selected');
+    P.handles[i]?.classList.add('multi');
+    P.lightHandles[i]?.classList.add('multi');
+  }
+}
+
+
+// Mesh edges
+
+function computeFrozenEdges() {
+  const indices = [...S.multiSelect];
+  const pts = indices.map(i => handlePos(S.colors[i]));
+  const localEdges = meshEdgesFor(pts);
+  S.frozenEdges = localEdges.map(([a, b]) => [indices[a], indices[b]]);
+}
+
+function updateMesh() {
+  if (!S.isMultiMode() || !S.frozenEdges) { P.clearMesh(); return; }
+  const guidesActive = (S.pointerInPickerWrap || S.dragging) && (S.modKeys.shift || S.modKeys.meta);
+  if (guidesActive) { P.clearMesh(); return; }
+  const refIdx = S.multiSelect.has(S.activeIndex) ? S.activeIndex : [...S.multiSelect][0];
+  const stroke = S.colors[refIdx]?.L > MIDDLE_GRAY ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)';
+  P.updateMesh(S.frozenEdges, i => handlePos(S.colors[i]), stroke);
+}
+
+
+// Background
+
+function updateBackground() {
+  // Nothing selected: drop the lightness tint and let the page background show
+  // through the color map panel (the frame + body behind it are the body bg).
+  if (S.activeIndex === -1) {
+    els.pickerWrap.style.backgroundColor = 'transparent';
+    els.pickerWrap.classList.remove('light-bg');
+    return;
+  }
+  const L = S.colors[S.activeIndex]?.L ?? 0.5;
+  els.pickerWrap.style.backgroundColor = neutralP3(L);
+  els.pickerWrap.classList.toggle('light-bg', L > MIDDLE_GRAY);
+}
+
+
+// Selection management
+
+function setHandles(i, active) {
+  P.setHandleActive(P.handles[i], active);
+  P.setHandleActive(P.lightHandles[i], active);
+}
+
+function activateSwatch(i) {
+  setHandles(i, true);
+  swatchEl(i)?.classList.add('selected');
+}
+
+function deactivateSwatch(i) {
+  if (i === -1) return;
+  setHandles(i, false);
+  swatchEl(i)?.classList.remove('selected');
+}
+
+function clearAllHandleActive() {
+  P.handles.forEach(h => h?.classList.remove('active'));
+  P.lightHandles.forEach(h => h?.classList.remove('active'));
+}
+
+function exitMultiSelect() {
+  S.multiSelect.clear();
+  S.frozenEdges = null;
+  clearMultiVisuals();
+  updateMesh();
+}
+
+function setActive(index, { silent = false } = {}) {
+  exitMultiSelect();
+  deactivateSwatch(S.activeIndex);
+  clearAllHandleActive();
+  S.activeIndex = index;
+  els.swatches.classList.remove('none-selected');
+  activateSwatch(index);
+  els.discOverlay.appendChild(P.handles[index]);
+  els.lightbarOverlay.appendChild(P.lightHandles[index]);
+  if (!silent) requestRender();
+}
+
+function toggleMultiSelect(index) {
+  if (!S.isMultiMode() && S.activeIndex !== -1 && S.activeIndex !== index) {
+    swatchEl(S.activeIndex)?.classList.remove('selected');
+    setHandles(S.activeIndex, false);
+    S.multiSelect.add(S.activeIndex);
+  }
+  if (!S.multiSelect.has(index)) S.multiSelect.add(index);
+  applyMultiVisuals();
+  if (S.multiSelect.has(index)) S.activeIndex = index;
+  els.swatches.classList.remove('none-selected');
+  computeFrozenEdges();
+  requestRender();
+}
+
+function deselect() {
+  exitMultiSelect();
+  deactivateSwatch(S.activeIndex);
+  clearAllHandleActive();
+  S.activeIndex = -1;
+  els.swatches.classList.add('none-selected');
+  P.render();
+}
+
+
+
+export { swatchEl, updateSwatch, createSwatchDOM, reindex, removeColorAt, setPalette, wireSwatch, updateAddButton };
+export {
+  setActive, toggleMultiSelect, deselect, setHandles, deactivateSwatch,
+  activateSwatch, exitMultiSelect, applyMultiVisuals, computeFrozenEdges,
+  updateMesh, updateBackground,
+};
