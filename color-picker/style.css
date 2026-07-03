@@ -826,7 +826,7 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
   position: relative;
   cursor: pointer;     /* the field activates the swatch on click (promotion area) */
   /* No overflow clip here: each .chip-fill is bottom-anchored within its own
-     full-height cell so bars never spill, and the .hue-marker (●) sits just
+     full-height cell so bars never spill, and the .hue-marker triangle sits just
      above the strip and must stay visible. The swatch-inner squircle handles
      the rounded bottom corners.
      Background (the swatch's own colour) is set in JS so the field reads as
@@ -1173,11 +1173,11 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
 }
 .match-cell.hue-match .hue-marker { opacity: 1; }
 
-/* Hover cap: a solid upward triangle (same 12×6 shape as the hue-marker
-   .hue-marker) sitting on the top edge of the chip being hovered (--chip-top is
-   the bar's top offset). Coloured like the chip label's hover state. */
-.match-cell::after {
-  content: "";
+/* Chip cap: a solid upward triangle (same 12×6 shape as the .hue-marker) sitting
+   on the top edge of the chip's bar (--chip-top is the bar's top offset). Shown
+   while the chip is hovered, and kept persistently on the promoted chip. Coloured
+   like the chip label's hover state. */
+.promoted-chip {
   position: absolute;
   top: calc(var(--chip-top, 0%) - 6px);   /* base flush with the bar's top edge */
   left: 0;
@@ -1190,29 +1190,27 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
   z-index: 3;
   transition: opacity 0.3s ease;
 }
-.swatch-container.light .match-cell::after { background: rgba(0,0,0,0.2); }
-.match-cell:has(.chip-fill:hover, .chip-gamut-warning:hover)::after { opacity: 1; }
-/* On promotion the chips collapse — kill the hover dot instantly (no fade). */
-.swatches.hide-chips-on-promote .match-cells.has-promotion .match-cell::after {
+.swatch-container.light .promoted-chip { background: rgba(0,0,0,0.2); }
+.match-cell:has(.chip-fill:hover, .chip-gamut-warning:hover) .promoted-chip { opacity: 1; }
+/* On promotion the chips collapse — kill the hover cap instantly (no fade). */
+.swatches.hide-chips-on-promote .match-cells.has-promotion .promoted-chip {
   opacity: 0 !important;
   transition: none;
 }
-/* Keep the ::after triangle persistently visible on the promoted chip. */
-.match-cells.has-promotion .match-cell.promoted-match::after { opacity: 1; }
-/* Hide it instantly at the start of any chip transition; fades back in (0.1s) when done. */
-.match-cells.chips-transitioning .match-cell.promoted-match::after {
-  opacity: 0;
-  transition: opacity 0s;
-}
+/* Keep the cap persistently visible on the promoted chip. In hide-matches mode
+   the rule above (!important) still wins and collapses it with the chips; in
+   show-chips mode the bars don't move on promote, so the cap just stays put — no
+   transition-hide, which is what used to flash it off-then-on for 250ms. */
+.match-cells.has-promotion .match-cell.promoted-match .promoted-chip { opacity: 1; }
 
 .swatch-container.light .hue-marker { color: rgba(0,0,0,0.3); }
 
 .swatches.none-selected .hue-marker { opacity: 0; }
 .swatches.none-selected .match-label { visibility: hidden; }
 
-/* Hide the hue-marker caps on all chips during promotion (original behaviour). */
-.match-cells.has-promotion .hue-marker,
-.match-cell.promoted-match .hue-marker { opacity: 0; }
+/* Chips collapse on promotion only in hide-matches mode — hide their hue-markers
+   with them. In show-chips mode the chips stay, so the hue indicator stays too. */
+.swatches.hide-chips-on-promote .match-cells.has-promotion .hue-marker { opacity: 0; }
 
 /* Out-of-P3 caution beside the promoted name (top-right overlay): small, left of
    the label. Keeps a pointer cursor on hover. */
