@@ -617,9 +617,15 @@ function buildMatchCells(container) {
     // chip to its right, so it never draws a right border (see CSS).
     if (i === 0) cell.classList.add('chip-rightmost');
     cell.style.display = 'none';
-    const cap = document.createElement('div');
-    cap.className = 'hue-marker';
-    cell.appendChild(cap);
+    // Two triangle markers per chip:
+    //  • .hue-marker   — bottom, on the chip boundary; flags the closest-hue chip.
+    //  • .promoted-chip — top cap over the bar; shows on hover, stays on the promoted chip.
+    const hueMarker = document.createElement('div');
+    hueMarker.className = 'hue-marker';
+    cell.appendChild(hueMarker);
+    const promotedChip = document.createElement('div');
+    promotedChip.className = 'promoted-chip';
+    cell.appendChild(promotedChip);
     // The colour bar: background + border only. Label lives in a sibling
     // .chip-label-wrap so it can be masked independently without fading
     // the chip's background colour.
