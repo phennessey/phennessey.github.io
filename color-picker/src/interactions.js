@@ -589,7 +589,7 @@ els.swatches.addEventListener('pointerdown', ev => {
   syncModKeys(ev);
   const container = ev.target.closest('.swatch-container');
   if (!container) return;
-  if (ev.target.closest('.icon, .swatch-readout, .match-cells')) return;
+  if (ev.target.closest('.icon, .swatch-readout, .match-cells, .cmyk-swatch-bias')) return;
   if (S.colors.length < 2) return;
   const si = idxOf(container);
 

@@ -53,6 +53,7 @@ const _lch = [0, 0, 0];
 const _p3  = [0, 0, 0];
 const _rgb = [0, 0, 0];
 const _hsl = [0, 0, 0];
+const _xyzc = [0, 0, 0];
 
 // ── Core color conversions ───────────────────────────────────────────
 
@@ -128,6 +129,30 @@ export function computeP3AndSRGB(color) {
   // when the colour falls outside sRGB.
   const srgbCss = hex;
   return { p3Str, p3Css, srgbCss, hex, outOfSRGB };
+}
+
+// ── CIELAB L* (the "Lab lightness" Photoshop reports) ────────────────
+//
+// Display readout only — NOT used in any colour/gamut calculation. Photoshop's Lab
+// PCS is D50, so we Bradford-adapt XYZ(D65, @texel's XYZ) to D50 and take the CIELAB
+// L* nonlinearity. L* depends only on luminance, so just the Bradford Y (luminance)
+// row is needed. Scale is 0–100 to match Photoshop's Lab readout.
+const _bfY = [0.0295424, 0.9904844, -0.0170491];   // Bradford D65→D50, Y (luminance) row
+const _labEps = 216 / 24389, _labKap = 24389 / 27;
+function cielabLFromXYZ(xyz65) {
+  const Y = _bfY[0]*xyz65[0] + _bfY[1]*xyz65[1] + _bfY[2]*xyz65[2];   // D50 white Y = 1
+  return 116 * (Y > _labEps ? Math.cbrt(Y) : (_labKap*Y + 16)/116) - 16;
+}
+/** CIELAB L* (D50, 0–100) of a picker colour — its true (P3-gamut) colour. */
+export function cielabL(color) {
+  toOKLab(color.h, color.s, toe(color.L), _lab);
+  convert(_lab, OKLab, XYZ, _xyzc);
+  return cielabLFromXYZ(_xyzc);
+}
+/** CIELAB L* (D50, 0–100) of an sRGB [0–1] colour — e.g. the displayed sRGB hex. */
+export function cielabLOfSrgb(r, g, b) {
+  convert([r, g, b], sRGB, XYZ, _xyzc);
+  return cielabLFromXYZ(_xyzc);
 }
 
 // ── Background lightness → P3 CSS ────────────────────────────────────
