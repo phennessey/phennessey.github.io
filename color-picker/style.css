@@ -699,6 +699,21 @@ body.light-bg .swatch-container::before {
 
 .swatch-container.light .swatch-readout { color: rgba(0,0,0,0.3); }
 
+/* CIELAB-L* annotation appended in brackets to each region's readout. Currently
+   HIDDEN (display:none) — the JS wiring stays live so it can be re-enabled for
+   verification just by dropping the display rule. Matches the readouts' resting
+   alpha; tabular figures so digits don't jitter as the CMYK value updates. */
+.lightness-readout {
+  display: none;
+  font-size: 10px;
+  color: rgba(255,255,255,0.3);
+  user-select: none;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.swatch-container.light .lightness-readout { color: rgba(0,0,0,0.3); }
+.swatches.none-selected .lightness-readout { visibility: hidden; }
+
 /* When no swatch is selected, hide all per-swatch readouts, icons, and region
    badges uniformly. .region-badge is the single source of truth for every badge
    (sRGB, P3, CMYK, CB, Pantone) so no badge needs its own inline hide rule. */
@@ -1361,20 +1376,39 @@ body.light-bg .cmyk-profile-select { border-color: rgba(0,0,0,0.38); }
 }
 .cmyk-check input { margin: 0; cursor: pointer; accent-color: var(--ui-label); }
 
-.cmyk-bias {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  margin-top: 6px;
-  /* Track line and thumb follow the page lightness. */
-  --bias-line: rgba(255,255,255,0.25);
-  --bias-fg:   rgba(255,255,255,0.95);
+/* Per-swatch out-of-gamut build-lightness slider: sits just below the CMYK label
+   inside the CMYK region. Shown only on an out-of-gamut CMYK swatch that isn't
+   showing a Color-Bridge substitution (bridge clears .out-of-cmyk anyway). Track
+   line + thumb are solid (they follow the region's lightness via the swatch .light
+   class); the DIV's opacity is the single alpha knob — it rests at the label/badge
+   alpha (0.3) and rises to 0.8 on hover or while dragging (:focus-within). */
+.cmyk-swatch-bias {
+  position: absolute;
+  top: calc(var(--swatch-padding) + 22px);   /* clear the CMYK label row above */
+  left: var(--swatch-padding);
+  right: var(--swatch-padding);
+  max-width: 111px;  /* 10px short of the gamut-icon's right edge for an all-2-digit
+                        "CMYK 00-00-00-00 ⚠" readout (badge + value + icon) above */
+  z-index: 1;
+  display: none;
+  opacity: 0.3;                    /* rest: matches the region badge / readout alpha */
+  transition: opacity 0.12s ease;
+  --bias-line: rgb(255,255,255);
+  --bias-fg:   rgb(255,255,255);
 }
-body.light-bg .cmyk-bias {
-  --bias-line: rgba(0,0,0,0.25);
-  --bias-fg:   rgba(0,0,0,0.85);
+.swatch-container.light .cmyk-swatch-bias {
+  --bias-line: rgb(0,0,0);
+  --bias-fg:   rgb(0,0,0);
 }
+.swatches.cmyk-active .swatch-container.out-of-cmyk:not(.cmyk-bridge) .cmyk-swatch-bias {
+  display: block;
+}
+/* Hover or drag the slider area → brighten toward (but not to) full. */
+.cmyk-swatch-bias:hover,
+.cmyk-swatch-bias:focus-within {
+  opacity: 0.8;
+}
+.swatches.none-selected .cmyk-swatch-bias { display: none; }
 
 /* Wrapper carries the 1px track line; the input sits on top providing only the
    circular thumb (which rests at the left = standard clipping). */
@@ -1423,9 +1457,3 @@ body.light-bg .cmyk-bias {
   background: var(--bias-fg);
 }
 
-.cmyk-bias-labels {
-  display: flex;
-  justify-content: space-between;
-  font-size: 10px;
-  color: var(--ui-label);
-}

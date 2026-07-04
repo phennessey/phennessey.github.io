@@ -6,7 +6,7 @@
 import { MIDDLE_GRAY, MAX_COLORS, GAMUT_ICON_SVG, CLOSE_ICON_SVG } from './constants.js';
 import { S, P, els, pantoneSelections, handlePos } from './state.js';
 import { idxOf, meshEdgesFor } from './picker.js';
-import { computeP3AndSRGB, neutralP3 } from './color.js';
+import { computeP3AndSRGB, neutralP3, cielabL, cielabLOfSrgb } from './color.js';
 import { updateSwatchCMYK, isOutOfCMYK } from './cmyk.js';
 import { buildMatchCells, matchRowObserver, updateSwatchMatches } from './pantone.js';
 import { syncModKeys, requestRender } from './util.js';
@@ -41,6 +41,18 @@ function updateSwatch(index) {
     if (vEls[k] && vEls[k].textContent !== parts[k]) vEls[k].textContent = parts[k];
   }
 
+  // CIELAB L* (D50, 0–100) readout — the "Lab lightness" a P3 doc reports in
+  // Photoshop. sRGB shows the clamped hex's L*, P3 the true colour's (they differ
+  // only when out of sRGB). CMYK's own L* is set in updateSwatchCMYK (the proof's,
+  // which tracks the bias slider).
+  const nH = parseInt(hex.slice(1), 16);
+  const srgbLtxt = `[${cielabLOfSrgb(((nH >> 16) & 255)/255, ((nH >> 8) & 255)/255, (nH & 255)/255).toFixed(3)}]`;
+  const srgbLEl = container.querySelector('.color-swatch.srgb .lightness-readout');
+  if (srgbLEl && srgbLEl.textContent !== srgbLtxt) srgbLEl.textContent = srgbLtxt;
+  const p3Ltxt = `[${cielabL(S.colors[index]).toFixed(3)}]`;
+  const p3LEl = container.querySelector('.color-swatch.p3 .lightness-readout');
+  if (p3LEl && p3LEl.textContent !== p3Ltxt) p3LEl.textContent = p3Ltxt;
+
   container.classList.toggle('out-of-srgb', outOfSRGB);
   container.classList.toggle('light', S.colors[index].L > MIDDLE_GRAY);
 
@@ -65,17 +77,24 @@ function createSwatchDOM(index) {
             <div class="swatch-top-bar">
               <span class="region-badge">sRGB</span>
               <div class="swatch-readout srgb">${hex}</div>
+              <span class="lightness-readout"></span>
             </div>
           </div>
           <div class="color-swatch p3" style="background:${p3Css};--region-bg:${p3Css}">
             <div class="swatch-top-bar">
-              <span class="p3-readout"><span class="p3-tag region-badge">P3</span><span class="p3-v"></span><span class="p3-v"></span><span class="p3-v"></span><span class="icon gamut-warning">${GAMUT_ICON_SVG}</span></span>
+              <span class="p3-readout"><span class="p3-tag region-badge">P3</span><span class="p3-v"></span><span class="p3-v"></span><span class="p3-v"></span><span class="icon gamut-warning">${GAMUT_ICON_SVG}</span><span class="lightness-readout"></span></span>
             </div>
           </div>
         </div>
         <div class="color-swatch cmyk">
           <div class="swatch-top-bar">
-            <span class="cmyk-readout"><span class="cmyk-tag region-badge">CMYK</span><span class="cb-tag region-badge">CB</span><span class="cmyk-v">0-0-0-0</span><span class="icon gamut-warning cmyk-gamut">${GAMUT_ICON_SVG}</span></span>
+            <span class="cmyk-readout"><span class="cmyk-tag region-badge">CMYK</span><span class="cb-tag region-badge">CB</span><span class="cmyk-v">0-0-0-0</span><span class="icon gamut-warning cmyk-gamut">${GAMUT_ICON_SVG}</span><span class="lightness-readout"></span></span>
+          </div>
+          <div class="cmyk-swatch-bias">
+            <div class="cmyk-bias-track">
+              <input type="range" class="cmyk-bias-slider" min="0" max="100" value="0" step="1"
+                     aria-label="CMYK build lightness for this swatch">
+            </div>
           </div>
         </div>
       </div>
@@ -180,6 +199,17 @@ function wireSwatch(container) {
   container.querySelector('.cmyk-gamut')?.addEventListener('click', e => {
     e.stopPropagation();
     pullIntoGamut(container, isOutOfCMYK, S.colors[idxOf(container)].s);
+  });
+
+  // Per-swatch CMYK build-lightness slider (visible only on out-of-gamut CMYK
+  // swatches). Its value biases just this swatch's build; updateSwatchCMYK reads
+  // it. Magnetic snap to 0 (standard clip) near the low end. Repaint only this
+  // swatch's CMYK region — the gamut ring and other swatches are unaffected.
+  container.querySelector('.cmyk-bias-slider')?.addEventListener('input', e => {
+    const sl = e.currentTarget;
+    if (+sl.value <= 5) sl.value = '0';
+    const ci = idxOf(container);
+    updateSwatchCMYK(container, S.colors[ci], ci);
   });
 
   container.querySelector('.delete-swatch').addEventListener('click', e => {
