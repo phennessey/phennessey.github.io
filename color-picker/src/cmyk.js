@@ -91,7 +91,7 @@ const GAMUT_EPS = 0.012;  // s tolerance: covers the LUT's slight (~0.01) under-
 // true once a profile is parsed and its transforms are built. The out-of-gamut
 // build-lightness preference is now PER SWATCH: each out-of-gamut CMYK swatch
 // carries its own slider (see updateSwatchCMYK), so there is no global bias here.
-export const cmyk = { active: false, profileKey: "gracol", ready: false, showBoundary: false, useColorBridge: false };
+export const cmyk = { active: false, profileKey: "gracol", ready: false, showBoundary: true, useColorBridge: false };
 
 let fwd = null;  // CIELAB(D50, native PCS) → CMYK  (out-of-sRGB colours only)
 let fwdSRGB = null;  // native *sRGB → CMYK (in-sRGB colours; matches Adobe exactly)
@@ -589,6 +589,7 @@ if (engineOK && profileSel) {
 const boundaryToggle = document.getElementById("cmyk-show-boundary");
 if (engineOK && boundaryToggle) {
   P.setCMYKBoundaryFn(inCMYKGamut);
+  cmyk.showBoundary = boundaryToggle.checked;   // sync state to the DOM's initial (checked) state
   boundaryToggle.addEventListener("change", () => {
     cmyk.showBoundary = boundaryToggle.checked;
     syncBoundary();
