@@ -712,14 +712,26 @@ body.light-bg .swatch-container::before {
   font-variant-numeric: tabular-nums;
 }
 .swatch-container.light .lightness-readout { color: rgba(0,0,0,0.3); }
-.swatches.none-selected .lightness-readout { visibility: hidden; }
 
 /* When no swatch is selected, hide all per-swatch readouts, icons, and region
    badges uniformly. .region-badge is the single source of truth for every badge
    (sRGB, P3, CMYK, CB, Pantone) so no badge needs its own inline hide rule. */
-.swatches.none-selected .swatch-readout,
-.swatches.none-selected .region-badge,
-.swatches.none-selected .icon { visibility: hidden; }
+/* ══ THE none-selected rule ══════════════════════════════════════════════
+   With no swatch selected, a swatch shows ONLY colour. This single rule hides
+   EVERY descendant of a swatch except the containers that carry the colour
+   fills themselves. Any UI added anywhere inside a swatch — top bars, badges,
+   readouts, icons, sliders, future controls — is covered AUTOMATICALLY.
+   ⚠ NEVER add a bespoke `.none-selected …` hide rule for swatch UI again; if a
+   new element must stay visible here, it is colour-bearing — add it to the
+   exclusion list below instead. (visibility, not display, so layout and JS
+   measurements stay stable; !important so no show-rule of any specificity —
+   that is how the CMYK slider once leaked through — can override it.) */
+.swatches.none-selected .swatch-inner *:not(
+  .color-row, .color-stack, .color-swatch,
+  .match-row, .match-cells, .match-field-noise, .noise-overlay
+) {
+  visibility: hidden !important;
+}
 
 /* Flex strip at the top-right of each swatch. Used for both the sRGB
    top bar (delete + hex) and the P3 top bar (gamut icon + p3 readout).
@@ -1220,9 +1232,6 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
 
 .swatch-container.light .hue-marker { color: rgba(0,0,0,0.3); }
 
-.swatches.none-selected .hue-marker { opacity: 0; }
-.swatches.none-selected .match-label { visibility: hidden; }
-
 /* Chips collapse on promotion only in hide-matches mode — hide their hue-markers
    with them. In show-chips mode the chips stay, so the hue indicator stays too. */
 .swatches.hide-chips-on-promote .match-cells.has-promotion .hue-marker { opacity: 0; }
@@ -1316,14 +1325,30 @@ body.disc-dragging,   body.disc-dragging * {
 .swatch-container.out-of-srgb .p3-readout { display: flex; }
 .swatch-container.light .p3-readout,
 .swatch-container.light .cmyk-readout { color: rgba(0,0,0,0.3); }
-.swatches.none-selected .p3-readout,
-.swatches.none-selected .cmyk-readout { visibility: hidden; }
 
 /* "CB" badge: a second region badge beside "CMYK", shown only when the build is
    substituted from the promoted Pantone's own Color Bridge values (.cmyk-bridge,
    set in updateSwatchCMYK). Hidden otherwise so the CMYK badge stands alone. */
 .cmyk-readout .cb-tag { display: none; }
 .swatch-container.cmyk-bridge .cmyk-readout .cb-tag { display: inline-block; }
+
+/* The CMYK region's chrome follows the SOFT PROOF's own lightness (.light is set
+   on .color-swatch.cmyk in updateSwatchCMYK), NOT the input colour's — the proof
+   can sit on the other side of middle gray (a dark input's printable clip, or a
+   slider-darkened build). Explicit :not(.light)/.light pairs so these outrank the
+   container-level .swatch-container.light rules in both directions. */
+.color-swatch.cmyk:not(.light) .cmyk-readout,
+.color-swatch.cmyk:not(.light) .lightness-readout { color: rgba(255,255,255,0.3); }
+.color-swatch.cmyk.light .cmyk-readout,
+.color-swatch.cmyk.light .lightness-readout { color: rgba(0,0,0,0.3); }
+.color-swatch.cmyk:not(.light) .region-badge { background: rgba(255,255,255,0.3); }
+.color-swatch.cmyk.light .region-badge { background: rgba(0,0,0,0.3); }
+.color-swatch.cmyk:not(.light) .icon { color: rgba(255,255,255,0.3); }
+.color-swatch.cmyk.light .icon { color: rgba(0,0,0,0.3); }
+.color-swatch.cmyk:not(.light) .icon:hover { color: rgba(255,255,255,1); }
+.color-swatch.cmyk.light .icon:hover { color: rgba(0,0,0,1); }
+.color-swatch.cmyk:not(.light) .cmyk-swatch-bias { --bias-line: rgb(255,255,255); --bias-fg: rgb(255,255,255); }
+.color-swatch.cmyk.light .cmyk-swatch-bias { --bias-line: rgb(0,0,0); --bias-fg: rgb(0,0,0); }
 
 /* CMYK section: ICC profile picker */
 .cmyk-body { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 4px 10px 0 0; line-height: 1.4; font-size: 11px; }
@@ -1400,7 +1425,10 @@ body.light-bg .cmyk-profile-select { border-color: rgba(0,0,0,0.38); }
   --bias-line: rgb(0,0,0);
   --bias-fg:   rgb(0,0,0);
 }
-.swatches.cmyk-active .swatch-container.out-of-cmyk:not(.cmyk-bridge) .cmyk-swatch-bias {
+/* Shown only when it can do something: out-of-gamut, not Color-Bridge substituted,
+   and not inert (.cmyk-bias-inert = full slider travel rounds to the same build,
+   e.g. a deep colour whose vendor build already sits at the press's TAC limit). */
+.swatches.cmyk-active .swatch-container.out-of-cmyk:not(.cmyk-bridge):not(.cmyk-bias-inert) .cmyk-swatch-bias {
   display: block;
 }
 /* Hover or drag the slider area → brighten toward (but not to) full. */
@@ -1408,7 +1436,6 @@ body.light-bg .cmyk-profile-select { border-color: rgba(0,0,0,0.38); }
 .cmyk-swatch-bias:focus-within {
   opacity: 0.8;
 }
-.swatches.none-selected .cmyk-swatch-bias { display: none; }
 
 /* Wrapper carries the 1px track line; the input sits on top providing only the
    circular thumb (which rests at the left = standard clipping). */

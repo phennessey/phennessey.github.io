@@ -49,8 +49,9 @@ import {
   convert, OKLab, XYZ, DisplayP3, sRGB, OKLabToOKHSL, DisplayP3Gamut,
   toOKLab, toe, computeP3AndSRGB, cielabL,
 } from "./color.js";
-import { els, P, pantoneSelections } from "./state.js";
+import { S, els, P, pantoneSelections } from "./state.js";
 import { requestRender } from "./util.js";
+import { MIDDLE_GRAY } from "./constants.js";
 
 const CE = window.jsColorEngine;
 const engineOK = !!(CE && CE.Transform && CE.Profile && CE.color);
@@ -129,6 +130,8 @@ const mul3 = (M, v) => [
 const _xyz   = [0, 0, 0];
 const _p3    = [0, 0, 0];
 const _cmykXyz = [0, 0, 0];  // XYZ(D65) scratch for the Color-Bridge L* readout
+const _regionOk  = [0, 0, 0];   // proof OKLab/OKHSL scratch for the region's own
+const _regionHsl = [0, 0, 0];   // light/dark chrome decision (see updateSwatchCMYK)
 
 // sRGB gamma → linear (IEC 61966-2-1)
 const linearize = v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
@@ -191,151 +194,101 @@ function convertColor(color) {
   return { lab, c, back };
 }
 
-// ── Out-of-gamut bias: ease toward the CIELAB-lightness match ─────────
+// ── Out-of-gamut bias: ink-space only — NEVER adds an ink the build lacks ──
 //
-// The per-swatch slider (0 = standard clip … 1 = full) eases the printed colour from
-// the standard relative-colorimetric clip toward an in-gamut ENDPOINT at the input's
-// hue whose soft-proof CIELAB L* matches the INPUT's. So at full travel the printed
-// swatch reads as the same lightness a Lab-measuring app (Photoshop) reports for the
-// input — not merely the same OKLab L, which for vivid blues/purples prints visibly
-// too light. We deliberately mix spaces: the build stays OKLab/OKHSL (hue locked,
-// never bent), but the slider's endpoint is chosen in CIELAB L* for perceptual truth.
+// The per-swatch slider (0 = standard clip … 1 = full travel) adjusts an
+// out-of-gamut colour's build toward the INPUT's apparent lightness (CIELAB L*,
+// what a Lab-measuring app reports), working entirely in INK space on the
+// standard build:
 //
-// Kept simple and smooth (accuracy traded for speed, by design):
-//   • Endpoint lightness is a linear estimate in CIELAB L* — the clip's L* (raw.back.L)
-//     and the far end's L* (proof of the max-chroma build at the input's lightness)
-//     bracket the target (the input's own L*); the match fraction sets the endpoint.
-//   • The path is a straight OKLab line clip → endpoint — a plain chord, NOT the
-//     jagged per-lightness gamut boundary — so the colour eases evenly instead of
-//     chattering as the slider moves.
+//   • DARKEN (input prints darker than the clip): hold C/M/Y, add K only —
+//     capped at K=100 and the press TAC (darkenedBuild).
+//   • LIGHTEN (input prints lighter): scale ALL FOUR inks down by ONE common
+//     factor toward paper white (lightenPath). The C:M:Y ratio is preserved so
+//     the hue angle holds, and K scales with them so no gray floor is left
+//     behind — bare paper (all channels zero) is the far end, so any lighter
+//     target is reachable. No channel ratio ever changes; no ink is introduced.
 //
-// In-gamut colours have nothing to trade → no-op.
-
-// CIELAB(D50, native PCS) ↔ OKLab through XYZ(D65).
-function labD50ToOk(lab, out = [0, 0, 0]) {
-  convert(labD50ToXYZd65(lab.L, lab.a, lab.b), XYZ, OKLab, out);
-  return out;
-}
-const _okxyz = [0, 0, 0];
-function okToLabD50(ok) {
-  convert(ok, OKLab, XYZ, _okxyz);
-  return xyzD65ToLabD50(_okxyz);
-}
-
-const _clipHsl = [0, 0, 0];
-
-// ⚠ GAMUT SENSING MUST BE BPC-FREE. The build/proof transforms (fwd, revLab50) use
-// BPC — correct for the Adobe-matching conversion and the painted proof, but FATAL
-// for gamut detection: BPC rescales lightness symmetrically on both legs, so a Lab
-// point BELOW the profile's physical black (all three bundled profiles bottom out
-// near L*≈9–10 at 400% ink) round-trips "clean" — the dE signal in the shadows is
-// ~2 ΔE of NON-MONOTONIC noise instead of a clean clip step. A binary search on that
-// signal bisects noise and returns fictional chroma the press cannot print; the
-// forward transform then clips the fictional endpoint wherever it likes (measured:
-// a dark magenta landing at L*18 against a target of L*5.7 on FOGRA39, +9 L* on
-// SWOP — the "erratic dark colours, different per profile" bug). This is the same
-// trap documented for the old round-trip gamut test (see the LUT header). RULE:
-// anything that asks "is this printable / how much chroma fits" reads the gamut LUT
-// (sampled BPC-false); only appearance probes go through the BPC'd paint chain.
-const lutChroma = (hue, L) => Math.max(0, lutLookup(hue, L) - GAMUT_EPS);
-
-// Appearance probe: the CIELAB L* the swatch would actually PAINT for an OKHSL
-// (hue, C, L) point — through the same chain as updateSwatchCMYK: BPC'd forward
-// build, ROUNDED to the integer percentages shown on the label, BPC'd reverse
-// proof. Ground truth for the Newton landing step (appearance space, where the
-// user compares swatches), never used for gamut decisions (see rule above).
-function paintedLstar(hue, C, L) {
-  const lab = okToLabD50(toOKLab(hue, C, L));
-  const cm  = fwd.transform(CE.color.Lab(lab.L, lab.a, lab.b));
-  const pr  = revLab50.transform(CE.color.CMYK(
-    Math.round(cm.C), Math.round(cm.M), Math.round(cm.Y), Math.round(cm.K)));
-  return pr.L;
-}
+// Landing: both paths bisect their travel so the painted proof's CIELAB L*
+// lands on the input's at bias 1 (as close as ink limits allow). Probes are
+// single REVERSE transforms of candidate builds (rounded like the label) —
+// monotone, no forward round-trip, hence immune to the BPC-cancel trap that
+// poisoned the old endpoint search (see the gamut-LUT header + CLAUDE.md).
+// bias 0 is exactly the raw Adobe-matching build, and both paths are continuous
+// in bias by construction. In-gamut colours have nothing to trade → no-op.
 
 /**
- * The CIELAB(D50) input to feed the forward transform after applying the bias.
- * bias 0 = the exact standard relative-colorimetric clip (raw.back). Toward 1 the
- * printed colour eases along a straight OKLab line to an endpoint at the input's hue
- * whose PAINTED proof CIELAB L* matches the input's, carrying the max chroma the
- * physical gamut allows at that lightness (from the LUT — never the BPC'd round-trip,
- * see the gamut-sensing rule above). Straight-line path = smooth; CIELAB endpoint =
- * the print reads at the input's apparent lightness. Unchanged at bias 0 / in-gamut.
+ * Lighten path: the raw build with all four inks scaled down by one common
+ * factor (1−p) toward paper. p=0 is the raw build exactly; p=1 is bare paper.
+ * Because C, M, Y and K all scale together the C:M:Y ratio (hue angle) and the
+ * K:CMY balance are preserved, and no ink is ever introduced.
  */
-function biasedLab(raw, color, oog, bias) {
-  if (bias === 0 || !oog) return raw.lab;
-  const clipOk = labD50ToOk(raw.back);                     // exact clip (in gamut), OKLab
-  OKLabToOKHSL(clipOk, DisplayP3Gamut, _clipHsl);
-  const L0 = _clipHsl[2];                                  // clip's OKHSL lightness
-  const inputL = toe(color.L);                             // input's OKHSL lightness
-
-  // Endpoint lightness = where the painted proof's CIELAB L* matches the input's, as
-  // a fraction of the clip→input-lightness span (L* is ~linear along it). Clip L* =
-  // raw.back.L (already CIELAB D50); far-end L* = painted proof of the max-gamut-
-  // chroma build at the input's lightness; target = the input's own L*.
-  const target = cielabL(color);                          // input's CIELAB L*
-  const LstarClip = raw.back.L;
-  const LstarFull = paintedLstar(color.h, lutChroma(color.h, inputL), inputL);
-  const denom = LstarFull - LstarClip;
-  const clampL = v => Math.max(0.02, Math.min(0.99, v));
-  // ⚠ The two bracket probes carry ~±0.3 L* of noise (integer-CMYK rounding, table
-  // interpolation), so a span below SPAN_MIN L* is NOISE, not signal — this happens
-  // in the deep shadows, where painted L* flatlines near the BPC floor no matter the
-  // build. Dividing by it made frac slam its clamp and turned the Newton slope into
-  // noise÷noise, catapulting the endpoint to a bright fictional colour (the measured
-  // "dark magenta lands at L*19 / dark red at L*16" bug). No signal → frac 1, no Newton.
-  const SPAN_MIN = 1.5;
-  const hasSignal = Math.abs(denom) > SPAN_MIN;
-  // Linear estimate of the OKHSL lightness whose proof L* == target. frac may exceed 1
-  // (clamped): for colours that clip LIGHTER the match is DARKER than the input's own
-  // lightness, so the endpoint must be able to go past it — the reverse direction.
-  const frac = hasSignal ? Math.max(0, Math.min(2, (target - LstarClip) / denom)) : 1;
-  // Trust region: Lend may never leave the frac∈[0,2] extrapolation interval — even a
-  // plausible-looking Newton step must not escape it (belt-and-braces for shadows).
-  const trustLo = Math.min(L0, L0 + 2 * (inputL - L0)), trustHi = Math.max(L0, L0 + 2 * (inputL - L0));
-  const clampTrust = v => clampL(Math.max(trustLo, Math.min(trustHi, v)));
-  let Lend = clampTrust(L0 + (inputL - L0) * frac);
-  let Cend = lutChroma(color.h, Lend);
-  // One Newton step in CIELAB L* to remove the linear estimate's residual (it drifts
-  // ~0.5 L* when extrapolated), so the endpoint lands on the SAME L* either direction.
-  if (hasSignal && Math.abs(inputL - L0) > 1e-4) {
-    const slope = denom / (inputL - L0);
-    const resid = paintedLstar(color.h, Cend, Lend) - target;
-    Lend = clampTrust(Lend - resid / slope);
-    Cend = lutChroma(color.h, Lend);
-  }
-  const endOk = toOKLab(color.h, Cend, Lend);             // endpoint OKLab (max gamut chroma there)
-
-  // Smooth: straight OKLab line clip → endpoint (a chord, not the jagged boundary).
-  return okToLabD50([
-    clipOk[0] + (endOk[0] - clipOk[0]) * bias,
-    clipOk[1] + (endOk[1] - clipOk[1]) * bias,
-    clipOk[2] + (endOk[2] - clipOk[2]) * bias,
-  ]);
+function lightenPath(raw, p) {
+  const s = 1 - p;                                                 // fraction of ink kept
+  const { C, M, Y, K } = raw.c;
+  return { C: C * s, M: M * s, Y: Y * s, K: K * s };
 }
 
 /**
- * The biased CMYK build: the chord's build, crossfaded in INK space from the raw
- * standard build, weighted by the bias itself. This pins the bias→0 limit to the
- * exact raw build: re-feeding the proofed clip through the B2A table re-separates
- * it with a different black-generation split (measured: a 9-point cyan pop on a
- * dark GRACoL red at the first slider tick — B2A∘A2B is not the identity, and GCR
- * is most degenerate in the shadows), so without the crossfade the ink numbers and
- * proof stepped discontinuously the moment the slider engaged. Ink-space lerp keeps
- * every channel gliding from the true build (bias 0, exactly raw.c — the Adobe-
- * matching conversion) to the Newton-landed endpoint build (bias 1, exactly the
- * chord's end). Ink blending is physically reasonable mid-path (it is how print
- * gradients mix), and both ends are exact.
+ * Lighten-direction build: bisect how far along lightenPath the painted proof's
+ * CIELAB L* reaches the input's, then travel that far, scaled by the bias. The
+ * probe is one reverse transform of the rounded candidate build — monotone in p
+ * (removing ink only ever lightens). Full removal is bare paper (L* ≈ 100), so a
+ * lighter-than-clip target is always reachable.
+ */
+function lightenedBuild(raw, bias, target) {
+  const proofL = p => {
+    const b = lightenPath(raw, p);
+    return revLab50.transform(CE.color.CMYK(
+      Math.round(b.C), Math.round(b.M), Math.round(b.Y), Math.round(b.K))).L;
+  };
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 12; i++) { const mid = (lo + hi) / 2; if (proofL(mid) < target) lo = mid; else hi = mid; }
+  return lightenPath(raw, ((lo + hi) / 2) * bias);
+}
+
+// Total-ink (TAC) limits of the bundled press conditions — the K-add darkening
+// path must never write builds a preflight would reject. (GRACoL 2006 = 320%;
+// SWOP 2006 = 300%; the FOGRA39L VIGC profile = 300%, per its filename.)
+const PROFILE_TAC = { gracol: 320, swop: 300, fogra39: 300 };
+
+/**
+ * Darken-direction build: the input prints DARKER than the standard clip. Hold
+ * C/M/Y exactly as the standard build has them and add K ONLY, bisecting K so the
+ * painted proof's CIELAB L* lands on the input's at full travel — capped at K=100
+ * and the press TAC (C+M+Y+K ≤ the profile limit). C/M/Y never change, so the
+ * standard separation's hue and chroma are untouched and K only ever increases.
+ * If even max K can't reach the target, the slider honestly maxes out at this
+ * press's darkest. The probe is a single reverse transform of the rounded build —
+ * monotone in K, no forward round-trip, so no BPC-cancel hazard.
+ */
+function darkenedBuild(raw, bias, target) {
+  const { C, M, Y, K } = raw.c;
+  const tac = PROFILE_TAC[cmyk.profileKey] ?? 300;
+  const Kcap = Math.min(100, Math.max(0, tac - (C + M + Y)));      // K headroom under TAC
+  const pr = k => revLab50.transform(CE.color.CMYK(
+    Math.round(C), Math.round(M), Math.round(Y), Math.round(k))).L;
+  let Kend = Kcap;
+  if (pr(Kcap) < target) {             // max K overshoots the target → bisect the landing
+    let lo = K, hi = Kcap;
+    for (let i = 0; i < 12; i++) { const mid = (lo + hi) / 2; if (pr(mid) > target) lo = mid; else hi = mid; }
+    Kend = (lo + hi) / 2;
+  }
+  return { C, M, Y, K: K + (Kend - K) * bias };   // glide K raw → landing; C/M/Y held
+}
+
+/**
+ * The biased CMYK build. Direction by apparent lightness: input darker than the
+ * clip → hold C/M/Y and add K only (darkenedBuild); input lighter → scale all
+ * four inks down toward paper by one common factor (lightenedBuild). See the
+ * section header — neither path introduces an ink the standard build lacks, and
+ * neither changes the C:M:Y ratio, so the hue angle holds in both directions.
  */
 function biasedBuild(raw, color, oog, bias) {
   if (bias === 0 || !oog) return raw.c;
-  const lab = biasedLab(raw, color, oog, bias);
-  const cb  = fwd.transform(CE.color.Lab(lab.L, lab.a, lab.b));
-  return {
-    C: raw.c.C + (cb.C - raw.c.C) * bias,
-    M: raw.c.M + (cb.M - raw.c.M) * bias,
-    Y: raw.c.Y + (cb.Y - raw.c.Y) * bias,
-    K: raw.c.K + (cb.K - raw.c.K) * bias,
-  };
+  const target = cielabL(color);
+  if (target < raw.back.L - 0.25) return darkenedBuild(raw, bias, target);
+  return lightenedBuild(raw, bias, target);
 }
 
 const cl3 = v => Math.max(0, Math.min(1, v)).toFixed(3);
@@ -410,7 +363,22 @@ export function updateSwatchCMYK(container, color, index) {
   const bridge = cmyk.useColorBridge && promoted && promoted.cbCMYK && promoted.cbHex
     ? promoted : null;
 
-  let label, cmykBg, oog, cmykL;
+  // The CMYK region's light/dark chrome FOLLOWS THE INTERFACE — the container's
+  // input-colour .light state — and diverges to the soft proof's own state only
+  // when the proof sits CLEARLY on the other side of middle gray (dead band
+  // below). Deciding purely from the proof flickered wildly during drags: the
+  // proof's lightness wobbles across the bare threshold while the colour changes.
+  // Anchoring to the container keeps the state stable, and the band ensures a
+  // switch only for a genuine mismatch (e.g. a light input whose printable clip
+  // is plainly dark).
+  const LIGHT_BAND = 0.05;              // OKHSL-lightness dead band around toe(MIDDLE_GRAY)
+  const proofLightnessOf = xyz65 => {   // the proof's OKHSL lightness
+    convert(xyz65, XYZ, OKLab, _regionOk);
+    OKLabToOKHSL(_regionOk, DisplayP3Gamut, _regionHsl);
+    return _regionHsl[2];
+  };
+
+  let label, cmykBg, oog, cmykL, biasInert = false, proofLh = null;
   if (bridge) {
     const [C, M, Y, K] = bridge.cbCMYK;
     label = `${C}-${M}-${Y}-${K}`;          // Pantone's own recipe, verbatim
@@ -419,12 +387,27 @@ export function updateSwatchCMYK(container, color, index) {
     const nb = parseInt(bridge.cbHex.slice(1), 16);
     convert([((nb >> 16) & 255) / 255, ((nb >> 8) & 255) / 255, (nb & 255) / 255], sRGB, XYZ, _cmykXyz);
     cmykL = xyzD65ToLabD50(_cmykXyz).L;      // CIELAB L* (D50) of Pantone's published soft-proof hex
+    proofLh = proofLightnessOf(_cmykXyz);
   } else {
     // Flag from true gamut membership (the LUT). The CMYK build comes from the
     // biased conversion when the slider is engaged on an out-of-gamut colour.
     oog = isOutOfCMYK(color);
     const raw = convertColor(color);
     const c = biasedBuild(raw, color, oog, bias);
+    // Show the slider only when it can DO something: if the full-travel build
+    // rounds to the same four inks as the standard build, every slider position
+    // paints identically, so hide it (.cmyk-bias-inert, see CSS). The full-travel
+    // probe runs the darken optimizer (~65 rev transforms), so during a drag the
+    // last settled answer is kept — it is recomputed on the settled render.
+    if (oog) {
+      if (S.dragging) {
+        biasInert = container.classList.contains("cmyk-bias-inert");
+      } else {
+        const b1 = bias === 1 ? c : biasedBuild(raw, color, oog, 1);
+        biasInert = Math.round(b1.C) === Math.round(raw.c.C) && Math.round(b1.M) === Math.round(raw.c.M)
+                 && Math.round(b1.Y) === Math.round(raw.c.Y) && Math.round(b1.K) === Math.round(raw.c.K);
+      }
+    }
     // Soft-proof appearance: reverse the FINAL CMYK build to the engine's native
     // PCS CIELAB(D50), then CIELAB(D50) → XYZ(D65) → Display-P3. This matches the
     // engine's own CMYK→'*sRGB' (Adobe-exact) to <1/255 for in-sRGB builds, and
@@ -437,10 +420,12 @@ export function updateSwatchCMYK(container, color, index) {
     // proofed behind an integer label could differ by a fraction of an ink percent).
     const C = Math.round(c.C), M = Math.round(c.M), Y = Math.round(c.Y), K = Math.round(c.K);
     const proof = revLab50.transform(CE.color.CMYK(C, M, Y, K));
-    convert(labD50ToXYZd65(proof.L, proof.a, proof.b), XYZ, DisplayP3, _p3);
+    const proofXyz = labD50ToXYZd65(proof.L, proof.a, proof.b);
+    convert(proofXyz, XYZ, DisplayP3, _p3);
     cmykBg = `color(display-p3 ${cl3(_p3[0])} ${cl3(_p3[1])} ${cl3(_p3[2])})`;
     label = `${C}-${M}-${Y}-${K}`;
     cmykL = proof.L;   // CIELAB L* (D50) directly — matches Photoshop's Lab L for a P3 doc
+    proofLh = proofLightnessOf(proofXyz);
   }
 
   cmykEl.style.background = cmykBg;
@@ -457,6 +442,18 @@ export function updateSwatchCMYK(container, color, index) {
 
   container.classList.toggle("out-of-cmyk", oog);
   container.classList.toggle("cmyk-bridge", !!bridge);   // shows the "CB" badge
+  container.classList.toggle("cmyk-bias-inert", biasInert);   // hides a do-nothing slider
+
+  // Region chrome state: the interface's (container's) state, unless the proof
+  // clearly contradicts it — see the LIGHT_BAND comment above.
+  const containerLight = color.L > MIDDLE_GRAY;   // the same test updateSwatch uses
+  let regionLight = containerLight;
+  if (proofLh != null) {
+    const T = toe(MIDDLE_GRAY);
+    if (containerLight && proofLh < T - LIGHT_BAND) regionLight = false;
+    else if (!containerLight && proofLh > T + LIGHT_BAND) regionLight = true;
+  }
+  cmykEl.classList.toggle("light", regionLight);
 }
 
 // ── Gamut LUT: max OKHSL saturation per (hue, lightness) cell ─────────
