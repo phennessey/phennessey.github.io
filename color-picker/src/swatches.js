@@ -205,12 +205,17 @@ function wireSwatch(container) {
   // swatches). Its value biases just this swatch's build; updateSwatchCMYK reads
   // it. Magnetic snap to 0 (standard clip) near the low end. Repaint only this
   // swatch's CMYK region — the gamut ring and other swatches are unaffected.
-  container.querySelector('.cmyk-bias-slider')?.addEventListener('input', e => {
+  const biasSlider = container.querySelector('.cmyk-bias-slider');
+  biasSlider?.addEventListener('input', e => {
     const sl = e.currentTarget;
     if (+sl.value <= 5) sl.value = '0';
     const ci = idxOf(container);
     updateSwatchCMYK(container, S.colors[ci], ci);
   });
+  // A finished drag leaves the input FOCUSED, which pins the slider's hover alpha
+  // via :focus-within until something else is clicked. Release focus when the
+  // pointer interaction ends (keyboard focus/adjustment is unaffected).
+  biasSlider?.addEventListener('pointerup', e => e.currentTarget.blur());
 
   container.querySelector('.delete-swatch').addEventListener('click', e => {
     e.stopPropagation();
