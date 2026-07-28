@@ -1,0 +1,230 @@
+/* Hennessey Design — styles.css */
+
+:root {
+	--black: #000;
+	--white: #fff;
+	--accent: #f7931d;
+	--light-gray: #d2d2d2;
+	--gray: #acacac;
+	--stage-bg: #333;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+	background: var(--stage-bg);
+	color: var(--black);
+	font-family: akzidenz-grotesk-next-pro, sans-serif;
+	font-weight: 400;
+	overflow: hidden;
+	/* Kill the mobile tap-highlight flash (inherited by descendants) */
+	-webkit-tap-highlight-color: transparent;
+}
+
+
+/* Stage + scaled 1152x648 frame
+   -------------------------------------------------------------------------
+   The frame is authored at true 1152x648 px, then uniformly scaled to fit
+   the viewport with >=5% margin on top and sides. Every dimension inside the
+   frame is therefore "relative to 1152x648" as authored. */
+
+.stage {
+	position: fixed;
+	inset: 0;
+	background: var(--stage-bg);
+	overflow: hidden;
+	/* No text/drag selection overlay when click-dragging across slides */
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+}
+
+.frame {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 1152px;
+	height: 648px;
+	transform: translate(-50%, -50%) scale(var(--s, 1));
+	transform-origin: center center;
+}
+
+
+/* Slides — stacked, cross-fade
+   ------------------------------------------------------------------------- */
+
+.slide {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	/* No slide background: the left bar supplies its own solid fill and the
+	   image supplies the right side, so the area behind the image is transparent
+	   — only the JPG shows there. (The cover has no image, so it sets its own
+	   white background below.) */
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 200ms ease;
+	/* ALWAYS a self-contained stacking context, so the bar's z-index never
+	   hoists out of the slide when opacity reaches 1. Without this, a child's
+	   z-index escapes to a global layer at opacity 1 and "pops" instead of
+	   fading with the slide. */
+	isolation: isolate;
+}
+
+/* Slides stack by DOM order = index (higher index paints on top). Opacity is
+   driven inline from ui.js: at rest only the current slide is at opacity 1 and
+   nothing sits behind it; during a move the two involved slides are shown (one
+   animating, one an opaque base) and every other slide is at opacity 0. */
+
+
+/* Left bar (280px) — yellow only on slide 1, transparent (white) elsewhere
+   ------------------------------------------------------------------------- */
+
+.slide-bar {
+	position: relative;      /* stack above the absolutely-placed image */
+	z-index: 1;
+	flex: 0 0 280px;
+	width: 280px;
+	height: 100%;
+	padding: 32px;
+	display: flex;
+	flex-direction: column;
+	background: var(--white);   /* solid — masks any image bleed, no see-through */
+}
+
+/* Cover (slide 1) has no image, so it keeps a solid white right side. */
+.slide--accent { background: var(--white); }
+.slide--accent .slide-bar { background: var(--accent); }
+
+/* Cover-slide wordmark (slide 1) — original treatment, original scale */
+.wordmark {
+	font-weight: 800;
+	line-height: 0.8;
+	letter-spacing: -0.01em;
+	font-size: 2.38rem;      /* midpoint between 2.8rem and 1.96rem */
+}
+.wordmark span { display: block; }   /* Patrick / Hennessey on two lines */
+.wm-first { color: var(--white); }
+.wm-last  { color: var(--white); }
+
+.slide-name {
+	font-size: 15px;          /* content slides: 50% of the old 30px */
+	line-height: 1;
+	font-weight: 800;
+	color: var(--light-gray);
+	white-space: nowrap;      /* one line */
+}
+
+.slide-title {
+	margin-top: 20px;        /* gap below the name */
+	font-size: 22.5px;        /* content slides: 50% of the old 45px */
+	line-height: 0.8;
+	font-weight: 800;
+	color: var(--black);
+}
+
+.slide-title span { display: block; }   /* Production / Design on two lines */
+
+.bar-bottom {
+	margin-top: auto;        /* bottom-aligned category block */
+	padding-right: 60px;
+}
+
+.cat { margin-top: 10px; }
+
+.cat-h {
+	font-size: 7px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;    /* em-based — scales with font-size */
+	color: var(--gray);
+}
+
+.cat-b {
+	margin-top: 3px;
+	font-size: 12px;
+	line-height: 1.15;        /* 115% */
+	font-weight: 400;         /* light weight */
+	color: var(--black);
+}
+
+
+/* Right column — the pre-made slide image.
+   Locked to full slide height and flush to the right edge (zero gap on top,
+   bottom, right). Width follows from the height by the image's own aspect,
+   so the LEFT edge is free to land wherever those constraints require. */
+
+.slide-image {
+	position: absolute;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	left: auto;              /* left edge floats */
+	height: 100%;
+	width: auto;             /* scale by intrinsic aspect from full height */
+	display: block;
+	z-index: 0;              /* sits beneath the bar */
+}
+
+/* 1px white edge at the bar/image seam, sitting BELOW the image (z-index -1,
+   beneath the image's z-index 0). It backs any sub-pixel gap between bar and
+   image without painting over the JPG. */
+.slide::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 280px;             /* the bar's right edge (bar is 280px wide) */
+	width: 1px;
+	background: var(--white);
+	z-index: -1;
+}
+
+
+/* Navigation arrows — in the stage margin, fade in on hover
+   ------------------------------------------------------------------------- */
+
+.nav-arrow {
+	position: fixed;
+	top: 0;
+	height: 100%;
+	width: 20%;               /* trigger + click zone: 20% of the viewport edge */
+	display: flex;
+	align-items: center;
+	background: none;
+	border: none;
+	cursor: pointer;
+	color: var(--light-gray);
+	opacity: 0;
+	transition: opacity 0.2s ease;
+	z-index: 10;
+}
+
+.nav-prev { left: 0;  justify-content: flex-start; padding-left: 20px; }
+.nav-next { right: 0; justify-content: flex-end;   padding-right: 20px; }
+
+/* Reveal only while the cursor is inside the edge zone */
+.nav-arrow:hover { opacity: 0.85; }
+
+.nav-arrow.is-hidden { display: none; }
+
+/* Remove browser-drawn focus/active overlays (keyboard focus ring, Firefox
+   inner border, iOS callout) — cross-browser. */
+.nav-arrow:focus,
+.nav-arrow:focus-visible,
+.nav-arrow:active {
+	outline: none;
+	box-shadow: none;
+}
+.nav-arrow::-moz-focus-inner { border: 0; padding: 0; }
+
+.nav-arrow svg {
+	width: 40px;
+	height: 40px;
+	pointer-events: none;   /* svg never becomes the click/drag target */
+	-webkit-user-drag: none;
+	user-drag: none;
+}
