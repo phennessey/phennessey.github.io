@@ -3,7 +3,7 @@
 (function () {
 	'use strict';
 
-	var SLIDE_COUNT = 15;
+	var SLIDE_COUNT = 16;   // cover + 14 content slides + outro
 
 	// Bar categories, in display order, mapped to keys in the SLIDES data.
 	var CATEGORIES = [
@@ -53,61 +53,65 @@
 	}
 
 	function buildSlide(i) {
+		// The first and last slides are full-yellow "bookends" (intro + outro).
+		var isAccent = (i === 0 || i === SLIDE_COUNT - 1);
+
 		var slide = document.createElement('div');
-		slide.className = 'slide' + (i === 0 ? ' slide--accent' : '');
+		slide.className = 'slide' + (isAccent ? ' slide--accent' : '');
 		slide.dataset.index = i;
 
+		// Bookend slide: full-yellow, NO sidebar div, no image, no seam — just
+		// the wordmark + a subtitle placed directly on the slide.
+		if (isAccent) {
+			var subtitle = (i === 0)
+				? 'Production Design &amp;<br>Automation Systems'
+				: 'p.hennessey@yahoo.com';
+			var cover = document.createElement('div');
+			cover.className = 'cover-content';
+			cover.innerHTML =
+				'<h1 class="wordmark">' +
+				'<span class="wm-first">Patrick</span>' +
+				'<span class="wm-last">Hennessey</span>' +
+				'</h1>' +
+				'<p class="wm-sub">' + subtitle + '</p>';
+			slide.appendChild(cover);
+			return slide;
+		}
+
+		// Content slides: left bar (name, title, categories) + right image.
 		var bar = document.createElement('div');
 		bar.className = 'slide-bar';
 
 		var top = document.createElement('div');
 		top.className = 'bar-top';
-
-		if (i === 0) {
-			// Cover slide: original wordmark, Patrick (white) / Hennessey (black).
-			top.innerHTML =
-				'<h1 class="wordmark">' +
-				'<span class="wm-first">Patrick</span>' +
-				'<span class="wm-last">Hennessey</span>' +
-				'</h1>';
-		} else {
-			top.innerHTML =
-				'<div class="slide-name">Patrick Hennessey</div>' +
-				'<h2 class="slide-title"><span>Production</span><span>Design</span></h2>';
-		}
-
+		top.innerHTML =
+			'<div class="slide-name">Patrick Hennessey</div>' +
+			'<h2 class="slide-title"><span>Production</span><span>Design</span></h2>';
 		bar.appendChild(top);
 
-		// Category block: content slides only (not the cover slide).
-		if (i !== 0) {
-			var data = SLIDES[i - 1] || {};
-			var bottom = document.createElement('div');
-			bottom.className = 'bar-bottom';
-			bottom.innerHTML = CATEGORIES.map(function (c) {
-				var value = data[c.key];
-				var body = value ? multiline(value) : 'Content goes here';
-				return '<div class="cat">' +
-					'<div class="cat-h">' + c.label + '</div>' +
-					'<div class="cat-b">' + body + '</div>' +
-					'</div>';
-			}).join('');
-			bar.appendChild(bottom);
-		}
+		var data = SLIDES[i - 1] || {};
+		var bottom = document.createElement('div');
+		bottom.className = 'bar-bottom';
+		bottom.innerHTML = CATEGORIES.map(function (c) {
+			var value = data[c.key];
+			var body = value ? multiline(value) : 'Content goes here';
+			return '<div class="cat">' +
+				'<div class="cat-h">' + c.label + '</div>' +
+				'<div class="cat-b">' + body + '</div>' +
+				'</div>';
+		}).join('');
+		bar.appendChild(bottom);
 
 		slide.appendChild(bar);
 
-		// Right column: the pre-made JPG on content slides. The cover slide
-		// (i === 0) has a plain white right side, no image.
-		// Images: content slide 1 -> img/slide.jpg, then img/slide2.jpg ..
-		// img/slide14.jpg for the rest.
-		if (i !== 0) {
-			var n = (i === 1) ? '' : String(i);
-			var image = document.createElement('img');
-			image.className = 'slide-image';
-			image.src = 'img/slide' + n + '.jpg';
-			image.alt = '';
-			slide.appendChild(image);
-		}
+		// Right column: the pre-made JPG. Content slide 1 -> img/slide.jpg,
+		// then img/slide2.jpg .. img/slide14.jpg for the rest.
+		var n = (i === 1) ? '' : String(i);
+		var image = document.createElement('img');
+		image.className = 'slide-image';
+		image.src = 'img/slide' + n + '.jpg';
+		image.alt = '';
+		slide.appendChild(image);
 
 		return slide;
 	}
@@ -128,7 +132,7 @@
 	// supersedes an older one via `navToken`, and rapid moves keep at most the
 	// two slides they touch on screen.
 
-	var TRANSITION_MS = 200;   // must match the CSS opacity transition
+	var TRANSITION_MS = 100;   // must match the CSS opacity transition
 	var navToken = 0;
 
 	// Set opacity with NO animation (disable the transition for one commit).
@@ -147,6 +151,14 @@
 	function updateArrows() {
 		prevBtn.classList.toggle('is-hidden', current === 0);
 		nextBtn.classList.toggle('is-hidden', current === SLIDE_COUNT - 1);
+	}
+
+	// Only the current slide is interactive — so its bar text can be selected,
+	// while the hidden slides (stacked on top at opacity 0) never intercept.
+	function applyPointerEvents() {
+		for (var i = 0; i < slideEls.length; i++) {
+			slideEls[i].style.pointerEvents = (i === current) ? 'auto' : 'none';
+		}
 	}
 
 	function navigate(target) {
@@ -171,6 +183,7 @@
 		setAnimated(topEl, forward ? 1 : 0);
 
 		updateArrows();
+		applyPointerEvents();
 
 		// When the fade settles (and only if not superseded), keep ONLY current.
 		var settled = false;
@@ -194,19 +207,37 @@
 	nextBtn.addEventListener('click', function () { go(1); });
 
 	document.addEventListener('keydown', function (e) {
-		if (e.key === 'ArrowRight') go(1);
-		else if (e.key === 'ArrowLeft') go(-1);
+		if (e.key === 'ArrowRight' || e.key === 'ArrowDown') go(1);
+		else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') go(-1);
 	});
+
+	// Mouse wheel / trackpad: advance one slide the instant a scroll is detected,
+	// then ignore further wheel input for WHEEL_COOLDOWN ms. No accumulation and
+	// no backlog, so a stream of high-resolution / momentum events can't pile up
+	// or keep flipping after you stop. Down (+) advances, up (-) goes back.
+	var WHEEL_COOLDOWN = 200;   // ms between wheel-driven advances
+	var wheelLocked = false;
+	window.addEventListener('wheel', function (e) {
+		if (Math.abs(e.deltaY) < 1) return;   // ignore noise / horizontal scroll
+		if (wheelLocked) return;
+		wheelLocked = true;
+		setTimeout(function () { wheelLocked = false; }, WHEEL_COOLDOWN);
+		go(e.deltaY > 0 ? 1 : -1);
+	}, { passive: true });
 
 
 	// --- Fit the frame to the viewport (>=5% margin, top & sides) ---------
 
 	function fit() {
+		var vw = window.innerWidth;
 		var scale = Math.min(
-			(window.innerWidth * 0.9) / 1152,
+			(vw * 0.9) / 1152,
 			(window.innerHeight * 0.9) / 648
 		);
 		frame.style.setProperty('--s', scale);
+		// Margin outside the scaled frame → the nav-arrow hover/click zones.
+		var marginX = (vw - 1152 * scale) / 2;
+		document.documentElement.style.setProperty('--margin-x', marginX + 'px');
 	}
 
 	window.addEventListener('resize', fit, { passive: true });
@@ -221,6 +252,7 @@
 	// Initial paint: show the cover instantly; every other slide hidden.
 	slideEls.forEach(function (el, i) { setInstant(el, i === 0 ? 1 : 0); });
 	updateArrows();
+	applyPointerEvents();
 
 	fit();
 })();

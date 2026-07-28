@@ -66,7 +66,7 @@ body {
 	   white background below.) */
 	opacity: 0;
 	pointer-events: none;
-	transition: opacity 200ms ease;
+	transition: opacity 100ms ease;
 	/* ALWAYS a self-contained stacking context, so the bar's z-index never
 	   hoists out of the slide when opacity reaches 1. Without this, a child's
 	   z-index escapes to a global layer at opacity 1 and "pops" instead of
@@ -83,21 +83,32 @@ body {
 /* Left bar (280px) — yellow only on slide 1, transparent (white) elsewhere
    ------------------------------------------------------------------------- */
 
+/* Allow selecting the copy in the bars (the stage disables select globally). */
+.slide-bar, .cover-content {
+	-webkit-user-select: text;
+	-moz-user-select: text;
+	user-select: text;
+}
+
 .slide-bar {
-	position: relative;      /* stack above the absolutely-placed image */
-	z-index: 1;
-	flex: 0 0 280px;
-	width: 280px;
+	position: relative;
+	z-index: 0;              /* sits BEHIND the image (see .slide-image) */
+	flex: 0 0 282px;
+	width: 282px;            /* 2px wider than the 280 column: its right edge
+	                            overlaps under the image, hiding any seam */
 	height: 100%;
 	padding: 32px;
 	display: flex;
 	flex-direction: column;
-	background: var(--white);   /* solid — masks any image bleed, no see-through */
+	background: var(--white);   /* solid fill continues behind the image edge */
 }
 
-/* Cover (slide 1) has no image, so it keeps a solid white right side. */
-.slide--accent { background: var(--white); }
-.slide--accent .slide-bar { background: var(--accent); }
+/* Intro/cover slide: full yellow — no sidebar, no image, no seam strip.
+   Content sits directly on the slide (see .cover-content). The seam strip is
+   scoped to non-cover slides, so nothing is bordered here. */
+.slide--accent { background: var(--accent); }
+
+.cover-content { padding: 32px; }
 
 /* Cover-slide wordmark (slide 1) — original treatment, original scale */
 .wordmark {
@@ -109,6 +120,15 @@ body {
 .wordmark span { display: block; }   /* Patrick / Hennessey on two lines */
 .wm-first { color: var(--white); }
 .wm-last  { color: var(--white); }
+
+.wm-sub {
+	margin-top: 16px;          /* double the previous 8px gap below the name */
+	font-size: 0.714rem;       /* 40% smaller than the previous 1.19rem */
+	line-height: 1.1;
+	font-weight: 700;
+	text-transform: uppercase;
+	color: var(--white);
+}
 
 .slide-name {
 	font-size: 15px;          /* content slides: 50% of the old 30px */
@@ -130,7 +150,7 @@ body {
 
 .bar-bottom {
 	margin-top: auto;        /* bottom-aligned category block */
-	padding-right: 60px;
+	padding-right: 50px;
 }
 
 .cat { margin-top: 10px; }
@@ -166,21 +186,7 @@ body {
 	height: 100%;
 	width: auto;             /* scale by intrinsic aspect from full height */
 	display: block;
-	z-index: 0;              /* sits beneath the bar */
-}
-
-/* 1px white edge at the bar/image seam, sitting BELOW the image (z-index -1,
-   beneath the image's z-index 0). It backs any sub-pixel gap between bar and
-   image without painting over the JPG. */
-.slide::before {
-	content: '';
-	position: absolute;
-	top: 0;
-	bottom: 0;
-	left: 280px;             /* the bar's right edge (bar is 280px wide) */
-	width: 1px;
-	background: var(--white);
-	z-index: -1;
+	z-index: 1;              /* on top of the bar, which overlaps 2px behind it */
 }
 
 
@@ -191,7 +197,6 @@ body {
 	position: fixed;
 	top: 0;
 	height: 100%;
-	width: 20%;               /* trigger + click zone: 20% of the viewport edge */
 	display: flex;
 	align-items: center;
 	background: none;
@@ -203,8 +208,11 @@ body {
 	z-index: 10;
 }
 
-.nav-prev { left: 0;  justify-content: flex-start; padding-left: 20px; }
-.nav-next { right: 0; justify-content: flex-end;   padding-right: 20px; }
+/* Hover/click zone = only the margin OUTSIDE the frame (--margin-x, set in
+   ui.js), so it never covers the slide or blocks selecting the bar text. The
+   arrow floats just past the frame's edge. */
+.nav-prev { left: 0;  width: var(--margin-x, 5vw); justify-content: flex-end;   padding-right: 12px; }
+.nav-next { right: 0; width: var(--margin-x, 5vw); justify-content: flex-start; padding-left: 12px; }
 
 /* Reveal only while the cursor is inside the edge zone */
 .nav-arrow:hover { opacity: 0.85; }
