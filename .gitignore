@@ -1,1 +1,23 @@
+# macOS
 .DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Claude Code local-only settings
+.claude/settings.local.json
+
+# This is a public GitHub Pages site: PDFs are ignored by default so a cover
+# letter or other private document can't be published by accident. Add an
+# explicit exception below for each PDF that is genuinely meant to be public.
+*.pdf
+!portfolio/img/PatrickHennessey_Resume_2026.pdf
+
+# Logs / deps (none expected for this static site, but just in case)
+node_modules/
+npm-debug.log*

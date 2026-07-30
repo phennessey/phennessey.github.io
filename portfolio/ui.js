@@ -1,21 +1,15 @@
 // Hennessey Design — ui.js
+//
+// Data + behavior only. Markup lives in index.html (the two bookend slides and
+// the #content-slide template); visual constants live in styles.css and are
+// read from there, so no value is maintained in two files.
 
 (function () {
 	'use strict';
 
-	var SLIDE_COUNT = 16;   // cover + 14 content slides + outro
-
-	// Bar categories, in display order, mapped to keys in the SLIDES data.
-	var CATEGORIES = [
-		{ label: 'Agency',  key: 'agency' },
-		{ label: 'Client',  key: 'client' },
-		{ label: 'Project', key: 'project' },
-		{ label: 'Roles',   key: 'roles' }
-	];
-
-	// Per-content-slide copy (from info.txt). '\n' marks an intentional line
-	// return that must be honored in the rendered bar. SLIDES[k] feeds content
-	// slide k+1 (the cover has no data). 14 entries for 14 content slides.
+	// Copy for the 14 generated content slides, in order. Newlines are
+	// intentional line breaks — .cat-b sets `white-space: pre-line`, so they
+	// render as authored without any markup in this file.
 	var SLIDES = [
 		{ agency: 'Cinco Design', client: 'EA Sports',    project: 'FIFA 22',                                             roles: 'digital asset and styleguide production, automation, file management, final packaging' },
 		{ agency: 'Cinco Design', client: 'EA Sports',    project: 'Madden NFL 22',                                       roles: 'digital asset and styleguide production, automation, file management, final packaging' },
@@ -33,175 +27,193 @@
 		{ agency: 'Fiction',      client: 'Apple',        project: 'iPhone, iPad, and iPod product launches for US Retail Marcom', roles: 'layout, file management, print and documentation production' }
 	];
 
+	var root = document.documentElement;
+	var stage = document.getElementById('stage');
 	var frame = document.getElementById('frame');
 	var prevBtn = document.getElementById('prev');
 	var nextBtn = document.getElementById('next');
+	var template = document.getElementById('content-slide');
+	var coverEl = document.getElementById('slide-cover');
+	var outroEl = document.getElementById('slide-outro');
 
-	var current = 0;           // toggle state: index of the current slide
-	var slideEls = [];         // all slides, index 0..14, persistent in the DOM
+	var VISIBLE = 'is-visible';
+
+	var slideEls = [];   // every slide, in index order, persistent in the DOM
+	var current = 0;     // index of the slide currently on screen
 
 
-	// --- Build slides -----------------------------------------------------
+	// --- Visual constants, read from styles.css ---------------------------
 
-	// Escape HTML, then turn intentional line returns into <br> so they render.
-	function multiline(s) {
-		return String(s)
-			.replace(/&/g, '&amp;')
-			.replace(/</g, '&lt;')
-			.replace(/>/g, '&gt;')
-			.replace(/\n/g, '<br>');
+	var cssVars = getComputedStyle(root);
+
+	function cssNumber(name, fallback) {
+		var value = parseFloat(cssVars.getPropertyValue(name));
+		return isNaN(value) ? fallback : value;
 	}
 
-	function buildSlide(i) {
-		// The first and last slides are full-yellow "bookends" (intro + outro).
-		var isAccent = (i === 0 || i === SLIDE_COUNT - 1);
+	var FADE_MS = cssNumber('--fade-ms', 100);
+	var FRAME_W = cssNumber('--frame-w', 1152);
+	var FRAME_H = cssNumber('--frame-h', 648);
+	var FIT = cssNumber('--fit', 0.9);
 
-		var slide = document.createElement('div');
-		slide.className = 'slide' + (isAccent ? ' slide--accent' : '');
-		slide.dataset.index = i;
 
-		// Bookend slide: full-yellow, NO sidebar div, no image, no seam — just
-		// the wordmark + a subtitle placed directly on the slide.
-		if (isAccent) {
-			var subtitle = (i === 0)
-				? 'Production Design &amp;<br>Automation Systems'
-				: 'p.hennessey@yahoo.com';
-			var cover = document.createElement('div');
-			cover.className = 'cover-content';
-			cover.innerHTML =
-				'<h1 class="wordmark">' +
-				'<span class="wm-first">Patrick</span>' +
-				'<span class="wm-last">Hennessey</span>' +
-				'</h1>' +
-				'<p class="wm-sub">' + subtitle + '</p>';
-			slide.appendChild(cover);
-			return slide;
+	// --- Build the content slides ----------------------------------------
+
+	function buildSlide(data, index) {
+		var slide = template.content.firstElementChild.cloneNode(true);
+
+		var fields = slide.querySelectorAll('[data-field]');
+		for (var i = 0; i < fields.length; i++) {
+			fields[i].textContent = data[fields[i].dataset.field] || '';
 		}
 
-		// Content slides: left bar (name, title, categories) + right image.
-		var bar = document.createElement('div');
-		bar.className = 'slide-bar';
-
-		var top = document.createElement('div');
-		top.className = 'bar-top';
-		top.innerHTML =
-			'<div class="slide-name">Patrick Hennessey</div>' +
-			'<h2 class="slide-title"><span>Production</span><span>Design</span></h2>';
-		bar.appendChild(top);
-
-		var data = SLIDES[i - 1] || {};
-		var bottom = document.createElement('div');
-		bottom.className = 'bar-bottom';
-		bottom.innerHTML = CATEGORIES.map(function (c) {
-			var value = data[c.key];
-			var body = value ? multiline(value) : 'Content goes here';
-			return '<div class="cat">' +
-				'<div class="cat-h">' + c.label + '</div>' +
-				'<div class="cat-b">' + body + '</div>' +
-				'</div>';
-		}).join('');
-		bar.appendChild(bottom);
-
-		slide.appendChild(bar);
-
-		// Right column: the pre-made JPG. Content slide 1 -> img/slide.jpg,
-		// then img/slide2.jpg .. img/slide14.jpg for the rest.
-		var n = (i === 1) ? '' : String(i);
-		var image = document.createElement('img');
-		image.className = 'slide-image';
-		image.src = 'img/slide' + n + '.jpg';
-		image.alt = '';
-		slide.appendChild(image);
+		// Content slide 1 -> img/slide.jpg, then img/slide2.jpg .. slide14.jpg.
+		// Held in data-src until the slide is near (see loadNearby).
+		var image = slide.querySelector('.slide-image');
+		image.dataset.src = 'img/slide' + (index === 1 ? '' : index) + '.jpg';
+		image.alt = data.client + ' — ' + data.project.replace(/\n/g, ' ');
 
 		return slide;
 	}
 
-	// --- State / navigation ----------------------------------------------
-	//
-	// At rest, exactly ONE slide is visible (`current`) — nothing sits behind
-	// it. A move touches only two slides and cleans up after itself:
-	//   * forward  (from < current): `current` fades IN on top of `from`, which
-	//     holds at full opacity as an opaque base (so identical text never
-	//     lightens); when the fade ends, `from` is hidden.
-	//   * backward (from > current): `from` fades OUT on top, revealing `current`
-	//     held at full opacity beneath; when the fade ends, `from` is hidden.
-	// Slides stack by index (higher index paints on top), so the higher-index
-	// slide of the pair is always the one whose opacity animates. Opacity is set
-	// inline; a settle step (transitionend, with a timeout fallback) drops every
-	// non-current slide to 0 so only `current` remains. No lock — a newer move
-	// supersedes an older one via `navToken`, and rapid moves keep at most the
-	// two slides they touch on screen.
+	// The 14 JPGs total ~7.7 MB, so they are fetched as you approach them
+	// rather than all at once on first paint. Neighbours are pulled in too, so
+	// a move never waits on the network.
+	var PRELOAD_RADIUS = 2;
 
-	var TRANSITION_MS = 100;   // must match the CSS opacity transition
-	var navToken = 0;
-
-	// Set opacity with NO animation (disable the transition for one commit).
-	function setInstant(el, value) {
-		el.style.transition = 'none';
-		el.style.opacity = value;
-		void el.offsetWidth;           // commit without transitioning
-		el.style.transition = '';      // restore the CSS transition
+	function loadImage(i) {
+		var el = slideEls[i];
+		if (!el) return;
+		var image = el.querySelector('.slide-image');
+		if (image && image.dataset.src) {
+			image.src = image.dataset.src;
+			delete image.dataset.src;
+		}
 	}
 
-	// Set opacity and let the CSS transition animate it.
-	function setAnimated(el, value) {
-		el.style.opacity = value;
+	function loadNearby() {
+		for (var i = current - PRELOAD_RADIUS; i <= current + PRELOAD_RADIUS; i++) {
+			loadImage(i);
+		}
+	}
+
+
+	// --- Navigation -------------------------------------------------------
+	//
+	// Exactly one slide is visible at rest. A move animates exactly ONE slide,
+	// and always over a fully opaque slide beneath it — fading both at once
+	// would blend their text and wash it out mid-move:
+	//   forward  — the incoming (higher) slide fades in over the outgoing one,
+	//              which holds at full opacity until the fade lands.
+	//   backward — the incoming (lower) slide is revealed instantly beneath,
+	//              then the outgoing (higher) slide fades away above it.
+	// Cleanup after the fade is guarded by navToken, so a newer move simply
+	// supersedes an older one's cleanup.
+
+	var navToken = 0;
+	var inFlight = null;   // slide whose fade hasn't landed yet, if any
+
+	// Apply a visibility change to a batch of slides with no animation: fades
+	// are suppressed until the change has been committed. One forced reflow for
+	// the whole batch, however many slides it covers.
+	function withoutFade(els, mutate) {
+		if (!els.length) return;             // nothing to do, so no reflow
+		var i;
+		for (i = 0; i < els.length; i++) els[i].classList.add('no-fade');
+		for (i = 0; i < els.length; i++) mutate(els[i]);
+		void frame.offsetWidth;              // commit before the fades return
+		for (i = 0; i < els.length; i++) els[i].classList.remove('no-fade');
+	}
+
+	function show(el) { el.classList.add(VISIBLE); }
+	function hide(el) { el.classList.remove(VISIBLE); }
+
+	// Slides still painted that aren't in `keep` — i.e. leftovers from a move
+	// that has been superseded, or the outgoing slide once its fade has landed.
+	function stragglers(keep) {
+		var found = [];
+		for (var i = 0; i < slideEls.length; i++) {
+			var el = slideEls[i];
+			if (keep.indexOf(el) === -1 && el.classList.contains(VISIBLE)) found.push(el);
+		}
+		return found;
+	}
+
+	function whenFadeEnds(el, done) {
+		var fired = false;
+		function finish(e) {
+			if (fired || (e && e.target !== el)) return;
+			fired = true;
+			el.removeEventListener('transitionend', finish);
+			done();
+		}
+		el.addEventListener('transitionend', finish);
+		setTimeout(finish, FADE_MS + 80);   // fallback if transitionend is missed
+	}
+
+	// Only the current slide is interactive. `inert` keeps the hidden slides out
+	// of the tab order and the accessibility tree, so the outro's resume link
+	// can't be reached from the cover.
+	function updateInteractivity() {
+		for (var i = 0; i < slideEls.length; i++) {
+			if (i === current) slideEls[i].removeAttribute('inert');
+			else slideEls[i].setAttribute('inert', '');
+		}
 	}
 
 	function updateArrows() {
 		prevBtn.classList.toggle('is-hidden', current === 0);
-		nextBtn.classList.toggle('is-hidden', current === SLIDE_COUNT - 1);
-	}
-
-	// Only the current slide is interactive — so its bar text can be selected,
-	// while the hidden slides (stacked on top at opacity 0) never intercept.
-	function applyPointerEvents() {
-		for (var i = 0; i < slideEls.length; i++) {
-			slideEls[i].style.pointerEvents = (i === current) ? 'auto' : 'none';
-		}
+		nextBtn.classList.toggle('is-hidden', current === slideEls.length - 1);
 	}
 
 	function navigate(target) {
-		if (target < 0 || target >= SLIDE_COUNT || target === current) return;
+		if (target < 0 || target >= slideEls.length || target === current) return;
 
-		var from = current;
+		var fromEl = slideEls[current];
+		var toEl = slideEls[target];
+		var forward = target > current;
 		current = target;
 
-		var top = Math.max(from, current);      // higher index -> on top -> animates
-		var bottom = Math.min(from, current);   // lower index  -> opaque base beneath
-		var forward = current > from;
-		var topEl = slideEls[top];
-		var token = ++navToken;
+		// Only these two take part in the move; anything else still painted is a
+		// leftover from a superseded move and is cut now, so stale fades can't
+		// stack up underneath.
+		withoutFade(stragglers([fromEl, toEl]), hide);
 
-		// Any slide not part of this move: gone instantly.
-		for (var i = 0; i < slideEls.length; i++) {
-			if (i !== top && i !== bottom) setInstant(slideEls[i], 0);
+		var animating;
+		if (forward) {
+			// If the previous move is still running, `fromEl` may only be
+			// part-way faded in. Snap it to full opacity first, so the incoming
+			// slide always has a genuinely opaque base under it.
+			if (inFlight) withoutFade([fromEl], show);
+			show(toEl);                       // fades in over fromEl
+			animating = toEl;
+		} else {
+			withoutFade([toEl], show);        // opaque base, revealed beneath
+			hide(fromEl);                     // fades away above it
+			animating = fromEl;
 		}
-		// Opaque base holds beneath the fade.
-		setInstant(slideEls[bottom], 1);
-		// Top slide fades in (forward) or out (backward).
-		setAnimated(topEl, forward ? 1 : 0);
 
 		updateArrows();
-		applyPointerEvents();
+		updateInteractivity();
+		loadNearby();
 
-		// When the fade settles (and only if not superseded), keep ONLY current.
-		var settled = false;
-		function settle() {
-			if (settled || token !== navToken) return;
-			settled = true;
-			for (var j = 0; j < slideEls.length; j++) {
-				if (j !== current) setInstant(slideEls[j], 0);
-			}
-		}
-		function onEnd(e) { if (e.target === topEl) settle(); }
-		topEl.addEventListener('transitionend', onEnd, { once: true });
-		setTimeout(settle, TRANSITION_MS + 80);   // fallback if transitionend is missed
+		// Once the fade lands, cut the outgoing slide — instantly, so nothing
+		// lingers half-painted behind the slide that's now on screen.
+		var token = ++navToken;
+		inFlight = animating;
+		whenFadeEnds(animating, function () {
+			if (token !== navToken) return;
+			inFlight = null;
+			withoutFade(stragglers([slideEls[current]]), hide);
+		});
 	}
 
 	function go(delta) {
 		navigate(current + delta);
 	}
+
+
+	// --- Input ------------------------------------------------------------
 
 	prevBtn.addEventListener('click', function () { go(-1); });
 	nextBtn.addEventListener('click', function () { go(1); });
@@ -209,13 +221,15 @@
 	document.addEventListener('keydown', function (e) {
 		if (e.key === 'ArrowRight' || e.key === 'ArrowDown') go(1);
 		else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') go(-1);
+		else if (e.key === 'Home') navigate(0);
+		else if (e.key === 'End') navigate(slideEls.length - 1);
 	});
 
-	// Mouse wheel / trackpad: advance one slide the instant a scroll is detected,
-	// then ignore further wheel input for WHEEL_COOLDOWN ms. No accumulation and
-	// no backlog, so a stream of high-resolution / momentum events can't pile up
-	// or keep flipping after you stop. Down (+) advances, up (-) goes back.
-	var WHEEL_COOLDOWN = 200;   // ms between wheel-driven advances
+	// Mouse wheel / trackpad: advance one slide the instant a scroll is
+	// detected, then ignore further wheel input for WHEEL_COOLDOWN ms. No
+	// accumulation and no backlog, so a stream of high-resolution / momentum
+	// events can't pile up or keep flipping after you stop. Down (+) advances.
+	var WHEEL_COOLDOWN = 200;
 	var wheelLocked = false;
 	window.addEventListener('wheel', function (e) {
 		if (Math.abs(e.deltaY) < 1) return;   // ignore noise / horizontal scroll
@@ -225,34 +239,62 @@
 		go(e.deltaY > 0 ? 1 : -1);
 	}, { passive: true });
 
+	// Touch/pen: a horizontal swipe advances, matching the arrow direction.
+	// Mouse drags are deliberately ignored so click-dragging to select the bar
+	// text still works.
+	var SWIPE_MIN = 40;   // px of travel before it counts as a swipe
+	var swipeFrom = null;
 
-	// --- Fit the frame to the viewport (>=5% margin, top & sides) ---------
+	stage.addEventListener('pointerdown', function (e) {
+		swipeFrom = (e.pointerType === 'mouse') ? null : e.clientX;
+	});
+
+	stage.addEventListener('pointercancel', function () { swipeFrom = null; });
+
+	stage.addEventListener('pointerup', function (e) {
+		if (swipeFrom === null) return;
+		var dx = e.clientX - swipeFrom;
+		swipeFrom = null;
+		if (Math.abs(dx) >= SWIPE_MIN) go(dx < 0 ? 1 : -1);
+	});
+
+
+	// --- Fit the frame to the viewport ------------------------------------
+	//
+	// --s is the only thing set from here; styles.css derives the frame box and
+	// the nav-arrow margin (--margin-x) from it.
 
 	function fit() {
-		var vw = window.innerWidth;
-		var scale = Math.min(
-			(vw * 0.9) / 1152,
-			(window.innerHeight * 0.9) / 648
-		);
-		frame.style.setProperty('--s', scale);
-		// Margin outside the scaled frame → the nav-arrow hover/click zones.
-		var marginX = (vw - 1152 * scale) / 2;
-		document.documentElement.style.setProperty('--margin-x', marginX + 'px');
+		root.style.setProperty('--s', Math.min(
+			(window.innerWidth * FIT) / FRAME_W,
+			(window.innerHeight * FIT) / FRAME_H
+		));
 	}
 
-	window.addEventListener('resize', fit, { passive: true });
+	var fitQueued = false;
+	window.addEventListener('resize', function () {
+		if (fitQueued) return;
+		fitQueued = true;
+		requestAnimationFrame(function () {
+			fitQueued = false;
+			fit();
+		});
+	}, { passive: true });
 
-	// Build every slide once; they persist in the DOM, stacked by index.
-	for (var i = 0; i < SLIDE_COUNT; i++) {
-		var el = buildSlide(i);
+
+	// --- Init -------------------------------------------------------------
+
+	slideEls.push(coverEl);
+	SLIDES.forEach(function (data, i) {
+		var el = buildSlide(data, i + 1);
 		slideEls.push(el);
-		frame.appendChild(el);
-	}
+		frame.insertBefore(el, outroEl);
+	});
+	slideEls.push(outroEl);
 
-	// Initial paint: show the cover instantly; every other slide hidden.
-	slideEls.forEach(function (el, i) { setInstant(el, i === 0 ? 1 : 0); });
+	withoutFade([coverEl], show);   // cover is up immediately, with no fade-in
 	updateArrows();
-	applyPointerEvents();
-
+	updateInteractivity();
+	loadNearby();
 	fit();
 })();

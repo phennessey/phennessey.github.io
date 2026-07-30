@@ -1,4 +1,8 @@
-/* Hennessey Design — styles.css */
+/* Hennessey Design — styles.css
+   -------------------------------------------------------------------------
+   Single source of truth for every visual constant, including the ones ui.js
+   needs (--fade-ms, --frame-w, --frame-h, --fit): ui.js reads those from here
+   with getComputedStyle instead of keeping its own copies. */
 
 :root {
 	--black: #000;
@@ -7,9 +11,23 @@
 	--light-gray: #d2d2d2;
 	--gray: #acacac;
 	--stage-bg: #333;
+
+	/* Authored frame size, unitless so it works in calc() and reads as a plain
+	   number in ui.js. */
+	--frame-w: 1152;
+	--frame-h: 648;
+	--fit: 0.9;              /* fraction of the viewport the frame may fill */
+	--s: 1;                  /* fit scale — recomputed by ui.js on resize */
+
+	--fade-ms: 100ms;        /* slide cross-fade */
+	--nav-fade-ms: 200ms;    /* nav-arrow reveal */
+
+	/* Viewport left over beside the scaled frame = the nav-arrow hit zones.
+	   Derived from --s, so the frame size is never restated. */
+	--margin-x: max(0px, calc((100vw - var(--frame-w) * 1px * var(--s)) / 2));
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
 html, body { height: 100%; }
 
@@ -24,11 +42,12 @@ body {
 }
 
 
-/* Stage + scaled 1152x648 frame
+/* Stage + scaled frame
    -------------------------------------------------------------------------
-   The frame is authored at true 1152x648 px, then uniformly scaled to fit
-   the viewport with >=5% margin on top and sides. Every dimension inside the
-   frame is therefore "relative to 1152x648" as authored. */
+   The frame is authored at true --frame-w x --frame-h px, then uniformly
+   scaled to fit the viewport with >=5% margin on top and sides. Every
+   dimension inside the frame is therefore "relative to 1152x648" as
+   authored. */
 
 .stage {
 	position: fixed;
@@ -38,7 +57,6 @@ body {
 	/* No text/drag selection overlay when click-dragging across slides */
 	-webkit-user-select: none;
 	-moz-user-select: none;
-	-ms-user-select: none;
 	user-select: none;
 }
 
@@ -46,27 +64,30 @@ body {
 	position: absolute;
 	top: 50%;
 	left: 50%;
-	width: 1152px;
-	height: 648px;
-	transform: translate(-50%, -50%) scale(var(--s, 1));
+	width: calc(var(--frame-w) * 1px);
+	height: calc(var(--frame-h) * 1px);
+	transform: translate(-50%, -50%) scale(var(--s));
 	transform-origin: center center;
 }
 
 
 /* Slides — stacked, cross-fade
-   ------------------------------------------------------------------------- */
+   -------------------------------------------------------------------------
+   Slides sit in the frame in index order, so a higher index always paints
+   over a lower one. Visibility is a class, not an inline style: ui.js only
+   ever adds/removes .is-visible, and .no-fade suppresses the transition for
+   the one case that must land instantly (see ui.js). */
 
 .slide {
 	position: absolute;
 	inset: 0;
 	display: flex;
 	/* No slide background: the left bar supplies its own solid fill and the
-	   image supplies the right side, so the area behind the image is transparent
-	   — only the JPG shows there. (The cover has no image, so it sets its own
-	   white background below.) */
+	   image supplies the right side, so the area behind the image is
+	   transparent — only the JPG shows there. The bookend slides carry no
+	   image and paint themselves via .slide--accent. */
 	opacity: 0;
-	pointer-events: none;
-	transition: opacity 100ms ease;
+	transition: opacity var(--fade-ms) ease;
 	/* ALWAYS a self-contained stacking context, so the bar's z-index never
 	   hoists out of the slide when opacity reaches 1. Without this, a child's
 	   z-index escapes to a global layer at opacity 1 and "pops" instead of
@@ -74,13 +95,17 @@ body {
 	isolation: isolate;
 }
 
-/* Slides stack by DOM order = index (higher index paints on top). Opacity is
-   driven inline from ui.js: at rest only the current slide is at opacity 1 and
-   nothing sits behind it; during a move the two involved slides are shown (one
-   animating, one an opaque base) and every other slide is at opacity 0. */
+.slide.is-visible { opacity: 1; }
+.slide.no-fade { transition: none; }
+
+/* ui.js marks every non-current slide inert, which takes it out of the tab
+   order and the accessibility tree. This is the pointer-events half of that,
+   spelled out so hidden slides can't intercept clicks even where `inert`
+   isn't implemented. */
+.slide[inert] { pointer-events: none; }
 
 
-/* Left bar (280px) — yellow only on slide 1, transparent (white) elsewhere
+/* Left bar — always white; the accent is carried by the bookend slides
    ------------------------------------------------------------------------- */
 
 /* Allow selecting the copy in the bars (the stage disables select globally). */
@@ -103,23 +128,27 @@ body {
 	background: var(--white);   /* solid fill continues behind the image edge */
 }
 
-/* Intro/cover slide: full yellow — no sidebar, no image, no seam strip.
-   Content sits directly on the slide (see .cover-content). The seam strip is
-   scoped to non-cover slides, so nothing is bordered here. */
+/* Bookend slides (cover + outro): full yellow, no sidebar, no image. Content
+   sits directly on the slide via .cover-content. */
 .slide--accent { background: var(--accent); }
 
 .cover-content { padding: 32px; }
 
-/* Cover-slide wordmark (slide 1) — original treatment, original scale */
+/* Bookend wordmark — original treatment, original scale */
 .wordmark {
 	font-weight: 800;
 	line-height: 0.8;
 	letter-spacing: -0.01em;
 	font-size: 2.38rem;      /* midpoint between 2.8rem and 1.96rem */
+	color: var(--white);
 }
 .wordmark span { display: block; }   /* Patrick / Hennessey on two lines */
-.wm-first { color: var(--white); }
-.wm-last  { color: var(--white); }
+
+/* Redundant with .wordmark above, and deliberately so: an earlier version of
+   this file set the wordmark colour on these two classes only. Keeping both the
+   classes (in index.html) and this rule means the name renders white whether a
+   visitor has this stylesheet or a stale cached copy of the old one. */
+.wm-first, .wm-last { color: var(--white); }
 
 .wm-sub {
 	margin-top: 16px;          /* double the previous 8px gap below the name */
@@ -130,6 +159,21 @@ body {
 	color: var(--white);
 }
 
+.wm-resume { margin-top: 8px; }
+
+.wm-resume a {
+	color: var(--white);
+	text-decoration: none;
+	opacity: 0.7;
+	transition: opacity var(--nav-fade-ms) ease;
+}
+
+.wm-resume a:hover,
+.wm-resume a:focus-visible,
+.wm-resume a:active { opacity: 1; }
+
+.wm-resume-arrow { font-size: 85%; }
+
 .slide-name {
 	font-size: 15px;          /* content slides: 50% of the old 30px */
 	line-height: 1;
@@ -139,7 +183,7 @@ body {
 }
 
 .slide-title {
-	margin-top: 20px;        /* gap below the name */
+	margin-top: 20px;         /* gap below the name */
 	font-size: 22.5px;        /* content slides: 50% of the old 45px */
 	line-height: 0.8;
 	font-weight: 800;
@@ -169,6 +213,9 @@ body {
 	line-height: 1.15;        /* 115% */
 	font-weight: 400;         /* light weight */
 	color: var(--black);
+	/* Newlines in the SLIDES data are intentional line breaks. Honoring them
+	   here lets ui.js assign textContent instead of assembling markup. */
+	white-space: pre-line;
 }
 
 
@@ -204,29 +251,29 @@ body {
 	cursor: pointer;
 	color: var(--light-gray);
 	opacity: 0;
-	transition: opacity 0.2s ease;
+	transition: opacity var(--nav-fade-ms) ease;
 	z-index: 10;
 }
 
-/* Hover/click zone = only the margin OUTSIDE the frame (--margin-x, set in
-   ui.js), so it never covers the slide or blocks selecting the bar text. The
-   arrow floats just past the frame's edge. */
-.nav-prev { left: 0;  width: var(--margin-x, 5vw); justify-content: flex-end;   padding-right: 12px; }
-.nav-next { right: 0; width: var(--margin-x, 5vw); justify-content: flex-start; padding-left: 12px; }
+/* Hit zone = only the margin OUTSIDE the frame, so it never covers a slide or
+   blocks selecting the bar text. The arrow floats just past the frame edge. */
+.nav-prev { left: 0;  width: var(--margin-x); justify-content: flex-end;   padding-right: 12px; }
+.nav-next { right: 0; width: var(--margin-x); justify-content: flex-start; padding-left: 12px; }
 
 /* Reveal only while the cursor is inside the edge zone */
-.nav-arrow:hover { opacity: 0.85; }
+.nav-arrow:hover,
+.nav-arrow:focus-visible { opacity: 0.85; }
+
+/* Touch devices never hover, so the arrows would otherwise stay invisible. */
+@media (hover: none) {
+	.nav-arrow { opacity: 0.85; }
+}
 
 .nav-arrow.is-hidden { display: none; }
 
-/* Remove browser-drawn focus/active overlays (keyboard focus ring, Firefox
-   inner border, iOS callout) — cross-browser. */
-.nav-arrow:focus,
-.nav-arrow:focus-visible,
-.nav-arrow:active {
-	outline: none;
-	box-shadow: none;
-}
+/* Remove browser-drawn focus/active overlays (Firefox inner border, iOS
+   callout) while leaving :focus-visible styling above intact. */
+.nav-arrow:focus { outline: none; }
 .nav-arrow::-moz-focus-inner { border: 0; padding: 0; }
 
 .nav-arrow svg {
@@ -234,5 +281,10 @@ body {
 	height: 40px;
 	pointer-events: none;   /* svg never becomes the click/drag target */
 	-webkit-user-drag: none;
-	user-drag: none;
+}
+
+
+/* Respect a reduced-motion preference: cut the fades, keep the navigation. */
+@media (prefers-reduced-motion: reduce) {
+	:root { --fade-ms: 0ms; --nav-fade-ms: 0ms; }
 }
