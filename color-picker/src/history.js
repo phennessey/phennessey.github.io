@@ -9,6 +9,7 @@ import {
 import { findPantoneByName, syncLibraryCheckboxState, updateMatchesVisibility } from './pantone.js';
 import { requestRender } from './util.js';
 import { hexTextarea } from './hex.js';
+import { getGamutMode, resaturate } from './color.js';
 
 // History
 
@@ -17,9 +18,13 @@ let historyIndex = -1;
 let wheelSnapshotTimer = null;
 let pointerSnapshot    = null;
 
+// Each entry records the gamut mode its `s` was measured in (saturation is
+// relative to the gamut), so a snapshot restored after a mode switch is
+// re-measured in the current mode instead of being misread.
 function takeSnapshot() {
+  const mode = getGamutMode();
   return S.colors.map((c, i) => ({
-    h: c.h, s: c.s, L: c.L,
+    h: c.h, s: c.s, L: c.L, mode,
     selected: i === S.activeIndex || S.multiSelect.has(i),
     pantoneName: pantoneSelections.get(i)?.name ?? null,
   }));
@@ -90,7 +95,8 @@ function restoreSnapshot(snap) {
 
   pantoneSelections.clear();
 
-  setPalette(snap);
+  const mode = getGamutMode();
+  setPalette(snap.map(e => e.mode === mode ? e : { ...e, s: resaturate(e, e.mode, mode) }));
 
   const neededCategories = new Set();
   for (let i = 0; i < snap.length; i++) {
@@ -99,6 +105,9 @@ function restoreSnapshot(snap) {
     const entry = findPantoneByName(name);
     if (!entry) continue;
     pantoneSelections.set(i, entry);
+    // A promoted swatch IS its Pantone, so re-place it from the Pantone itself
+    // (rim-clamped in this gamut) rather than from the other mode's clip.
+    if (snap[i].mode !== mode) S.colors[i].s = Math.min(1, entry.s);
     neededCategories.add(entry.category);
   }
   if (neededCategories.size > 0) {

@@ -46,8 +46,8 @@
 // (see "True gamut membership" below), not the soft-proof round-trip.
 
 import {
-  convert, OKLab, XYZ, DisplayP3, sRGB, OKLabToOKHSL, DisplayP3Gamut,
-  toOKLab, toe, computeP3AndSRGB, cielabL,
+  convert, OKLab, XYZ, DisplayP3, sRGB, oklabToOKHSL, oklabToOKHSLIn,
+  toOKLab, toe, computeP3AndSRGB, cielabL, getGamutMode, isSRGBMode, clampOKLabToSRGB,
 } from "./color.js";
 import { S, els, P, pantoneSelections } from "./state.js";
 import { requestRender } from "./util.js";
@@ -98,7 +98,7 @@ let fwdSRGB = null;  // native *sRGB → CMYK (in-sRGB colours; matches Adobe ex
 let revLab50 = null;  // CMYK → native PCS CIELAB(D50): soft-proof P3 fill + bias `back`
 let gamutLUT = null;          // Float32Array[LUT_L*LUT_H] of max OKHSL s, active profile
 const profileCache = {};
-const lutCache = {};          // gamut LUT per profile key (built once)
+const lutCache = {};          // gamut LUT per profile key + gamut mode (built once each)
 
 // ── Native PCS = CIELAB(D50). Every engine Lab interchange (forward build,
 //    soft-proof reverse, bias `back`, gamut LUT) uses the engine's raw D50 PCS;
@@ -130,6 +130,7 @@ const mul3 = (M, v) => [
 const _xyz   = [0, 0, 0];
 const _p3    = [0, 0, 0];
 const _cmykXyz = [0, 0, 0];  // XYZ(D65) scratch for the Color-Bridge L* readout
+const _proofOk   = [0, 0, 0];   // proof OKLab scratch for the sRGB-mode clip
 const _regionOk  = [0, 0, 0];   // proof OKLab/OKHSL scratch for the region's own
 const _regionHsl = [0, 0, 0];   // light/dark chrome decision (see updateSwatchCMYK)
 
@@ -374,7 +375,7 @@ export function updateSwatchCMYK(container, color, index) {
   const LIGHT_BAND = 0.05;              // OKHSL-lightness dead band around toe(MIDDLE_GRAY)
   const proofLightnessOf = xyz65 => {   // the proof's OKHSL lightness
     convert(xyz65, XYZ, OKLab, _regionOk);
-    OKLabToOKHSL(_regionOk, DisplayP3Gamut, _regionHsl);
+    oklabToOKHSL(_regionOk, _regionHsl);
     return _regionHsl[2];
   };
 
@@ -421,7 +422,14 @@ export function updateSwatchCMYK(container, color, index) {
     const C = Math.round(c.C), M = Math.round(c.M), Y = Math.round(c.Y), K = Math.round(c.K);
     const proof = revLab50.transform(CE.color.CMYK(C, M, Y, K));
     const proofXyz = labD50ToXYZd65(proof.L, proof.a, proof.b);
-    convert(proofXyz, XYZ, DisplayP3, _p3);
+    // sRGB mode limits everything shown to sRGB, so a proof outside sRGB (the
+    // printable cyans) is pulled radially to the sRGB edge, like the wheel does.
+    if (isSRGBMode()) {
+      convert(proofXyz, XYZ, OKLab, _proofOk);
+      convert(clampOKLabToSRGB(_proofOk, _proofOk), OKLab, DisplayP3, _p3);
+    } else {
+      convert(proofXyz, XYZ, DisplayP3, _p3);
+    }
     cmykBg = `color(display-p3 ${cl3(_p3[0])} ${cl3(_p3[1])} ${cl3(_p3[2])})`;
     label = `${C}-${M}-${Y}-${K}`;
     cmykL = proof.L;   // CIELAB L* (D50) directly — matches Photoshop's Lab L for a P3 doc
@@ -502,8 +510,9 @@ function fillGaps(data) {
  *  Ink levels use Chebyshev spacing (denser near 0% and 100%), where the gamut
  *  surface moves fastest — uniform spacing badly undersampled the light tints.
  *  OKHSL s is capped at 1: it goes numerically unstable (s ≫ 1) near pure white,
- *  and CMYK lives within Display-P3 so 1 is the meaningful ceiling. */
-function buildGamutLUT(profile) {
+ *  and 1 is the disc edge — CMYK lives within Display-P3, and in sRGB mode the
+ *  printable colours outside sRGB belong on the rim anyway. */
+function buildGamutLUT(profile, mode) {
   const src = new CE.Transform({ dataFormat: "object", BPC: false });
   src.create(profile, "*LabD50", CE.eIntent.relative);   // CMYK device → Lab(D50, native PCS)
   const data = new Float32Array(LUT_H * LUT_L);
@@ -511,7 +520,7 @@ function buildGamutLUT(profile) {
   const add = (C, M, Y, K) => {
     const lab = src.transform(CE.color.CMYK(C, M, Y, K));
     convert(labD50ToXYZd65(lab.L, lab.a, lab.b), XYZ, OKLab, ok);
-    OKLabToOKHSL(ok, DisplayP3Gamut, hsl);               // [H 0–360, s, L 0–1]
+    oklabToOKHSLIn(mode, ok, hsl);                       // [H 0–360, s, L 0–1] in `mode`'s gamut
     const s = Math.min(1, hsl[1]);
     const hb = ((Math.floor(hsl[0] / 360 * LUT_H) % LUT_H) + LUT_H) % LUT_H;
     const lb = Math.max(0, Math.min(LUT_L - 1, Math.round(hsl[2] * (LUT_L - 1))));
@@ -549,7 +558,40 @@ async function buildTransforms(key) {
   fwd = new CE.Transform(O); fwd.create("*LabD50", p, I);
   fwdSRGB = new CE.Transform(O); fwdSRGB.create("*sRGB", p, I);
   revLab50 = new CE.Transform(O); revLab50.create(p, "*LabD50", I);
-  gamutLUT = lutCache[key] || (lutCache[key] = buildGamutLUT(p));
+  gamutLUT = lutFor(key, p);
+}
+
+// The LUT stores OKHSL saturation, which is relative to the wheel's gamut, so
+// each gamut mode needs its own table (P3: CMYK sits inside the disc; sRGB: the
+// printable colours outside sRGB cap at the rim).
+function lutFor(key, profile, mode = getGamutMode()) {
+  const k = `${key}:${mode}`;
+  return lutCache[k] || (lutCache[k] = buildGamutLUT(profile, mode));
+}
+
+// A LUT build takes ~1s, so it must never land on a click. After a profile
+// loads, the table for each mode not yet built is pre-built in idle time —
+// one per idle callback — so the first P3 ⇄ sRGB switch finds it ready.
+function prewarmLUTs(key) {
+  const profile = profileCache[key];
+  if (!profile) return;
+  const idle = window.requestIdleCallback || (fn => setTimeout(fn, 200));
+  for (const mode of ["p3", "srgb"]) {
+    if (lutCache[`${key}:${mode}`]) continue;
+    idle(() => lutFor(key, profile, mode));
+  }
+}
+
+/** Gamut-mode switch: swap in the LUT for the new mode and re-trace the ring.
+ *  While the CMYK section is closed nothing reads the LUT, so a table not yet
+ *  built is left for setCMYKActive (or the idle pre-warm) rather than blocking
+ *  the switch. A profile still loading picks up the new mode when it builds. */
+export function refreshCMYKGamut() {
+  if (!engineOK || !cmyk.ready || !profileCache[cmyk.profileKey]) return;
+  if (!cmyk.active && !lutCache[`${cmyk.profileKey}:${getGamutMode()}`]) { gamutLUT = null; return; }
+  gamutLUT = lutFor(cmyk.profileKey, profileCache[cmyk.profileKey]);
+  P.invalidateCMYKBoundary();
+  syncBoundary();
 }
 
 /** Switch the active CMYK profile (async parse), then repaint. */
@@ -563,6 +605,7 @@ export async function setCMYKProfile(key) {
     P.invalidateCMYKBoundary();   // gamut differs per profile → re-trace the ring
     syncBoundary();
     if (cmyk.active) requestRender();
+    prewarmLUTs(key);             // the other mode's table, before anyone switches
   } catch (e) {
     console.error("CMYK profile load failed:", e);
   }
@@ -574,7 +617,11 @@ export function setCMYKActive(on) {
   cmyk.active = on;
   els.swatches.classList.toggle("cmyk-active", on);
   if (on && !cmyk.ready) setCMYKProfile(cmyk.profileKey);
-  else { syncBoundary(); requestRender(); }
+  else {
+    // A mode switch while CMYK was closed may have deferred this mode's table.
+    if (on && !gamutLUT) refreshCMYKGamut();
+    syncBoundary(); requestRender();
+  }
 }
 
 // ── Init: wire the profile dropdown ──────────────────────────────────

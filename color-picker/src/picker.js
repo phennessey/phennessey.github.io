@@ -5,8 +5,8 @@
 // Pure colour-space math lives in color.js.
 
 import {
-  convert, OKLab, DisplayP3,
-  toe, toOKLab, to255, clamp01, sForChroma, chromaOf, inSRGB, cuspL,
+  convert, OKLab, DisplayP3, sRGB,
+  toe, toOKLab, to255, clamp01, sForChroma, chromaOf, inSRGB, cuspL, isSRGBMode,
 } from './color.js';
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -27,15 +27,21 @@ const BAYER4 = [0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5].map(v => (v / 16 - 0.4687
 
 // ── Disc pixel rendering ─────────────────────────────────────────────
 
-export function renderDiscPixels(imageData, discSize, lr) {
+// `space` is the canvas's own colour space (DisplayP3 or sRGB): pixels are
+// written as 8-bit codes in that space, so they must be computed in it too.
+export function renderDiscPixels(imageData, discSize, lr, space = DisplayP3) {
   const d = imageData.data;
   const discR = discSize / 2;
   for (let y = 0; y < discSize; y++) {
     for (let x = 0; x < discSize; x++) {
-      const dx = x - discR, dy = y - discR;
+      // Sample each pixel at its centre: pixel x covers [x, x+1] in the same
+      // coordinates the pointer, handles and dots use. Sampling the corner
+      // shifted the image half a pixel — up to ~31 8-bit steps in the outer
+      // ring, where OKHSL chroma climbs steeply toward the edge.
+      const dx = x + 0.5 - discR, dy = y + 0.5 - discR;
       const h  = (Math.atan2(-dy, dx) / TAU + 1) % 1;
       const s  = Math.min(1, Math.sqrt(dx * dx + dy * dy) / discR);
-      convert(toOKLab(h, s, lr), OKLab, DisplayP3, _p3);
+      convert(toOKLab(h, s, lr), OKLab, space, _p3);
       const idx = (y * discSize + x) * 4;
       // Bayer 4×4 ordered dither (±0.5 LSB) breaks 8-bit banding — a LUT lookup.
       const n = BAYER4[(y & 3) * 4 + (x & 3)];
@@ -241,6 +247,23 @@ export function createPicker(S, cfg) {
   wheelCanvas.style.clipPath = `circle(${DISC_R}px at ${DISC_R}px ${DISC_R}px)`;
   const wheelCtx = wheelCanvas.getContext('2d', { colorSpace: 'display-p3' });
 
+  // sRGB mode draws on its own sRGB canvas, stacked exactly over the P3 one. A
+  // canvas's colour space is fixed when its context is created, and an 8-bit P3
+  // canvas can't hold sRGB colours exactly: its codes don't line up with the hex
+  // grid, so sRGB-edge colours (the whole rim in sRGB mode) rounded to just
+  // inside or just outside sRGB — ~19% of rim pixels showed colours outside
+  // sRGB. On an sRGB canvas every pixel is a real 8-bit sRGB (hex) value.
+  const wheelCanvasSRGB = document.createElement('canvas');
+  wheelCanvasSRGB.id = 'wheel-srgb';
+  initCanvas(wheelCanvasSRGB, DISC_SIZE, DISC_SIZE);
+  wheelCanvasSRGB.style.clipPath = wheelCanvas.style.clipPath;
+  wheelCanvasSRGB.style.position = 'absolute';
+  wheelCanvasSRGB.style.top = '0';
+  wheelCanvasSRGB.style.left = '0';
+  wheelCanvasSRGB.style.visibility = 'hidden';
+  wheelCanvas.after(wheelCanvasSRGB);
+  const wheelCtxSRGB = wheelCanvasSRGB.getContext('2d', { colorSpace: 'srgb' });
+
   // The lightbar is a div with a CSS gradient — sized to match overlay.
   lightbarEl.style.cssText += `width:${LB_WIDTH}px;height:${LB_HEIGHT}px;display:block;`;
 
@@ -261,6 +284,14 @@ export function createPicker(S, cfg) {
     id: 'gamut-boundary', fill: 'none', stroke: '#000', 'stroke-width': '0.5', 'stroke-linejoin': 'round',
   });
   discOverlay.appendChild(gamutBoundary);
+
+  // sRGB mode's edge circle: just a circle at the disc edge (not a gamut
+  // boundary — in sRGB mode there is none), faded in near lightness 0 and 100.
+  const srgbEdgeCircle = svgEl('circle', {
+    id: 'srgb-edge-circle', cx: DISC_R, cy: DISC_R, r: DISC_R,
+    fill: 'none', stroke: '#000', 'stroke-width': '0.5', 'pointer-events': 'none', 'stroke-opacity': '0',
+  });
+  discOverlay.appendChild(srgbEdgeCircle);
 
   // CMYK gamut boundary — same colour logic as the sRGB ring but a slightly
   // thicker line so the two are distinguishable. Hidden until opted into.
@@ -319,7 +350,7 @@ export function createPicker(S, cfg) {
   function clearMesh() { discMesh.innerHTML = ''; }
 
   // ── Render cache ─────────────────────────────────────────────────
-  let discImg = null, discL = -1;
+  let discImg = null, discL = -1, discMode = '';
   let lightbarKey = null;
   let gamutLr = -1, gamutD = '';
   // CMYK boundary: injected predicate, visibility, and an lr-keyed path cache.
@@ -362,38 +393,60 @@ export function createPicker(S, cfg) {
 
   // ── Disc drawing ─────────────────────────────────────────────────
   function drawDisc() {
-    const ctx = wheelCtx;
+    // Draw on the canvas whose colour space matches the mode; show only that one.
+    const srgbMode = isSRGBMode();
+    const mode = srgbMode ? 'srgb' : 'p3';
+    const ctx  = srgbMode ? wheelCtxSRGB : wheelCtx;
+    wheelCanvasSRGB.style.visibility = srgbMode ? 'visible' : 'hidden';
+    wheelCanvas.style.visibility     = srgbMode ? 'hidden' : 'visible';
     if (S.activeIndex !== -1) S.lastActiveIndex = S.activeIndex;
     const refL = S.colors[S.lastActiveIndex]?.L ?? 0.5;
     const lr   = toe(refL);
 
-    if (discL === refL && discImg) {
+    if (discL === refL && discMode === mode && discImg) {
       ctx.putImageData(discImg, 0, 0);
       updateGamutBoundary(refL, lr);
       return;
     }
 
     const img = ctx.createImageData(DISC_SIZE, DISC_SIZE);
-    renderDiscPixels(img, DISC_SIZE, lr);
+    renderDiscPixels(img, DISC_SIZE, lr, srgbMode ? sRGB : DisplayP3);
     ctx.putImageData(img, 0, 0);
     // Cache the ImageData we just built rather than reading it back with
     // getImageData — the pixels are identical, and this avoids a GPU→CPU
     // readback (the source of Chrome's willReadFrequently hint).
-    discImg = img;
-    discL   = refL;
+    discImg  = img;
+    discL    = refL;
+    discMode = mode;
     updateGamutBoundary(refL, lr);
   }
 
+  // The edge circle fades in over the last SRGB_CIRCLE_FADE of the lightbar at
+  // each end (lightness 6% → 0 and 94% → 100), up to the opacity the ring had at
+  // those ends before sRGB mode existed (gamutBoundaryStyle: 0.17 dark, 0.10 light).
+  const SRGB_CIRCLE_FADE = 0.06;
+
   function updateGamutBoundary(L, lr) {
     const { stroke, opacity } = gamutBoundaryStyle(L, MIDDLE_GRAY);
-    gamutBoundary.setAttribute('stroke', stroke);
-    gamutBoundary.setAttribute('stroke-opacity', opacity);
-    // The boundary path depends only on lr; recompute it (and re-parse the
-    // 359-point SVG path) only when lightness actually changes.
-    if (lr !== gamutLr) {
-      gamutD  = gamutBoundaryPath(lr, DISC_R);
-      gamutLr = lr;
-      gamutBoundary.setAttribute('d', gamutD);
+    if (isSRGBMode()) {
+      // No gamut boundary in sRGB mode: the disc edge IS the sRGB boundary.
+      // Only the plain edge circle, at the ring's own end opacity at 0 and 100.
+      if (gamutBoundary.getAttribute('d')) gamutBoundary.setAttribute('d', '');
+      gamutLr = -1;   // P3's traced ring must be recomputed after a switch back
+      const fade = Math.max(0, 1 - Math.min(lr, 1 - lr) / SRGB_CIRCLE_FADE);
+      srgbEdgeCircle.setAttribute('stroke', stroke);
+      srgbEdgeCircle.setAttribute('stroke-opacity', (parseFloat(opacity) * fade).toFixed(3));
+    } else {
+      srgbEdgeCircle.setAttribute('stroke-opacity', '0');
+      gamutBoundary.setAttribute('stroke', stroke);
+      gamutBoundary.setAttribute('stroke-opacity', opacity);
+      // The boundary path depends only on lr; recompute it (and re-parse the
+      // 359-point SVG path) only when lightness actually changes.
+      if (lr !== gamutLr) {
+        gamutD  = gamutBoundaryPath(lr, DISC_R);
+        gamutLr = lr;
+        gamutBoundary.setAttribute('d', gamutD);
+      }
     }
     updateCMYKBoundary(stroke, opacity, lr, L);
   }

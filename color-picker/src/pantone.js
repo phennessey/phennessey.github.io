@@ -11,8 +11,8 @@ import {
 import { S, P, els, pantoneSelections } from './state.js';
 import { TAU, svgEl, idxOf } from './picker.js';
 import {
-  toe, toOKLab, computeP3AndSRGB,
-  OKLabToOKHSL, OKHSLToOKLab, DisplayP3Gamut, convert, OKLab, DisplayP3,
+  toe, toOKLab, computeP3AndSRGB, isSRGBMode,
+  oklabToOKHSL, okhslToOKLab, convert, OKLab, DisplayP3, sRGB,
 } from './color.js';
 import { swatchEl, updateSwatch } from './swatches.js';
 import { flushPendingWheelSnapshot, recordSnapshot } from './history.js';
@@ -76,7 +76,10 @@ async function loadPantoneLibrary() {
   }
 
   const labBuf = [0, 0, 0];
-  const p3Check = [0, 0, 0];
+  const rgbCheck = [0, 0, 0];
+  const outside = rgb => rgb[0] < -1e-4 || rgb[0] > 1 + 1e-4
+                      || rgb[1] < -1e-4 || rgb[1] > 1 + 1e-4
+                      || rgb[2] < -1e-4 || rgb[2] > 1 + 1e-4;
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
     // Tab-separated columns: name, [OKLab], [C,M,Y,K], #hex. The last two are
@@ -100,19 +103,16 @@ async function loadPantoneLibrary() {
     const hexRaw = (parts[3] || '').trim();
     if (/^#[0-9a-fA-F]{6}$/.test(hexRaw)) cbHex = hexRaw.toUpperCase();
 
-    const hsl = [0, 0, 0];
-    OKLabToOKHSL(lab, DisplayP3Gamut, hsl);
-    const h = hsl[0] / 360;
-    const s = hsl[1];
     const L = lab[0];
-
     labBuf[0] = L; labBuf[1] = lab[1]; labBuf[2] = lab[2];
-    convert(labBuf, OKLab, DisplayP3, p3Check);
-    const outOfP3 = p3Check[0] < -1e-4 || p3Check[0] > 1 + 1e-4
-                 || p3Check[1] < -1e-4 || p3Check[1] > 1 + 1e-4
-                 || p3Check[2] < -1e-4 || p3Check[2] > 1 + 1e-4;
+    convert(labBuf, OKLab, DisplayP3, rgbCheck);
+    const outOfP3 = outside(rgbCheck);
+    convert(labBuf, OKLab, sRGB, rgbCheck);
+    const outOfSRGB = outside(rgbCheck);
 
-    pantoneData.push({ name, category: categoryOf(name), L, a: lab[1], b: lab[2], h, s, outOfP3, cbCMYK, cbHex, el: null });
+    const entry = { name, category: categoryOf(name), L, a: lab[1], b: lab[2], outOfP3, outOfSRGB, cbCMYK, cbHex, el: null };
+    placeEntry(entry);
+    pantoneData.push(entry);
   }
 
   buildDots();
@@ -121,18 +121,67 @@ async function loadPantoneLibrary() {
   updateAllSwatchMatches();
 }
 
+// A Pantone's wheel coordinates in the current gamut. `s` can exceed 1: a
+// Pantone outside the gamut sits beyond the disc edge at its true saturation.
+// `outOfGamut` drives the chip/promoted warning icon — outside Display P3 in P3
+// mode, outside sRGB in sRGB mode (everything shown is limited to that gamut).
+const _placeHsl = [0, 0, 0];
+function placeEntry(entry) {
+  oklabToOKHSL([entry.L, entry.a, entry.b], _placeHsl);
+  entry.h = _placeHsl[0] / 360;
+  entry.s = _placeHsl[1];
+  entry.outOfGamut = isSRGBMode() ? entry.outOfSRGB : entry.outOfP3;
+}
+
+/** Re-place every Pantone for a gamut-mode switch: new disc coordinates, new
+ *  out-of-gamut flags, rebuilt dots and match chips. */
+function remapPantoneToGamut() {
+  if (!pantoneData.length) return;
+  // Move the existing dots rather than rebuilding ~5000 elements.
+  for (const entry of pantoneData) {
+    placeEntry(entry);
+    if (entry.el) {
+      const { cx, cy } = dotXY(entry);
+      entry.el.setAttribute('cx', cx);
+      entry.el.setAttribute('cy', cy);
+    }
+  }
+  updateDots();
+  updateAllSwatchMatches();
+}
+
+// sRGB mode: how far beyond the rim an out-of-sRGB Pantone dot may be drawn, as
+// a fraction of the wheel's radius. Their true positions reach ~1.56× the radius
+// (well outside the interface), so the excess beyond the rim is squeezed into
+// this band: x → m·x / (x + m). Smooth at the rim (slope 1, so dots just outside
+// don't jump), order-preserving, and never reaching m. Display only — the
+// Pantone's real saturation (entry.s) is untouched for matching and promotion.
+const SRGB_DOT_OVERSHOOT = 0.20;
+function dotRadiusS(s) {
+  if (s <= 1 || !isSRGBMode()) return s;
+  const x = s - 1, m = SRGB_DOT_OVERSHOOT;
+  return 1 + m * x / (x + m);
+}
+
+// A dot's disc position, as SVG attribute strings. Out-of-gamut Pantones sit
+// beyond the rim (compressed in sRGB mode, see dotRadiusS).
+function dotXY(entry) {
+  const R   = DISC_SIZE / 2;
+  const ang = entry.h * TAU;
+  const s   = dotRadiusS(entry.s);
+  return {
+    cx: (R + Math.cos(ang) * s * R).toFixed(2),
+    cy: (R - Math.sin(ang) * s * R).toFixed(2),
+  };
+}
+
 function buildDots() {
   discDots.innerHTML = '';
-  const DISC_R_LOCAL = DISC_SIZE / 2;
   const frag = document.createDocumentFragment();
   for (const entry of pantoneData) {
-    const ang = entry.h * TAU;
-    // TEMP: rim-clamp disabled — OOG pantones render at their true s (outside the disc).
-    const s   = entry.s;  // was: Math.min(1, entry.s)
-    const cx  = DISC_R_LOCAL + Math.cos(ang) * s * DISC_R_LOCAL;
-    const cy  = DISC_R_LOCAL - Math.sin(ang) * s * DISC_R_LOCAL;
+    const { cx, cy } = dotXY(entry);
     const circ = svgEl('circle', {
-      cx: cx.toFixed(2), cy: cy.toFixed(2), r: DOT_RADIUS,
+      cx, cy, r: DOT_RADIUS,
       fill: '#000', 'fill-opacity': '0',
     });
     frag.appendChild(circ);
@@ -266,7 +315,7 @@ function fillTargetLab(c) {
   okhslInput[0] = c.h * 360;
   okhslInput[1] = c.s;
   okhslInput[2] = toe(clampMatchL(c.L));
-  OKHSLToOKLab(okhslInput, DisplayP3Gamut, swatchLabBuf);
+  okhslToOKLab(okhslInput, swatchLabBuf);
 }
 
 // The `n` closest matches to a swatch (closest-first). `n` is just how many
@@ -284,7 +333,7 @@ function swatchHueAngle(c) {
   okhslInput[0] = c.h * 360;
   okhslInput[1] = 1;
   okhslInput[2] = toe(clampMatchL(c.L));
-  OKHSLToOKLab(okhslInput, DisplayP3Gamut, hueLabBuf);
+  okhslToOKLab(okhslInput, hueLabBuf);
   return (Math.atan2(hueLabBuf[2], hueLabBuf[1]) / TAU + 1) % 1;
 }
 
@@ -320,15 +369,15 @@ function renderPromoted(cell, p) {
   if (p) {
     cell.dataset.pantoneName = p.name;
     renderPantoneLabel(cell.querySelector('.match-label'), p.name);
-    cell.classList.toggle('out-of-p3', !!p.outOfP3);
-    if (warn) warn.style.display = p.outOfP3 ? '' : 'none';
+    cell.classList.toggle('out-of-gamut', !!p.outOfGamut);
+    if (warn) warn.style.display = p.outOfGamut ? '' : 'none';
     if (matchCells && !matchCells.classList.contains('has-promotion')) {
       startChipTransition(matchCells);
     }
     if (matchCells) matchCells.classList.add('has-promotion');
   } else {
     delete cell.dataset.pantoneName;
-    cell.classList.remove('out-of-p3');
+    cell.classList.remove('out-of-gamut');
     if (warn) warn.style.display = 'none';
     if (matchCells && matchCells.classList.contains('has-promotion')) {
       startChipTransition(matchCells);
@@ -347,7 +396,7 @@ function startChipTransition(matchCells) {
 
 function clearChipCell(cell) {
   cell.style.display = 'none';
-  cell.classList.remove('out-of-p3', 'chip-short', 'metallic', 'promoted-match', 'hue-match');
+  cell.classList.remove('out-of-gamut', 'chip-short', 'metallic', 'promoted-match', 'hue-match');
   delete cell.dataset.pantoneName;
 }
 
@@ -360,7 +409,7 @@ function renderChipCell(cell, m, isHueMatch, isPromoted, chipTopRatio, hideGamut
   cell._chipRatio = chipTopRatio;
   cell.querySelector('.chip-fill').style.background = pantoneP3Css(m);
   cell.dataset.pantoneName = m.name;
-  cell.classList.toggle('out-of-p3', !!m.outOfP3);
+  cell.classList.toggle('out-of-gamut', !!m.outOfGamut);
   cell.classList.toggle('chip-short', !!hideGamut);
   cell.classList.toggle('metallic', m.category === 'metallic');
   cell.classList.toggle('promoted-match', !!isPromoted);
@@ -394,8 +443,7 @@ function buildDisplayOrder(matches, targetHue, markEntry) {
   // from (a latent angle; see swatchHueAngle).
   const seam = (targetHue + 0.5) % 1;
   const keyOf = m => (hueOf(m) - seam + 1) % 1;
-  const visual = matches.slice().sort((a, b) => keyOf(a) - keyOf(b));
-  const displayOrder = visual.slice().reverse();
+  const displayOrder = matches.slice().sort((a, b) => keyOf(a) - keyOf(b));
 
   return { displayOrder, markDomIdx: displayOrder.indexOf(markEntry) };
 }
@@ -547,8 +595,9 @@ function oklabToP3Css(L, a, b) {
   return `color(display-p3 ${Math.max(0, p3Buf[0]).toFixed(3)} ${Math.max(0, p3Buf[1]).toFixed(3)} ${Math.max(0, p3Buf[2]).toFixed(3)})`;
 }
 
-// A pantone's pickable P3 colour: hold hue and lightness, pull the OKHSL
-// saturation in to the P3 rim (s ≤ 1) for out-of-P3 pantones — radial chroma
+// A pantone's pickable colour: hold hue and lightness, pull the OKHSL
+// saturation in to the rim of the current gamut (s ≤ 1) for out-of-gamut
+// pantones — the P3 rim in P3 mode, the sRGB rim in sRGB mode — radial chroma
 // reduction, not a per-channel clip. This is the SAME point the swatch stores
 // on assignment (s = min(1, entry.s)), so the chip, promoted cell, drag dot and
 // swatch fill all render the identical colour. In-gamut pantones (s ≤ 1) are
@@ -773,7 +822,9 @@ function wireMatchRowClick(matchRow, container) {
 // an out-of-gamut caution (a chip's, or the promoted cell's) shows the note;
 // leaving the swatch area clears it. Other features can call setStatus() too.
 const statusRegion = document.getElementById('status-region');
-const GAMUT_STATUS = 'This Pantone color is outside the color space of this display';
+const gamutStatus = () => isSRGBMode()
+  ? "This Pantone color is outside the sRGB color gamut of this browser's current display mode."
+  : "This Pantone color is outside the Display P3 color gamut of this browser's current display mode.";
 function setStatus(text) { if (statusRegion) statusRegion.textContent = text || ''; }
 
 els.swatches.addEventListener('pointerover', ev => {
@@ -781,9 +832,9 @@ els.swatches.addEventListener('pointerover', ev => {
   // above) of an out-of-gamut chip, or the promoted swatch's overlay when its
   // pantone is out of gamut, surfaces the note.
   const chipHit = ev.target.closest('.chip-fill, .chip-gamut-warning');
-  const onChip = chipHit && chipHit.closest('.match-cell.out-of-p3');
+  const onChip = chipHit && chipHit.closest('.match-cell.out-of-gamut');
   const onPromoted = ev.target.closest('.promoted-gamut-warning');
-  setStatus(onChip || onPromoted ? GAMUT_STATUS : '');
+  setStatus(onChip || onPromoted ? gamutStatus() : '');
 });
 els.swatches.addEventListener('pointerleave', () => setStatus(''));
 
@@ -888,4 +939,5 @@ export {
   clearPromotedOnEdit, loadPantoneLibrary, updateSwatchMatches, updateDots,
   scheduleMatches, updateMatchesVisibility, syncLibraryCheckboxState,
   findPantoneByName, pantoneP3Css, buildMatchCells, matchRowObserver,
+  remapPantoneToGamut,
 };

@@ -10,6 +10,11 @@
   <div class="top-ui">
 
     <div class="picker-wrap color-map-panel">
+      <!-- P3 gamut switch: on = P3 mode, off = sRGB mode (see src/mode.js). -->
+      <button type="button" class="gamut-toggle" id="gamut-toggle" role="switch" aria-checked="true">
+        <span class="gamut-toggle-track" aria-hidden="true"><span class="gamut-toggle-knob"></span></span>
+        <span class="gamut-toggle-label">P3</span>
+      </button>
       <div class="colormap-body">
         <div class="panel">
           <canvas id="wheel"></canvas>

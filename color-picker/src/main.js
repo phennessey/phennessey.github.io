@@ -16,6 +16,7 @@ import { syncHexField, hexTextarea } from './hex.js';
 import { recordSnapshot } from './history.js';
 import { applyBgLevel } from './interactions.js';
 import { setCMYKActive, setCMYKProfile, cmyk } from './cmyk.js';
+import './mode.js';
 
 
 // Render patch

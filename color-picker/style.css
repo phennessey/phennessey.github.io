@@ -290,6 +290,73 @@ body.light-bg .top-ui {
 }
 body.light-bg .section-divider { background: rgba(0,0,0,0.2); }
 
+/* P3 gamut switch, in the color map panel's top-left corner: a monochrome
+   switch, then its "P3" label. The switch is a transparent pill drawn as a 1px
+   line, with a filled dot inside that slides right when on. On (the default) = P3 mode; off = sRGB
+   mode. Tones follow the panel's light/dark tint (.light-bg on .picker-wrap)
+   so it stays legible at any lightness. */
+.gamut-toggle {
+  --gt-text: rgba(255,255,255,0.4);
+  --gt-text-on: rgba(255,255,255,0.85);
+  --gt-ink: rgba(255,255,255,0.4);       /* pill line + dot, off */
+  --gt-ink-on: rgba(255,255,255,0.85);   /* pill line + dot, on */
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.picker-wrap.light-bg .gamut-toggle {
+  --gt-text: rgba(0,0,0,0.4);
+  --gt-text-on: rgba(0,0,0,0.8);
+  --gt-ink: rgba(0,0,0,0.4);
+  --gt-ink-on: rgba(0,0,0,0.8);
+}
+.gamut-toggle-label {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  color: var(--gt-text);
+  transition: color 0.15s ease;
+}
+/* The pill: an outline only, never filled. */
+.gamut-toggle-track {
+  position: relative;
+  box-sizing: border-box;
+  width: 24px;
+  height: 14px;
+  border: 1px solid var(--gt-ink);
+  border-radius: 7px;
+  background: transparent;
+  transition: border-color 0.12s ease;
+}
+/* The dot: filled, 2px inside the line; slides 10px right when on. */
+.gamut-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gt-ink);
+  transition: transform 0.12s ease, background-color 0.12s ease;
+}
+.gamut-toggle[aria-checked="true"] .gamut-toggle-label { color: var(--gt-text-on); }
+.gamut-toggle[aria-checked="true"] .gamut-toggle-track { border-color: var(--gt-ink-on); }
+.gamut-toggle[aria-checked="true"] .gamut-toggle-knob {
+  background: var(--gt-ink-on);
+  transform: translateX(10px);
+}
+.gamut-toggle:hover .gamut-toggle-label { color: var(--gt-text-on); }
+.gamut-toggle:focus-visible { outline: 1px solid var(--gt-text-on); outline-offset: 2px; border-radius: 4px; }
+
 .panel {
   position: relative;
   flex-shrink: 0;
@@ -1100,13 +1167,13 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
   display: block;
 }
 
-.match-cell.out-of-p3 .chip-gamut-warning { display: block; }
+.match-cell.out-of-gamut .chip-gamut-warning { display: block; }
 /* …hidden only when the bar is too short to hold it (set in JS). */
-.match-cell.out-of-p3.chip-short .chip-gamut-warning { display: none; }
+.match-cell.out-of-gamut.chip-short .chip-gamut-warning { display: none; }
 
 /* Chips with a gamut icon: mask shifted up 10px (bottom edge at 100%-10px) so the
    text clears the icon at the bottom; 20px fade span. */
-.match-cell.out-of-p3 .chip-label-wrap {
+.match-cell.out-of-gamut .chip-label-wrap {
   mask-image: linear-gradient(to bottom, black calc(100% - 30px), transparent calc(100% - 10px));
 }
 
@@ -1236,7 +1303,7 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
    with them. In show-chips mode the chips stay, so the hue indicator stays too. */
 .swatches.hide-chips-on-promote .match-cells.has-promotion .hue-marker { opacity: 0; }
 
-/* Out-of-P3 caution beside the promoted name (top-right overlay): small, left of
+/* Out-of-gamut caution beside the promoted name (top-right overlay): small, left of
    the label. Keeps a pointer cursor on hover. */
 .promoted-gamut-warning {
   flex-shrink: 0;

@@ -640,8 +640,8 @@ els.swatches.addEventListener('pointerdown', ev => {
       if (!target) return;
       const ti = idxOf(target);
       if (!Number.isInteger(ti) || ti < 0 || ti >= S.colors.length) return;
-      // Place the indicator at the Pantone's true position in P3 (saturation
-      // clamped to the P3 rim for out-of-P3 pantones). We no longer snap the
+      // Place the indicator at the Pantone's true position in the current gamut
+      // (saturation clamped to the rim for out-of-gamut pantones). We no longer snap the
       // stored colour to the 8-bit sRGB hex grid — the swatch readout shows the
       // closest sRGB hex on its own when the colour is within sRGB.
       S.colors[ti] = { h: entry.h, s: Math.min(1, entry.s), L: entry.L };
