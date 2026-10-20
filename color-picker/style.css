@@ -1347,10 +1347,12 @@ body.swatch-dragging * { cursor: grabbing !important; }
 ::-moz-focus-inner { border: 0; padding: 0; }
 .cmyk-profile-select:focus { box-shadow: none; }
 
-/* While dragging the disc or a swatch, nothing may become selected — otherwise
-   a hex readout / the hex textarea gets highlighted mid-drag and lingers. */
-body.swatch-dragging, body.swatch-dragging *,
-body.disc-dragging,   body.disc-dragging * {
+/* While dragging the disc, the lightbar or a swatch, nothing may become
+   selected — otherwise a hex readout / the hex textarea gets highlighted
+   mid-drag and lingers. */
+body.swatch-dragging,  body.swatch-dragging *,
+body.disc-dragging,    body.disc-dragging *,
+body.lightbar-dragging, body.lightbar-dragging * {
   -webkit-user-select: none !important;
   user-select: none !important;
 }

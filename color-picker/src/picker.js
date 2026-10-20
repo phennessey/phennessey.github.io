@@ -13,10 +13,9 @@ import {
 
 export const TAU = 2 * Math.PI;
 
-// CMYK gamut-ring tracing: dense hue sampling for the sharp features at extreme
-// lightness; few bisections because radial precision saturates early (see
-// cmykBoundaryPath).
-const CMYK_BOUNDARY_STEPS = 360, CMYK_BOUNDARY_ITERS = 11;
+// CMYK gamut ring: one radius per degree of hue, read straight off the
+// profile's gamut table (see cmykBoundaryPath).
+const CMYK_BOUNDARY_STEPS = 360;
 
 // Scratch array for pixel rendering (reused across calls).
 const _p3 = [0, 0, 0];
@@ -353,7 +352,7 @@ export function createPicker(S, cfg) {
   let discImg = null, discL = -1, discMode = '';
   let lightbarKey = null;
   let gamutLr = -1, gamutD = '';
-  // CMYK boundary: injected predicate, visibility, and an lr-keyed path cache.
+  // CMYK boundary: injected radius function, visibility, and an lr-keyed path cache.
   let cmykBoundaryFn = null, cmykShow = false, cmykLr = -1, cmykD = '';
 
   function invalidateCache() {
@@ -474,32 +473,21 @@ export function createPicker(S, cfg) {
     }
   }
 
-  // Trace the CMYK gamut ring at toe'd lightness `lr`. The ICC predicate is far
-  // costlier than inSRGB and carries CLUT-discretisation noise that peaks at
-  // extreme lightness, so three choices keep the line smooth without wasting ICC
-  // calls: (1) sample hue densely — the boundary has sharp features at the
-  // extremes that a coarse ring renders jagged; (2) only ~11 bisections — radial
-  // precision saturates well before that (measured: more iterations change the
-  // path by < 1e-5), so extra calls buy nothing; (3) one closed-ring 3-tap
-  // smooth to settle the residual noise floor (matches a brute-force 480-sample
-  // ring at ~half the ICC calls).
+  // The CMYK gamut ring at toe'd lightness `lr`: cmykBoundaryFn(h, lr) is the
+  // gamut edge's saturation at each hue, read off the profile's gamut table (the
+  // same table the swatch flag reads, so ring and flag agree exactly). Negative
+  // means nothing prints at that hue; where nothing prints at any hue (below the
+  // press's black) there is no ring. No smoothing: it would move the line off
+  // the flag's edge.
   function cmykBoundaryPath(lr) {
-    const N = CMYK_BOUNDARY_STEPS;
-    const r = new Array(N);
+    const N = CMYK_BOUNDARY_STEPS, r = new Array(N);
+    let any = false;
     for (let i = 0; i < N; i++) {
-      const h = i / N;
-      let lo = 0, hi = 1;
-      for (let it = 0; it < CMYK_BOUNDARY_ITERS; it++) {
-        const m = (lo + hi) * 0.5;
-        if (cmykBoundaryFn(h, m, lr)) lo = m; else hi = m;
-      }
-      r[i] = hi;
+      const v = cmykBoundaryFn(i / N, lr);
+      r[i] = Math.max(0, Math.min(1, v));
+      if (v > 0) any = true;
     }
-    const s = new Array(N);
-    for (let i = 0; i < N; i++) {
-      s[i] = 0.25 * r[(i - 1 + N) % N] + 0.5 * r[i] + 0.25 * r[(i + 1) % N];
-    }
-    return polarPath(N, h => s[Math.round(h * N) % N] * DISC_R, DISC_R);
+    return any ? polarPath(N, h => r[Math.round(h * N) % N] * DISC_R, DISC_R) : '';
   }
 
   // ── Lightbar drawing ─────────────────────────────────────────────
@@ -695,7 +683,7 @@ export function createPicker(S, cfg) {
     createHandle, createLightHandle, setHandleActive,
     updateMesh, clearMesh,
     hideHueLine() { discHueLine.setAttribute('opacity', '0'); },
-    // CMYK gamut-boundary overlay (predicate injected by cmyk.js).
+    // CMYK gamut-boundary overlay (radius function injected by cmyk.js).
     setCMYKBoundaryFn(fn) { cmykBoundaryFn = fn; },
     setCMYKBoundaryVisible(on) { cmykShow = on; },
     invalidateCMYKBoundary() { cmykLr = -1; },

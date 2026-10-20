@@ -433,6 +433,19 @@ function applyLbMultiDrag(ev) {
   requestRender();
 }
 
+// A lightbar drag blocks the browser's own mousedown behavior: starting a text
+// selection, or natively dragging an existing one (a leftover selection that
+// spans the lightbar followed the cursor as a "SETUP" ghost image). It also
+// blurs whatever had focus, as a normal click does — the hex field doesn't
+// refresh while focused — and keeps anything from being selected mid-drag.
+function startLightbarDrag(ev) {
+  ev.preventDefault();
+  window.getSelection()?.removeAllRanges();
+  document.activeElement?.blur?.();
+  document.body.classList.add('lightbar-dragging');
+}
+const endLightbarDrag = () => document.body.classList.remove('lightbar-dragging');
+
 els.lightbarOverlay.addEventListener('pointerdown', ev => {
   syncModKeys(ev);
   if (S.activeIndex === -1) return;
@@ -442,13 +455,15 @@ els.lightbarOverlay.addEventListener('pointerdown', ev => {
     if (!handleEl) return;
     const dragIdx = idxOf(handleEl);
     if (!S.multiSelect.has(dragIdx)) return;
+    startLightbarDrag(ev);
     startLbMultiDrag(ev, dragIdx);
-    captureDrag(els.lightbarOverlay, ev, applyLbMultiDrag, () => { lbMultiDrag = null; });
+    captureDrag(els.lightbarOverlay, ev, applyLbMultiDrag, () => { lbMultiDrag = null; endLightbarDrag(); });
     return;
   }
 
   const handleEl = ev.target.closest('.light-handle');
   if (handleEl && idxOf(handleEl) !== S.activeIndex) return;
+  startLightbarDrag(ev);
   if (handleEl) {
     const rect = els.lightbarEl.getBoundingClientRect();
     lbDragOffset = ev.clientY - rect.top - toeLToY(toe(S.colors[S.activeIndex].L));
@@ -458,6 +473,7 @@ els.lightbarOverlay.addEventListener('pointerdown', ev => {
   captureDrag(els.lightbarOverlay, ev, applyLightbarPointer, () => {
     lbDragOffset = 0;
     lbChromaLock = null;
+    endLightbarDrag();
   });
 });
 
