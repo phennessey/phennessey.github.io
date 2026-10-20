@@ -93,7 +93,7 @@ function createSwatchDOM(index) {
           <div class="cmyk-swatch-bias">
             <div class="cmyk-bias-track">
               <input type="range" class="cmyk-bias-slider" min="0" max="100" value="0" step="1"
-                     aria-label="CMYK build lightness for this swatch">
+                     aria-label="Move this swatch's CMYK build from Adobe's build to the exact lightness">
             </div>
           </div>
         </div>
@@ -201,9 +201,10 @@ function wireSwatch(container) {
     pullIntoGamut(container, isOutOfCMYK, S.colors[idxOf(container)].s);
   });
 
-  // Per-swatch CMYK build-lightness slider (visible only on out-of-gamut CMYK
-  // swatches). Its value biases just this swatch's build; updateSwatchCMYK reads
-  // it. Magnetic snap to 0 (standard clip) near the low end. Repaint only this
+  // Per-swatch CMYK slider (visible only on out-of-gamut CMYK swatches): the
+  // default build, Adobe's (0) ↔ the input's exact lightness (100); see cmyk.js. Its
+  // value biases just this swatch's build; updateSwatchCMYK reads it. Magnetic
+  // snap to 0 (the default build) near the low end. Repaint only this
   // swatch's CMYK region — the gamut ring and other swatches are unaffected.
   const biasSlider = container.querySelector('.cmyk-bias-slider');
   biasSlider?.addEventListener('input', e => {

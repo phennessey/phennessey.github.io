@@ -21,13 +21,16 @@
 //     profile's own separation when it already does, otherwise the solver's
 //     (cmyk-ink.js). The profile's table misses some printable colors (its
 //     black generation can't reach K-heavy dark browns and olives).
-//   Build (out of gamut): the color pulled in to the ring — same OKLab hue and
-//     lightness, chroma cut to the table's edge (what click-to-pull gives) —
-//     then matched exactly like an in-gamut color. Continuous across the ring:
-//     the profile's own clip can't reach K-heavy olives and browns, so it jumped
-//     there (an olive went 0-7-100-41 → 36-36-100-3, ΔE00 3.5 → 5.6). User
-//     requirement 2026-10-19: no discontinuous CMYK change when only one
-//     parameter moves.
+//   Build (out of gamut): Adobe's build — the profile's own conversion
+//     (relative colorimetric + BPC, Photoshop's default) — blended in over a
+//     narrow band just past the gamut boundary (see ADOBE_BLEND_BAND). At the
+//     boundary itself the build is the exact recipe for the color there, so it
+//     meets the in-gamut build with no jump; by the band's far edge it is
+//     Adobe's build as-is. User requirements 2026-10-19/20: start from Adobe's
+//     build, and no discontinuous CMYK change when only one parameter moves.
+//     Switching straight to Adobe's build at the boundary jumped wherever the
+//     profile's table can't make the exact recipe (an olive went 0-7-100-41 →
+//     36-36-100-3).
 //   Swatch: the proof of the build ROUNDED to whole percents — exactly what the
 //     numbers on the label print.
 //
@@ -38,12 +41,12 @@
 
 import {
   convert, OKLab, XYZ, DisplayP3, sRGB, oklabToOKHSL,
-  toOKLab, toe, cielabL, isSRGBMode, clampOKLabToSRGB, sForChroma,
+  toOKLab, toe, toeInv, isSRGBMode, clampOKLabToSRGB, sForChroma,
 } from "./color.js";
 import {
   makeInkSolver, xyzD65ToLabD50, labD50ToXYZd65, parseGamutTable, tableChroma, PROFILE_TAC, USE_BPC,
 } from "./cmyk-ink.js";
-import { S, els, P, pantoneSelections } from "./state.js";
+import { els, P, pantoneSelections } from "./state.js";
 import { requestRender } from "./util.js";
 import { MIDDLE_GRAY } from "./constants.js";
 
@@ -103,110 +106,87 @@ function okOutOfGamut() {
   return Math.hypot(_ok[1], _ok[2]) > okEdgeChroma();
 }
 
+// Out of gamut, the build fades from the exact recipe at the gamut boundary to
+// Adobe's build over this much chroma past it, relative to the boundary's own
+// chroma (0.02 = the first 2%), on a smoothstep so it eases in and out.
+const ADOBE_BLEND_BAND = 0.02;
+const smoothstep = t => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+
 /** The standard conversion: the input's CIELAB(D50), whether it's out of gamut,
- *  its build and that build's float proof. In gamut the build matches the input;
- *  out of gamut it matches the input pulled in to the ring (same hue and
- *  lightness, chroma cut to the edge — see the header). */
+ *  its build and that build's float proof. In gamut the build matches the
+ *  input; out of gamut it is Adobe's build, blended in from the exact recipe
+ *  for the color pulled in to the boundary (same hue and lightness, chroma cut
+ *  to the edge) over ADOBE_BLEND_BAND — see the header. */
 function convertColor(color) {
   const lab = colorToLab(color);
+  const ok = [_ok[0], _ok[1], _ok[2]];   // the input's OKLab, before any pull-in
   const oog = okOutOfGamut();
-  let target = lab;
   const C = Math.hypot(_ok[1], _ok[2]);
-  if (oog && C > 0) {   // (a flagged neutral — the sliver above black — has no chroma to cut)
-    const f = Math.max(0, okEdgeChroma()) / C;
-    _ok[1] *= f; _ok[2] *= f;
-    convert(_ok, OKLab, XYZ, _xyz);
-    target = xyzD65ToLabD50(_xyz);
+  if (!oog || C === 0) {   // (a flagged neutral — the sliver above black — has no chroma to cut)
+    const c = solver.solve(lab).c;
+    return { lab, ok, oog, c, back: proofOf(c) };
   }
-  const c = solver.solve(target).c;
-  return { lab, oog, c, back: proofOf(c) };
+  // The exact recipe for the color pulled in to the boundary — same hue and
+  // lightness, the most chroma that prints there. It anchors the blend at the
+  // boundary and is the slider's far end (see "Out-of-gamut slider").
+  const edge = Math.max(0, okEdgeChroma());
+  const f = edge / C;
+  _ok[1] *= f; _ok[2] *= f;
+  convert(_ok, OKLab, XYZ, _xyz);
+  const keepL = solver.solve(xyzD65ToLabD50(_xyz)).c;
+  const w = edge > 0 ? smoothstep((C - edge) / (ADOBE_BLEND_BAND * edge)) : 1;
+  const adobe = solver.clip(lab);
+  const c = { C: keepL.C + (adobe.C - keepL.C) * w, M: keepL.M + (adobe.M - keepL.M) * w,
+              Y: keepL.Y + (adobe.Y - keepL.Y) * w, K: keepL.K + (adobe.K - keepL.K) * w };
+  return { lab, ok, oog, c, keepL, back: proofOf(c) };
 }
 
-// ── Out-of-gamut bias: ink-space only — NEVER adds an ink the build lacks ──
+// ── Out-of-gamut slider: Adobe's build ↔ exact lightness ──────────────
 //
-// The per-swatch slider (0 = standard clip … 1 = full travel) adjusts an
-// out-of-gamut color's build toward the INPUT's apparent lightness (CIELAB L*,
-// what a Lab-measuring app reports), working entirely in INK space on the
-// standard build:
-//
-//   • DARKEN (input prints darker than the clip): hold C/M/Y, add K only —
-//     capped at K=100 and the press TAC (darkenedBuild).
-//   • LIGHTEN (input prints lighter): scale ALL FOUR inks down by ONE common
-//     factor toward paper white (lightenPath). The C:M:Y ratio is preserved so
-//     the hue angle holds, and K scales with them so no gray floor is left
-//     behind — bare paper (all channels zero) is the far end, so any lighter
-//     target is reachable. No channel ratio ever changes; no ink is introduced.
-//
-// Landing: both paths bisect their travel so the painted proof's CIELAB L*
-// lands on the input's at bias 1 (as close as ink limits allow). Probes are
-// single float REVERSE transforms of candidate builds — monotone, no forward
-// round-trip, hence immune to the BPC-cancel trap that poisoned the old
-// endpoint search (see CLAUDE.md).
-// bias 0 is exactly the raw build, and both paths are continuous
-// in bias by construction. In-gamut colors have nothing to trade → no-op.
+// An out-of-gamut color can't be printed, so its build has to give up some
+// lightness accuracy, some saturation, or a mix. Slider 0 is the default build
+// (Adobe's, see convertColor), which often lands lighter or darker than the
+// input. The far end (100) gives up saturation to get the lightness right: the
+// input's hue and exact CIELAB lightness L* (the [L*] readout on the swatch,
+// and what Photoshop/InDesign report) with the most saturation that prints
+// there, matched exactly by the solver. It's found on the gamut boundary at the
+// input's OKLab hue by bisecting the lightness until the point's L* equals the
+// input's. (Keeping OKLab lightness instead missed L* by up to 5 for blues —
+// #0000FF ended at L* 34.9 against 29.6 — since the two lightness scales
+// disagree there.) At the boundary itself this is the input, so it's continuous
+// with the in-gamut build.
+// In between, the inks blend from one to the other, so the build is continuous
+// in both the slider and the color. Hidden when the two ends round to the same
+// inks. (User decisions 2026-10-20. Two far ends were tried and rejected: the
+// press's most saturated point overshot by 20+ ΔE00, and the CIEDE2000-closest
+// point along a constant-hue lightness walk kept saturation at lightness's
+// expense — #B9B1F9 on GRACoL ended 4 L* too dark at 35-31-0-0, where the user
+// matched it in InDesign at 30-28-0-0; this end gives 30-27-0-0.)
 
-/**
- * Lighten path: the raw build with all four inks scaled down by one common
- * factor (1−p) toward paper. p=0 is the raw build exactly; p=1 is bare paper.
- * Because C, M, Y and K all scale together the C:M:Y ratio (hue angle) and the
- * K:CMY balance are preserved, and no ink is ever introduced.
- */
-function lightenPath(raw, p) {
-  const s = 1 - p;                                                 // fraction of ink kept
-  const { C, M, Y, K } = raw.c;
-  return { C: C * s, M: M * s, Y: Y * s, K: K * s };
-}
-
-/**
- * Lighten-direction build: bisect how far along lightenPath the painted proof's
- * CIELAB L* reaches the input's, then travel that far, scaled by the bias. The
- * probe is one float reverse transform of the candidate build — monotone in p
- * (removing ink only ever lightens). Full removal is bare paper (L* ≈ 100), so a
- * lighter-than-clip target is always reachable.
- */
-function lightenedBuild(raw, bias, target) {
-  const proofL = p => proofOf(lightenPath(raw, p)).L;
+/** The slider's far end (see above): the exact recipe for the boundary point at
+ *  the input's hue whose CIELAB L* equals the input's; cached on `raw`. */
+const _mOk = [0, 0, 0], _mXyz = [0, 0, 0];
+function matchLightnessBuild(raw) {
+  if (raw.matchL) return raw.matchL;
+  const [, a, b] = raw.ok, C = Math.hypot(a, b), h = Math.atan2(b, a) / (2 * Math.PI);
+  const at = lr => {   // the most-saturated printable point at OKHSL lightness lr (≤ the input's chroma)
+    const f = Math.min(C, Math.max(0, tableChroma(gamutTable, h, lr))) / C;
+    _mOk[0] = toeInv(lr); _mOk[1] = a * f; _mOk[2] = b * f;
+    convert(_mOk, OKLab, XYZ, _mXyz);
+    return xyzD65ToLabD50(_mXyz);
+  };
   let lo = 0, hi = 1;
-  for (let i = 0; i < 12; i++) { const mid = (lo + hi) / 2; if (proofL(mid) < target) lo = mid; else hi = mid; }
-  return lightenPath(raw, ((lo + hi) / 2) * bias);
+  for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (at(m).L < raw.lab.L) lo = m; else hi = m; }
+  return (raw.matchL = solver.solve(at((lo + hi) / 2)).c);
 }
 
-/**
- * Darken-direction build: the input prints DARKER than the standard clip. Hold
- * C/M/Y exactly as the standard build has them and add K ONLY, bisecting K so the
- * painted proof's CIELAB L* lands on the input's at full travel — capped at K=100
- * and the press TAC (C+M+Y+K ≤ the profile limit). C/M/Y never change, so the
- * standard separation's hue and chroma are untouched and K only ever increases.
- * If even max K can't reach the target, the slider honestly maxes out at this
- * press's darkest. The probe is a single float reverse transform of the build —
- * monotone in K, no forward round-trip, so no BPC-cancel hazard.
- */
-function darkenedBuild(raw, bias, target) {
-  const { C, M, Y, K } = raw.c;
-  const tac = PROFILE_TAC[cmyk.profileKey] ?? 300;
-  const Kcap = Math.min(100, Math.max(0, tac - (C + M + Y)));      // K headroom under TAC
-  const pr = k => proofOf({ C, M, Y, K: k }).L;
-  let Kend = Kcap;
-  if (pr(Kcap) < target) {             // max K overshoots the target → bisect the landing
-    let lo = K, hi = Kcap;
-    for (let i = 0; i < 12; i++) { const mid = (lo + hi) / 2; if (pr(mid) > target) lo = mid; else hi = mid; }
-    Kend = (lo + hi) / 2;
-  }
-  return { C, M, Y, K: K + (Kend - K) * bias };   // glide K raw → landing; C/M/Y held
-}
-
-/**
- * The biased CMYK build. Direction by apparent lightness: input darker than the
- * clip → hold C/M/Y and add K only (darkenedBuild); input lighter → scale all
- * four inks down toward paper by one common factor (lightenedBuild). See the
- * section header — neither path introduces an ink the standard build lacks, and
- * neither changes the C:M:Y ratio, so the hue angle holds in both directions.
- */
+/** The slider's build: 0 is the default build exactly, 1 the exact-lightness
+ *  build; in between, the inks blend from one to the other. */
 function biasedBuild(raw, color, oog, bias) {
-  if (bias === 0 || !oog) return raw.c;
-  const target = cielabL(color);
-  if (target < raw.back.L - 0.25) return darkenedBuild(raw, bias, target);
-  return lightenedBuild(raw, bias, target);
+  if (bias === 0 || !oog || !raw.keepL || !gamutTable) return raw.c;
+  const d = raw.c, e = matchLightnessBuild(raw);
+  return { C: d.C + (e.C - d.C) * bias, M: d.M + (e.M - d.M) * bias,
+           Y: d.Y + (e.Y - d.Y) * bias, K: d.K + (e.K - d.K) * bias };
 }
 
 const cl3 = v => Math.max(0, Math.min(1, v)).toFixed(3);
@@ -314,18 +294,14 @@ export function updateSwatchCMYK(container, color, index) {
     oog = raw.oog;
     const c = biasedBuild(raw, color, oog, bias);
     // Show the slider only when it can DO something: if the full-travel build
-    // rounds to the same four inks as the standard build, every slider position
-    // paints identically, so hide it (.cmyk-bias-inert, see CSS). The full-travel
-    // probe runs the darken optimizer (~65 rev transforms), so during a drag the
-    // last settled answer is kept — it is recomputed on the settled render.
+    // rounds to the same four inks as the default build, every slider position
+    // paints identically, so hide it (.cmyk-bias-inert, see CSS). The probe is
+    // cheap (table lookups and one solve), so it runs on every render, drags
+    // included — freezing it mid-drag left a stale slider showing or hidden.
     if (oog) {
-      if (S.dragging) {
-        biasInert = container.classList.contains("cmyk-bias-inert");
-      } else {
-        const b1 = bias === 1 ? c : biasedBuild(raw, color, oog, 1);
-        biasInert = Math.round(b1.C) === Math.round(raw.c.C) && Math.round(b1.M) === Math.round(raw.c.M)
-                 && Math.round(b1.Y) === Math.round(raw.c.Y) && Math.round(b1.K) === Math.round(raw.c.K);
-      }
+      const b1 = bias === 1 ? c : biasedBuild(raw, color, oog, 1);
+      biasInert = Math.round(b1.C) === Math.round(raw.c.C) && Math.round(b1.M) === Math.round(raw.c.M)
+               && Math.round(b1.Y) === Math.round(raw.c.Y) && Math.round(b1.K) === Math.round(raw.c.K);
     }
     // Soft-proof appearance: the label's whole-percent build, reversed to the
     // engine's native PCS CIELAB(D50), then CIELAB(D50) → XYZ(D65) → Display-P3
