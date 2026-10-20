@@ -1,8 +1,8 @@
 // Gamut mode switch: the "P3" switch in the color map panel. On (the
 // default) = P3 mode; off = sRGB mode, where the wheel is Ottosson's
-// original OKHSL — the disc edge is the sRGB boundary — and every colour the
+// original OKHSL — the disc edge is the sRGB boundary — and every color the
 // interface shows is limited to sRGB. Switching keeps each swatch's actual
-// colour: its saturation is re-measured in the new gamut, and a colour outside
+// color: its saturation is re-measured in the new gamut, and a color outside
 // sRGB moves to the rim at the same hue and lightness.
 
 import { S, P, pantoneSelections } from './state.js';

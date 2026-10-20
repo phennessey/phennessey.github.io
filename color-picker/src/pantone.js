@@ -84,7 +84,7 @@ async function loadPantoneLibrary() {
     if (!line.trim()) continue;
     // Tab-separated columns: name, [OKLab], [C,M,Y,K], #hex. The last two are
     // Pantone's own Color Bridge build + its published soft-proof hex, present
-    // ONLY for coated-process colours; every other library leaves them empty
+    // ONLY for coated-process colors; every other library leaves them empty
     // (the merged file still tabs them out, so split() yields blank strings).
     const parts = line.split('\t');
     if (parts.length < 2) continue;
@@ -93,7 +93,7 @@ async function loadPantoneLibrary() {
     try { lab = JSON.parse(parts[1].trim()); } catch { continue; }
     if (!Array.isArray(lab) || lab.length !== 3) continue;
 
-    // Color Bridge CMYK + hex, when this colour has them. Empty/whitespace
+    // Color Bridge CMYK + hex, when this color has them. Empty/whitespace
     // columns (most of the library) → null, i.e. "no Pantone build available".
     let cbCMYK = null, cbHex = null;
     const cmykRaw = (parts[2] || '').trim();
@@ -327,8 +327,8 @@ function closestN(c, n) {
 
 // The swatch's hue angle in the chips' OKLab-atan2 space. Computed at full
 // saturation so it stays well-defined even when the swatch is neutral — the hue
-// is latent state, the angle the colour descended from (the disc preserves the
-// stored `h` at dead-centre, so a gray keeps its last hue).
+// is latent state, the angle the color descended from (the disc preserves the
+// stored `h` at dead-center, so a gray keeps its last hue).
 function swatchHueAngle(c) {
   okhslInput[0] = c.h * 360;
   okhslInput[1] = 1;
@@ -430,7 +430,7 @@ function closestByHue(entries, targetHue) {
   return best;
 }
 
-// Sort matches by hue for display, centred on `targetHue`, and report where
+// Sort matches by hue for display, centered on `targetHue`, and report where
 // `markEntry` lands (the cell that gets the triangle marker).
 function buildDisplayOrder(matches, targetHue, markEntry) {
   if (!matches.length) return { displayOrder: [], markDomIdx: -1 };
@@ -439,7 +439,7 @@ function buildDisplayOrder(matches, targetHue, markEntry) {
   // chips fan out by hue with the target-hue chips in the MIDDLE of the lineup.
   // The arrangement rotates smoothly as the target hue moves — only the farthest
   // (antipodal) chips wrap across the seam at the outer edges — so a swatch
-  // descending toward neutral keeps the order it had, centred on the hue it came
+  // descending toward neutral keeps the order it had, centered on the hue it came
   // from (a latent angle; see swatchHueAngle).
   const seam = (targetHue + 0.5) % 1;
   const keyOf = m => (hueOf(m) - seam + 1) % 1;
@@ -518,8 +518,8 @@ function updateSwatchMatches(index) {
 
   renderPromoted(promotedCell, selected);
 
-  // The chip strip fills with the promoted Pantone's colour when one is pinned,
-  // otherwise the swatch's own colour — so the field reads as continuous behind
+  // The chip strip fills with the promoted Pantone's color when one is pinned,
+  // otherwise the swatch's own color — so the field reads as continuous behind
   // the bars. (Owned here, not in updateSwatch, so promote/un-promote — which
   // only call updateSwatchMatches — update the backdrop too.)
   if (matchCellsEl) {
@@ -531,7 +531,7 @@ function updateSwatchMatches(index) {
       bg = outOfSRGB ? p3Css : srgbCss;
     }
     // Remember the resting background; while a chip is being hovered the
-    // strip shows that chip's colour instead (see chip hover preview below),
+    // strip shows that chip's color instead (see chip hover preview below),
     // and restores to this when the pointer leaves.
     matchCellsEl._baseBg = bg;
     if (!matchCellsEl._chipHover) {
@@ -595,12 +595,12 @@ function oklabToP3Css(L, a, b) {
   return `color(display-p3 ${Math.max(0, p3Buf[0]).toFixed(3)} ${Math.max(0, p3Buf[1]).toFixed(3)} ${Math.max(0, p3Buf[2]).toFixed(3)})`;
 }
 
-// A pantone's pickable colour: hold hue and lightness, pull the OKHSL
+// A pantone's pickable color: hold hue and lightness, pull the OKHSL
 // saturation in to the rim of the current gamut (s ≤ 1) for out-of-gamut
 // pantones — the P3 rim in P3 mode, the sRGB rim in sRGB mode — radial chroma
 // reduction, not a per-channel clip. This is the SAME point the swatch stores
 // on assignment (s = min(1, entry.s)), so the chip, promoted cell, drag dot and
-// swatch fill all render the identical colour. In-gamut pantones (s ≤ 1) are
+// swatch fill all render the identical color. In-gamut pantones (s ≤ 1) are
 // unchanged.
 function pantoneP3Css(entry) {
   const lab = toOKLab(entry.h, Math.min(1, entry.s), toe(entry.L));
@@ -617,7 +617,7 @@ function buildMatchCells(container) {
   const matchCells = document.createElement('div');
   matchCells.className = 'match-cells';
 
-  // Field-level metallic texture: overlays the colour field (behind the chips)
+  // Field-level metallic texture: overlays the color field (behind the chips)
   // while a metallic chip is hovered or a metallic Pantone is promoted. First
   // child so it sits under the chips — only the open field reads as metallic.
   const fieldNoise = document.createElement('div');
@@ -675,9 +675,9 @@ function buildMatchCells(container) {
     const promotedChip = document.createElement('div');
     promotedChip.className = 'promoted-chip';
     cell.appendChild(promotedChip);
-    // The colour bar: background + border only. Label lives in a sibling
+    // The color bar: background + border only. Label lives in a sibling
     // .chip-label-wrap so it can be masked independently without fading
-    // the chip's background colour.
+    // the chip's background color.
     const fill = document.createElement('div');
     fill.className = 'chip-fill';
     const noiseEl = document.createElement('div');
@@ -839,7 +839,7 @@ els.swatches.addEventListener('pointerover', ev => {
 els.swatches.addEventListener('pointerleave', () => setStatus(''));
 
 // Hovering a chip body (the bar or its gamut icon — not the empty strip above)
-// previews that chip's colour as the match-strip background; leaving the chip
+// previews that chip's color as the match-strip background; leaving the chip
 // restores the strip's resting background (see updateSwatchMatches, _baseBg).
 function chipBgPreview(ev) {
   const matchCells = ev.target.closest('.match-cells');
@@ -892,7 +892,7 @@ if (metallicTextureCb) {
 
 const hideOnPromoteCb = document.getElementById('toggle-hide-on-promote');
 if (hideOnPromoteCb) {
-  // Initialise to match the checkbox's default (checked).
+  // Initialize to match the checkbox's default (checked).
   els.swatches.classList.toggle('hide-chips-on-promote', hideOnPromoteCb.checked);
   hideOnPromoteCb.addEventListener('change', () => {
     // Animate chips in/out on every promoted row.

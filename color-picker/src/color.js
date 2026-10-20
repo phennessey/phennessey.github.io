@@ -1,8 +1,8 @@
 // ══════════════════════════════════════════════════════════════════════
 // Color science
 // ══════════════════════════════════════════════════════════════════════
-// Pure colour-space conversions and gamut helpers, independent of the DOM
-// and the picker widget. New colour work (CMYK, Pantone colour bridge,
+// Pure color-space conversions and gamut helpers, independent of the DOM
+// and the picker widget. New color work (CMYK, Pantone color bridge,
 // export) belongs here.
 
 import {
@@ -48,10 +48,10 @@ export { convert, OKLab, XYZ, DisplayP3, sRGB };
 //
 // P3_SPACING_BLEND then mixes the P3 fit back toward his sRGB-tuned values
 // (0 = his sRGB curves on P3's edge, as @texel/color had it; 1 = the full P3
-// fit above). It sets how much of the P3 wheel's radius the sRGB colours take.
+// fit above). It sets how much of the P3 wheel's radius the sRGB colors take.
 // The full fit spaces P3 exactly like his sRGB but pulls the sRGB ring in to a
 // median 0.81 of the radius; his sRGB curves leave it at 0.92, cramming P3-only
-// colours into the outer 8%. 0.536 puts the median sRGB ring at 0.8615 of the
+// colors into the outer 8%. 0.536 puts the median sRGB ring at 0.8615 of the
 // radius — exactly the measured size difference: across hues and lightness, the
 // sRGB edge reaches a median 0.8615 of P3's edge chroma (P3 ≈ 16% larger), and
 // the wheel's radius represents chroma. Spacing at this setting: s = 0.8 reaches
@@ -170,15 +170,15 @@ export function okhslToOKLab(hsl, out) { return hslToLab(hsl, gamut, out); }
 // OKHSL's saturation curve is defined only up to the gamut edge (s = 1). Past
 // it, extrapolating the formula runs away — s shoots far past 1 and can turn
 // negative (sRGB: −2944 for one Pantone; P3 with its own fit: up to 503) — so a
-// colour outside the gamut would land wildly far from the disc, or inside it.
+// color outside the gamut would land wildly far from the disc, or inside it.
 // Pantone dots are the only thing placed past the edge, by these rules:
 //  • P3: past P3's edge, s is read off @texel/color's P3 OKHSL (his sRGB-tuned
 //    curves). It shares P3's exact edge (s = 1 at the same chroma), so it's
 //    continuous at the rim, and its extrapolation is well behaved (≤ 1.27 across
 //    the Pantone library) — the out-of-gamut Pantone map is unchanged from before
 //    P3 got its own fit.
-//  • sRGB: past sRGB's edge, a colour is placed by its position in the P3 wheel,
-//    scaled so the sRGB ring becomes the disc edge: s = s_P3(colour) / s_P3(sRGB
+//  • sRGB: past sRGB's edge, a color is placed by its position in the P3 wheel,
+//    scaled so the sRGB ring becomes the disc edge: s = s_P3(color) / s_P3(sRGB
 //    edge at the same hue and lightness). It sits relative to the sRGB circle
 //    exactly as it sits relative to the sRGB ring in P3 mode.
 const _xsEdge = [0, 0, 0], _xsP3 = [0, 0, 0], _xsP3Edge = [0, 0, 0];
@@ -191,9 +191,9 @@ function oklabToOKHSLExtended(lab, g, out) {
     out[1] = texelOKLabToOKHSL(lab, DisplayP3Gamut, _xsP3)[1];
     return out;
   }
-  const sColour = oklabToOKHSLExtended(lab, DisplayP3Gamut, _xsP3)[1];
+  const sColor = oklabToOKHSLExtended(lab, DisplayP3Gamut, _xsP3)[1];
   const sEdge   = labToHsl(_xsEdge, DisplayP3Gamut, _xsP3)[1];
-  if (sEdge > 0) out[1] = Math.max(1, sColour / sEdge);
+  if (sEdge > 0) out[1] = Math.max(1, sColor / sEdge);
   return out;
 }
 
@@ -203,15 +203,15 @@ export function oklabToOKHSL(lab, out) { return oklabToOKHSLExtended(lab, gamut,
 /** The same, in a given mode's gamut rather than the current one. */
 export function oklabToOKHSLIn(mode, lab, out) { return oklabToOKHSLExtended(lab, gamutFor(mode), out); }
 
-// ── Swatch colours past the edge (exact round trip) ──────────────────
+// ── Swatch colors past the edge (exact round trip) ──────────────────
 //
 // A swatch typed in as hex can sit a little past the wheel's edge: Ottosson's
 // edge estimate falls short near blue (the real sRGB edge bulges past his
 // triangle; P3's estimate falls short along the whole black–blue edge). OKHSL's
 // own formula is no use there — past the edge it flattens, so e.g. every chroma
 // from 0.0506 to 0.0528 at #00000F's hue reads s = 1.0000000006 in P3, and the
-// colour can't be recovered. So for swatches, past the edge s is chroma ÷ edge
-// chroma at the same hue and lightness, with its exact inverse: the edge colour
+// color can't be recovered. So for swatches, past the edge s is chroma ÷ edge
+// chroma at the same hue and lightness, with its exact inverse: the edge color
 // scaled by s. Inside the edge (everything the wheel draws) OKHSL is untouched.
 // Pantone dot placement uses its own rule (oklabToOKHSLExtended above).
 
@@ -234,7 +234,7 @@ function swatchHslFromLabRaw(lab, g, out) {
 // approximation, and float noise picks different cusps (C/L 0.573, 0.693 or
 // 0.879 for the same hue), throwing s off by up to 21%. Past the edge, re-read
 // at the hue nudged ±1e-9 rad and keep the smallest (stable) s. The nudge moves
-// the colour by ~1e-10 — far below any hex step.
+// the color by ~1e-10 — far below any hex step.
 const _swNudge = [0, 0, 0], _swHsl = [0, 0, 0];
 function swatchHslFromLab(lab, g, out) {
   swatchHslFromLabRaw(lab, g, out);
@@ -250,7 +250,7 @@ function swatchHslFromLab(lab, g, out) {
 }
 
 const _rsLab = [0, 0, 0], _rsHsl = [0, 0, 0];
-/** The saturation a colour {h, s, L} measured in `fromMode` has in `toMode`,
+/** The saturation a color {h, s, L} measured in `fromMode` has in `toMode`,
  *  capped at that gamut's edge (1). Hue and L carry over unchanged. */
 export function resaturate(col, fromMode, toMode) {
   if (fromMode === toMode || col.s === 0) return col.s;
@@ -259,9 +259,9 @@ export function resaturate(col, fromMode, toMode) {
   return Math.min(1, _rsHsl[1]);
 }
 
-/** Pull an OKLab colour radially (same hue and lightness) to the sRGB edge if
- *  it lies outside sRGB — the same treatment the wheel gives every colour in
- *  sRGB mode. In-gamut colours are copied through unchanged. */
+/** Pull an OKLab color radially (same hue and lightness) to the sRGB edge if
+ *  it lies outside sRGB — the same treatment the wheel gives every color in
+ *  sRGB mode. In-gamut colors are copied through unchanged. */
 export function clampOKLabToSRGB(lab, out) {
   oklabToOKHSLExtended(lab, sRGBGamut, _rsHsl);
   if (_rsHsl[1] <= 1) { out[0] = lab[0]; out[1] = lab[1]; out[2] = lab[2]; return out; }
@@ -307,7 +307,7 @@ export function toOKLab(h, s, lr, out = _lab) {
 }
 
 /** sRGB [0–1] → picker's {h, s, L} descriptor. Exact: toOKLab gives back the
- *  same OKLab, even for colours just past the wheel's edge. */
+ *  same OKLab, even for colors just past the wheel's edge. */
 export function srgbToOKHSL(r, g, b) {
   convert([r, g, b], sRGB, OKLab, _lab);
   swatchHslFromLab(_lab, gamut, _hsl);
@@ -362,12 +362,12 @@ export function computeP3AndSRGB(color) {
   const p3Css = `color(display-p3 ${p3Str})`;
   convert(_lab, OKLab, sRGB, _rgb);
   const beyondSRGB = _rgb.some(v => v < -1e-4 || v > 1 + 1e-4);
-  // In sRGB mode s ≤ 1 keeps every colour inside sRGB by construction, so any
-  // overshoot here is float noise at the edge — never a real P3-only colour.
+  // In sRGB mode s ≤ 1 keeps every color inside sRGB by construction, so any
+  // overshoot here is float noise at the edge — never a real P3-only color.
   const outOfSRGB = gamutMode === 'p3' && beyondSRGB;
   // Inside sRGB (within float noise), round the channels as they are. Only a
-  // colour truly outside goes through gamutMapOKLCH: it maps to Ottosson's
-  // ESTIMATED edge, which falls short near blue — running in-gamut colours
+  // color truly outside goes through gamutMapOKLCH: it maps to Ottosson's
+  // ESTIMATED edge, which falls short near blue — running in-gamut colors
   // through it turned a typed #00005A (which sits exactly on the edge) into
   // #000B4F.
   if (beyondSRGB) {
@@ -378,16 +378,16 @@ export function computeP3AndSRGB(color) {
   // The sRGB swatch fill must agree with the hex readout exactly, so paint it
   // with the same 8-bit value rather than a higher-precision color(srgb …) that
   // could drift from the displayed hex (a 1px lightness nudge can change the
-  // true colour by less than one 8-bit step — same hex, different fill). The
+  // true color by less than one 8-bit step — same hex, different fill). The
   // only finer / wider-than-sRGB fill is the P3 swatch (p3Css), shown solely
-  // when the colour falls outside sRGB.
+  // when the color falls outside sRGB.
   const srgbCss = hex;
   return { p3Str, p3Css, srgbCss, hex, outOfSRGB };
 }
 
 // ── CIELAB L* (the "Lab lightness" Photoshop reports) ────────────────
 //
-// Display readout only — NOT used in any colour/gamut calculation. Photoshop's Lab
+// Display readout only — NOT used in any color/gamut calculation. Photoshop's Lab
 // PCS is D50, so we Bradford-adapt XYZ(D65, @texel's XYZ) to D50 and take the CIELAB
 // L* nonlinearity. L* depends only on luminance, so just the Bradford Y (luminance)
 // row is needed. Scale is 0–100 to match Photoshop's Lab readout.
@@ -397,13 +397,13 @@ function cielabLFromXYZ(xyz65) {
   const Y = _bfY[0]*xyz65[0] + _bfY[1]*xyz65[1] + _bfY[2]*xyz65[2];   // D50 white Y = 1
   return 116 * (Y > _labEps ? Math.cbrt(Y) : (_labKap*Y + 16)/116) - 16;
 }
-/** CIELAB L* (D50, 0–100) of a picker colour — its true (P3-gamut) colour. */
+/** CIELAB L* (D50, 0–100) of a picker color — its true (P3-gamut) color. */
 export function cielabL(color) {
   toOKLab(color.h, color.s, toe(color.L), _lab);
   convert(_lab, OKLab, XYZ, _xyzc);
   return cielabLFromXYZ(_xyzc);
 }
-/** CIELAB L* (D50, 0–100) of an sRGB [0–1] colour — e.g. the displayed sRGB hex. */
+/** CIELAB L* (D50, 0–100) of an sRGB [0–1] color — e.g. the displayed sRGB hex. */
 export function cielabLOfSrgb(r, g, b) {
   convert([r, g, b], sRGB, XYZ, _xyzc);
   return cielabLFromXYZ(_xyzc);

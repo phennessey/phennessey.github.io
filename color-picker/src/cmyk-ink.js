@@ -63,7 +63,7 @@ export const USE_BPC = true;
 export const PROFILE_TAC = { gracol: 320, swop: 300, fogra39: 300 };
 
 // A recipe "matches" when its proof is within EXACT_DE of the target (CIEDE2000;
-// the solver stops there). A colour is "printable" — inside the gamut table —
+// the solver stops there). A color is "printable" — inside the gamut table —
 // when the solver can get within GAMUT_DE of it.
 export const EXACT_DE = 0.1;
 export const GAMUT_DE = 0.5;
@@ -71,18 +71,18 @@ export const GAMUT_DE = 0.5;
 // ── The exact-match ink solver ───────────────────────────────────────
 //
 // The profile's own separation (its BToA table) is a fine first guess, but its
-// black-generation policy misses some printable colours outright (K-heavy dark
+// black-generation policy misses some printable colors outright (K-heavy dark
 // browns and olives: #392E1A on GRACoL — the table's 70-73-94-56 proofs at
 // ΔE00 1.55, while 9-41-94-91 prints at 0.17). So the solver starts from the
 // profile's recipe and, if that misses, solves for one that matches:
 //
-//   projected Levenberg–Marquardt on all four inks, minimising the proof's Lab
+//   projected Levenberg–Marquardt on all four inks, minimizing the proof's Lab
 //   error, inside the box 0–100% and under the TAC. An ink pinned at a limit
 //   (with the gradient pushing past it) drops out of the step. Seeds: the
 //   profile's recipe at its own K, then at K moved ±25, K=100, K+50, K=0 — so
 //   the answer stays as close to the profile's black generation as it can.
 //
-// Three equations (L, a, b), four unknowns: printable colours have a whole
+// Three equations (L, a, b), four unknowns: printable colors have a whole
 // family of exact recipes; starting at the profile's recipe picks the nearby one.
 
 /**
@@ -95,7 +95,7 @@ export function makeInkSolver(CE, fwd, rev, tac) {
   const proofArr = x => rev.transform(CE.color.CMYKf(x[0] / 100, x[1] / 100, x[2] / 100, x[3] / 100));
   const dE = (lab, x) => CE.color.deltaE2000(lab, proofArr(x));
 
-  /** The profile's own recipe for a colour (its BToA separation, clipping
+  /** The profile's own recipe for a color (its BToA separation, clipping
    *  anything out of gamut the profile's colorimetric way). */
   function clip(lab) {
     const f = fwd.transform(CE.color.Lab(lab.L, lab.a, lab.b));

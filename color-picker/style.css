@@ -47,7 +47,7 @@ body {
   --section-gap: 16px;               /* breathing room on each side of a divider */
   --section-label-h: 13px;
   --section-label-gap: 6px;
-  /* Tool-section label/marker colours: dim when inactive, brighter when the
+  /* Tool-section label/marker colors: dim when inactive, brighter when the
      section is active (open). */
   --label-color: rgba(255,255,255,0.4);
   --label-color-active: rgba(255,255,255,0.78);
@@ -105,7 +105,7 @@ body.light-bg .top-ui {
   overflow: clip;                    /* clip the tinted fill to the squircle */
 }
 
-/* Wheel + lightbar, vertically centred, original gap between them. */
+/* Wheel + lightbar, vertically centered, original gap between them. */
 .colormap-body {
   display: flex;
   align-items: center;
@@ -152,8 +152,8 @@ body.light-bg .top-ui {
   margin: 0;
   cursor: pointer;
 }
-/* Visual marker: a right triangle (half as tall as wide) in the label colour,
-   centred in the hit box. Points down while inactive; snaps to point right when
+/* Visual marker: a right triangle (half as tall as wide) in the label color,
+   centered in the hit box. Points down while inactive; snaps to point right when
    active — the rotation is intentionally NOT animated. */
 .section-tri {
   position: absolute;
@@ -574,7 +574,7 @@ body.light-bg .libraries label:hover {
 }
 /* Checked pill: knocked-out text over a filled background. The shared
    declarations are grouped (incl. the light-bg/:hover selectors, so they keep
-   beating the label:hover border/colour rules above); only the fill differs. */
+   beating the label:hover border/color rules above); only the fill differs. */
 .libraries label:has(input:checked),
 .libraries label:has(input:checked):hover,
 body.light-bg .libraries label:has(input:checked),
@@ -666,7 +666,7 @@ body.light-bg .libraries label:has(input:checked):hover { background: rgba(0,0,0
   font-size: 0;
 }
 
-/* The colour region. A horizontal row so a CMYK proof can sit beside the
+/* The color region. A horizontal row so a CMYK proof can sit beside the
    sRGB/P3 stack when CMYK mode is active; with CMYK off it holds only the
    stack, which then fills the full width (identical to the original layout). */
 .color-row {
@@ -708,7 +708,7 @@ body.light-bg .libraries label:has(input:checked):hover { background: rgba(0,0,0
    is the right half; chips occupy .match-row below. */
 
 /* Bottom mode (no matches anywhere): .color-row becomes a column, so the CMYK
-   swatch stacks under the colour and takes the bottom 50% (the chip space).
+   swatch stacks under the color and takes the bottom 50% (the chip space).
    Top-bar keeps its default top-right anchor. */
 .swatches.cmyk-active:not(.show-matches):not(:has(.match-cells.has-promotion)) .color-row {
   flex-direction: column;
@@ -784,12 +784,12 @@ body.light-bg .swatch-container::before {
    badges uniformly. .region-badge is the single source of truth for every badge
    (sRGB, P3, CMYK, CB, Pantone) so no badge needs its own inline hide rule. */
 /* ══ THE none-selected rule ══════════════════════════════════════════════
-   With no swatch selected, a swatch shows ONLY colour. This single rule hides
-   EVERY descendant of a swatch except the containers that carry the colour
+   With no swatch selected, a swatch shows ONLY color. This single rule hides
+   EVERY descendant of a swatch except the containers that carry the color
    fills themselves. Any UI added anywhere inside a swatch — top bars, badges,
    readouts, icons, sliders, future controls — is covered AUTOMATICALLY.
    ⚠ NEVER add a bespoke `.none-selected …` hide rule for swatch UI again; if a
-   new element must stay visible here, it is colour-bearing — add it to the
+   new element must stay visible here, it is color-bearing — add it to the
    exclusion list below instead. (visibility, not display, so layout and JS
    measurements stay stable; !important so no show-rule of any specificity —
    that is how the CMYK slider once leaked through — can override it.) */
@@ -804,7 +804,7 @@ body.light-bg .swatch-container::before {
    top bar (delete + hex) and the P3 top bar (gamut icon + p3 readout).
    Absolutely positioned so it floats over the color region. */
 /* Rounded-rect region labels. White background; text takes on the swatch
-   background colour via --region-bg so it reads as a "knockout" stamp. */
+   background color via --region-bg so it reads as a "knockout" stamp. */
 .region-badge {
   display: inline-block;
   flex-shrink: 0;
@@ -923,14 +923,14 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
      full-height cell so bars never spill, and the .hue-marker triangle sits just
      above the strip and must stay visible. The swatch-inner squircle handles
      the rounded bottom corners.
-     Background (the swatch's own colour) is set in JS so the field reads as
+     Background (the swatch's own color) is set in JS so the field reads as
      continuous behind the bars. 0.1-alpha line marks the chip/field boundary;
      drawn 1px ABOVE the strip (outset) so a perfect-match bar can't cover it. */
   box-shadow: 0 -1px 0 rgba(255,255,255,0.1);
 }
 .swatch-container.light .match-cells { box-shadow: 0 -1px 0 rgba(0,0,0,0.1); }
 
-/* While previewing a chip's colour on hover: drop the chip/field divider line
+/* While previewing a chip's color on hover: drop the chip/field divider line
    and ease the background change (entering and restoring) at 0.1s. */
 .match-cells.chip-hover-preview {
   box-shadow: none;
@@ -951,8 +951,8 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
 
 /* When nothing is selected, chips hide everywhere… */
 .swatches.none-selected .match-cells { display: none; }
-/* …but a promoted swatch still shows its region filled with the pinned colour
-   (just the colour field — chips and the promoted label stay hidden). */
+/* …but a promoted swatch still shows its region filled with the pinned color
+   (just the color field — chips and the promoted label stay hidden). */
 .swatches.none-selected .match-cells.has-promotion { display: flex; }
 .swatches.none-selected .match-cells.has-promotion .match-cell { display: none !important; }
 
@@ -998,7 +998,7 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
 }
 
 /* De-promote box next to the promoted name. Always laid out (so the label's
-   position never shifts), but invisible until the user hovers the group. Colour
+   position never shifts), but invisible until the user hovers the group. Color
    is left to the .icon rules, so — like the swatch close box (.delete-swatch) —
    it sits at 0.3 alpha when revealed and only reaches full alpha on direct hover. */
 .promoted-close {
@@ -1041,7 +1041,7 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
   cursor: pointer;        /* the whole pantone strip activates the swatch on click */
 }
 
-/* The colour bar within a chip column. Anchored to the strip bottom; its top
+/* The color bar within a chip column. Anchored to the strip bottom; its top
    edge is driven by --chip-top (= deltaE/cutoff), so it shortens as the match
    gets farther — the "skyline". Above it, the strip background shows through. */
 .chip-fill {
@@ -1056,7 +1056,7 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
 }
 
 /* Label overlay: same bounds as .chip-fill but separate so the fade mask
-   applies only to the text, leaving the chip background colour unaffected. */
+   applies only to the text, leaving the chip background color unaffected. */
 .chip-label-wrap {
   position: absolute;
   left: 0;
@@ -1079,7 +1079,7 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
   top: 100%;
 }
 
-/* Transitions applied only during promotion/demotion, never on colour changes. */
+/* Transitions applied only during promotion/demotion, never on color changes. */
 .match-cells.chips-transitioning .chip-fill,
 .match-cells.chips-transitioning .chip-label-wrap {
   transition: top 0.2s ease;
@@ -1161,7 +1161,7 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
 }
 
 /* Field-level metallic texture (first child of .match-cells, so it sits under the
-   chips): shown over the colour field while a metallic chip is hovered or a
+   chips): shown over the color field while a metallic chip is hovered or a
    metallic Pantone is promoted. */
 .swatches.metallic-texture .match-cells.metallic-field > .match-field-noise {
   display: block;
@@ -1269,7 +1269,7 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
 
 /* Chip cap: a solid upward triangle (same 12×6 shape as the .hue-marker) sitting
    on the top edge of the chip's bar (--chip-top is the bar's top offset). Shown
-   while the chip is hovered, and kept persistently on the promoted chip. Coloured
+   while the chip is hovered, and kept persistently on the promoted chip. Colored
    like the chip label's hover state. */
 .promoted-chip {
   position: absolute;
@@ -1358,7 +1358,7 @@ body.lightbar-dragging, body.lightbar-dragging * {
 }
 
 /* P3 + CMYK readouts share one style. Only their reveal differs: P3 shows when
-   the colour is out-of-srgb; CMYK shows whenever CMYK mode is on (its whole
+   the color is out-of-srgb; CMYK shows whenever CMYK mode is on (its whole
    swatch region is hidden otherwise). */
 .p3-readout,
 .cmyk-readout {
@@ -1402,7 +1402,7 @@ body.lightbar-dragging, body.lightbar-dragging * {
 .swatch-container.cmyk-bridge .cmyk-readout .cb-tag { display: inline-block; }
 
 /* The CMYK region's chrome follows the SOFT PROOF's own lightness (.light is set
-   on .color-swatch.cmyk in updateSwatchCMYK), NOT the input colour's — the proof
+   on .color-swatch.cmyk in updateSwatchCMYK), NOT the input color's — the proof
    can sit on the other side of middle gray (a dark input's printable clip, or a
    slider-darkened build). Explicit :not(.light)/.light pairs so these outrank the
    container-level .swatch-container.light rules in both directions. */
@@ -1428,7 +1428,7 @@ body.lightbar-dragging, body.lightbar-dragging * {
 .cmyk-profile-label { font-size: 11px; color: var(--ui-label); white-space: nowrap; }
 
 /* Custom dropdown: outlined rounded rect with a CSS chevron, no native chrome.
-   Outline, text, and arrow all follow the page-lightness UI colour. */
+   Outline, text, and arrow all follow the page-lightness UI color. */
 .cmyk-profile-select-wrap { position: relative; display: inline-flex; }
 .cmyk-profile-select {
   font: inherit;
@@ -1455,7 +1455,7 @@ body.light-bg .cmyk-profile-select { border-color: rgba(0,0,0,0.38); }
   border-bottom: 1.5px solid var(--ui-label);
   transform: translateY(-65%) rotate(45deg);
 }
-/* "Show CMYK gamut boundary" checkbox — UI text colour, native check tinted. */
+/* "Show CMYK gamut boundary" checkbox — UI text color, native check tinted. */
 .cmyk-check {
   display: flex;
   align-items: flex-start;
@@ -1496,7 +1496,7 @@ body.light-bg .cmyk-profile-select { border-color: rgba(0,0,0,0.38); }
 }
 /* Shown only when it can do something: out-of-gamut, not Color-Bridge substituted,
    and not inert (.cmyk-bias-inert = full slider travel rounds to the same build,
-   e.g. a deep colour whose vendor build already sits at the press's TAC limit). */
+   e.g. a deep color whose vendor build already sits at the press's TAC limit). */
 .swatches.cmyk-active .swatch-container.out-of-cmyk:not(.cmyk-bridge):not(.cmyk-bias-inert) .cmyk-swatch-bias {
   display: block;
 }
@@ -1541,7 +1541,7 @@ body.light-bg .cmyk-profile-select { border-color: rgba(0,0,0,0.38); }
   -webkit-appearance: none;
   appearance: none;
   width: 11px; height: 11px;
-  margin-top: 1.5px;                        /* centre the 11px thumb on the 14px track */
+  margin-top: 1.5px;                        /* center the 11px thumb on the 14px track */
   border-radius: 50%;
   border: none;
   background: var(--bias-fg);

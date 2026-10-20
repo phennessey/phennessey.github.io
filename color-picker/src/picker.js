@@ -1,8 +1,8 @@
 // ══════════════════════════════════════════════════════════════════════
 // Picker widget & rendering
 // ══════════════════════════════════════════════════════════════════════
-// The colour wheel / lightbar renderer and the createPicker factory.
-// Pure colour-space math lives in color.js.
+// The color wheel / lightbar renderer and the createPicker factory.
+// Pure color-space math lives in color.js.
 
 import {
   convert, OKLab, DisplayP3, sRGB,
@@ -20,20 +20,20 @@ const CMYK_BOUNDARY_STEPS = 360;
 // Scratch array for pixel rendering (reused across calls).
 const _p3 = [0, 0, 0];
 
-// 4×4 Bayer ordered-dither thresholds, centred to ±0.5 LSB (in 0–1 colour
+// 4×4 Bayer ordered-dither thresholds, centered to ±0.5 LSB (in 0–1 color
 // units). Indexed by (y & 3, x & 3); a lookup, so essentially free per pixel.
 const BAYER4 = [0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5].map(v => (v / 16 - 0.46875) / 255);
 
 // ── Disc pixel rendering ─────────────────────────────────────────────
 
-// `space` is the canvas's own colour space (DisplayP3 or sRGB): pixels are
+// `space` is the canvas's own color space (DisplayP3 or sRGB): pixels are
 // written as 8-bit codes in that space, so they must be computed in it too.
 export function renderDiscPixels(imageData, discSize, lr, space = DisplayP3) {
   const d = imageData.data;
   const discR = discSize / 2;
   for (let y = 0; y < discSize; y++) {
     for (let x = 0; x < discSize; x++) {
-      // Sample each pixel at its centre: pixel x covers [x, x+1] in the same
+      // Sample each pixel at its center: pixel x covers [x, x+1] in the same
       // coordinates the pointer, handles and dots use. Sampling the corner
       // shifted the image half a pixel — up to ~31 8-bit steps in the outer
       // ring, where OKHSL chroma climbs steeply toward the edge.
@@ -247,10 +247,10 @@ export function createPicker(S, cfg) {
   const wheelCtx = wheelCanvas.getContext('2d', { colorSpace: 'display-p3' });
 
   // sRGB mode draws on its own sRGB canvas, stacked exactly over the P3 one. A
-  // canvas's colour space is fixed when its context is created, and an 8-bit P3
-  // canvas can't hold sRGB colours exactly: its codes don't line up with the hex
-  // grid, so sRGB-edge colours (the whole rim in sRGB mode) rounded to just
-  // inside or just outside sRGB — ~19% of rim pixels showed colours outside
+  // canvas's color space is fixed when its context is created, and an 8-bit P3
+  // canvas can't hold sRGB colors exactly: its codes don't line up with the hex
+  // grid, so sRGB-edge colors (the whole rim in sRGB mode) rounded to just
+  // inside or just outside sRGB — ~19% of rim pixels showed colors outside
   // sRGB. On an sRGB canvas every pixel is a real 8-bit sRGB (hex) value.
   const wheelCanvasSRGB = document.createElement('canvas');
   wheelCanvasSRGB.id = 'wheel-srgb';
@@ -292,7 +292,7 @@ export function createPicker(S, cfg) {
   });
   discOverlay.appendChild(srgbEdgeCircle);
 
-  // CMYK gamut boundary — same colour logic as the sRGB ring but a slightly
+  // CMYK gamut boundary — same color logic as the sRGB ring but a slightly
   // thicker line so the two are distinguishable. Hidden until opted into.
   const cmykBoundary = svgEl('path', {
     id: 'cmyk-boundary', fill: 'none', stroke: '#000', 'stroke-width': '1.25',
@@ -392,7 +392,7 @@ export function createPicker(S, cfg) {
 
   // ── Disc drawing ─────────────────────────────────────────────────
   function drawDisc() {
-    // Draw on the canvas whose colour space matches the mode; show only that one.
+    // Draw on the canvas whose color space matches the mode; show only that one.
     const srgbMode = isSRGBMode();
     const mode = srgbMode ? 'srgb' : 'p3';
     const ctx  = srgbMode ? wheelCtxSRGB : wheelCtx;
@@ -450,7 +450,7 @@ export function createPicker(S, cfg) {
     updateCMYKBoundary(stroke, opacity, lr, L);
   }
 
-  // CMYK boundary ring. Shares the sRGB ring's stroke colour/opacity but draws a
+  // CMYK boundary ring. Shares the sRGB ring's stroke color/opacity but draws a
   // thicker line. The path is cached on lr; the cache is invalidated externally
   // when the active profile changes.
   // Near the lightness extremes the gamut is tiny and the trace turns jagged and
@@ -550,9 +550,9 @@ export function createPicker(S, cfg) {
     }
   }
 
-  // Position/show the chroma-cusp marker. Visible only when a single-colour
+  // Position/show the chroma-cusp marker. Visible only when a single-color
   // Shift lightbar drag could snap to it: pointer on the lightbar, Shift held,
-  // Meta not (Meta is lock-chroma). Coloured for contrast at that lightness.
+  // Meta not (Meta is lock-chroma). Colored for contrast at that lightness.
   function updateCuspLine() {
     const single = S.activeIndex !== -1 && !S.isMultiMode();
     if (!(single && S.modKeys.shift && !S.modKeys.meta && S.pointerInLightbar)) {

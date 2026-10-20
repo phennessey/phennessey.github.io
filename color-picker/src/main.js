@@ -24,7 +24,7 @@ import './mode.js';
 const _coreRender = P.render.bind(P);
 P.render = function () {
   _coreRender();
-  // updateSwatch (swatch colour/readout) is cheap and always synchronous so
+  // updateSwatch (swatch color/readout) is cheap and always synchronous so
   // the palette tracks changes exactly. During an active drag the expensive
   // Pantone match recompute is coalesced to one pass per frame via
   // scheduleMatches; the settled (non-drag) state recomputes synchronously

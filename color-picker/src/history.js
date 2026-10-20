@@ -31,7 +31,7 @@ function takeSnapshot() {
 }
 
 // Selection is not undoable, so it's excluded here: selecting a different swatch
-// (with no colour/order/promotion change) must NOT create a history entry. The
+// (with no color/order/promotion change) must NOT create a history entry. The
 // per-swatch `selected` flag is still recorded — but only to restore a multi-edit
 // group on undo/redo (see restoreSnapshot).
 function snapshotsEqual(a, b) {

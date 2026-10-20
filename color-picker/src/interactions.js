@@ -86,7 +86,7 @@ function applyDiscPointer(ev) {
       };
     }
     // Rotate the hue by the cursor's angular delta rather than snapping to the
-    // cursor — like grabbing a wheel at its current position. Normalise the
+    // cursor — like grabbing a wheel at its current position. Normalize the
     // delta across the ±π seam so a wraparound doesn't cause a jump.
     let d = angle - S.discChromaLock.lastAngle;
     d = ((d + Math.PI) % TAU + TAU) % TAU - Math.PI;
@@ -99,8 +99,8 @@ function applyDiscPointer(ev) {
       col.s = clamp01((dx * Math.cos(a) - dy * Math.sin(a)) / DISC_R);
     } else {
       const r = Math.sqrt(dx * dx + dy * dy);
-      // At dead-centre the angle is undefined; keep the last hue so it stays as
-      // latent state (a neutral colour remembers the hue it descended from).
+      // At dead-center the angle is undefined; keep the last hue so it stays as
+      // latent state (a neutral color remembers the hue it descended from).
       if (r > 1e-3) col.h = (Math.atan2(-dy, dx) / TAU + 1) % 1;
       col.s = Math.min(1, r / DISC_R);
     }
@@ -370,7 +370,7 @@ function applyLightbarPointer(ev) {
   // Shift (without Meta) gives the lightbar a magnetic snap zone at the hue's
   // chroma cusp (its max-chroma lightness): the slider tracks the pointer as
   // usual, but within CUSP_SNAP_PX of the cusp's position it sticks to that
-  // value. An invisible single-colour gesture; Meta still means lock-chroma,
+  // value. An invisible single-color gesture; Meta still means lock-chroma,
   // and Shift+wheel stays the fine-tune scroll.
   const pointerY = ev.clientY - rect.top - lbDragOffset;
   if (S.modKeys.shift && !S.modKeys.meta) {
@@ -658,8 +658,8 @@ els.swatches.addEventListener('pointerdown', ev => {
       if (!Number.isInteger(ti) || ti < 0 || ti >= S.colors.length) return;
       // Place the indicator at the Pantone's true position in the current gamut
       // (saturation clamped to the rim for out-of-gamut pantones). We no longer snap the
-      // stored colour to the 8-bit sRGB hex grid — the swatch readout shows the
-      // closest sRGB hex on its own when the colour is within sRGB.
+      // stored color to the 8-bit sRGB hex grid — the swatch readout shows the
+      // closest sRGB hex on its own when the color is within sRGB.
       S.colors[ti] = { h: entry.h, s: Math.min(1, entry.s), L: entry.L };
       pantoneSelections.set(ti, entry);
       if (ti === S.activeIndex) P.invalidateCache();

@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════════════════
 // CMYK via ICC profile
 // ══════════════════════════════════════════════════════════════════════
-// Converts the picker's true (P3-gamut) OKLab colour to CMYK through a real
+// Converts the picker's true (P3-gamut) OKLab color to CMYK through a real
 // ICC output profile, and renders the build back to a Display-P3 swatch as a
 // soft proof. CMYK "mode" is active while the CMYK tool section is open (see
 // main.js).
@@ -14,12 +14,12 @@
 //
 //   Gamut (flag + ring): the profile's precomputed gamut table (lib/gamut/,
 //     built by tools/gamut-tables.html): the most OKLab chroma any ink recipe
-//     within the press's total-ink limit prints, per hue and lightness. A colour
+//     within the press's total-ink limit prints, per hue and lightness. A color
 //     is out of gamut when its chroma exceeds the table's. The dashed ring draws
 //     the same table, so flag and ring agree by construction.
-//   Build (in gamut): an ink recipe whose proof matches the colour — the
+//   Build (in gamut): an ink recipe whose proof matches the color — the
 //     profile's own separation when it already does, otherwise the solver's
-//     (cmyk-ink.js). The profile's table misses some printable colours (its
+//     (cmyk-ink.js). The profile's table misses some printable colors (its
 //     black generation can't reach K-heavy dark browns and olives).
 //   Build (out of gamut): the profile's own colorimetric clip.
 //   Swatch: the proof of the build ROUNDED to whole percents — exactly what the
@@ -78,14 +78,14 @@ const _proofOk   = [0, 0, 0];   // proof OKLab scratch for the sRGB-mode clip
 const _regionOk  = [0, 0, 0];   // proof OKLab/OKHSL scratch for the region's own
 const _regionHsl = [0, 0, 0];   // light/dark chrome decision (see updateSwatchCMYK)
 
-/** Picker colour {h,s,L} → its OKLab (into _ok) and CIELAB(D50, native PCS). */
+/** Picker color {h,s,L} → its OKLab (into _ok) and CIELAB(D50, native PCS). */
 function colorToLab(color) {
   toOKLab(color.h, color.s, toe(color.L), _ok);
   convert(_ok, OKLab, XYZ, _xyz);
   return xyzD65ToLabD50(_xyz);
 }
 
-/** Out of gamut: the colour's OKLab chroma exceeds the most the press prints at
+/** Out of gamut: the color's OKLab chroma exceeds the most the press prints at
  *  its hue and lightness (reads the OKLab left in _ok by colorToLab/toOKLab). */
 function okOutOfGamut() {
   if (!gamutTable) return false;
@@ -107,7 +107,7 @@ function convertColor(color) {
 // ── Out-of-gamut bias: ink-space only — NEVER adds an ink the build lacks ──
 //
 // The per-swatch slider (0 = standard clip … 1 = full travel) adjusts an
-// out-of-gamut colour's build toward the INPUT's apparent lightness (CIELAB L*,
+// out-of-gamut color's build toward the INPUT's apparent lightness (CIELAB L*,
 // what a Lab-measuring app reports), working entirely in INK space on the
 // standard build:
 //
@@ -125,7 +125,7 @@ function convertColor(color) {
 // round-trip, hence immune to the BPC-cancel trap that poisoned the old
 // endpoint search (see CLAUDE.md).
 // bias 0 is exactly the raw build, and both paths are continuous
-// in bias by construction. In-gamut colours have nothing to trade → no-op.
+// in bias by construction. In-gamut colors have nothing to trade → no-op.
 
 /**
  * Lighten path: the raw build with all four inks scaled down by one common
@@ -193,7 +193,7 @@ function biasedBuild(raw, color, oog, bias) {
 
 const cl3 = v => Math.max(0, Math.min(1, v)).toFixed(3);
 
-/** Whether a picker colour lies outside the active profile's printable gamut
+/** Whether a picker color lies outside the active profile's printable gamut
  *  (see the header). Also drives click-to-pull in swatches.js. */
 export function isOutOfCMYK(color) {
   if (!engineOK || !cmyk.ready) return false;
@@ -203,7 +203,7 @@ export function isOutOfCMYK(color) {
 
 /** The boundary ring's radius — the OKHSL saturation of the gamut's edge — at
  *  hue `h` and OKHSL lightness `lr` in the current gamut mode; negative where
- *  nothing prints. Capped at 1, the disc's edge (in sRGB mode, printable colours
+ *  nothing prints. Capped at 1, the disc's edge (in sRGB mode, printable colors
  *  outside sRGB sit on the rim). */
 export function cmykRingRadius(h, lr) {
   if (!engineOK || !cmyk.ready || !gamutTable) return -1;
@@ -246,8 +246,8 @@ export function updateSwatchCMYK(container, color, index) {
 
   // Per-swatch out-of-gamut build-lightness slider (rendered below the CMYK
   // label). Its value IS the state — it lives on the element, so it survives
-  // reindexing. Reset it to 0 whenever THIS swatch's colour changes: we key the
-  // reset on the colour so slider-driven repaints (colour unchanged) don't wipe
+  // reindexing. Reset it to 0 whenever THIS swatch's color changes: we key the
+  // reset on the color so slider-driven repaints (color unchanged) don't wipe
   // it. Only used for an out-of-gamut build below; hidden by CSS otherwise.
   const biasSlider = container.querySelector(".cmyk-bias-slider");
   let bias = 0;
@@ -264,10 +264,10 @@ export function updateSwatchCMYK(container, color, index) {
     ? promoted : null;
 
   // The CMYK region's light/dark chrome FOLLOWS THE INTERFACE — the container's
-  // input-colour .light state — and diverges to the soft proof's own state only
+  // input-color .light state — and diverges to the soft proof's own state only
   // when the proof sits CLEARLY on the other side of middle gray (dead band
   // below). Deciding purely from the proof flickered wildly during drags: the
-  // proof's lightness wobbles across the bare threshold while the colour changes.
+  // proof's lightness wobbles across the bare threshold while the color changes.
   // Anchoring to the container keeps the state stable, and the band ensures a
   // switch only for a genuine mismatch (e.g. a light input whose printable clip
   // is plainly dark).
@@ -291,7 +291,7 @@ export function updateSwatchCMYK(container, color, index) {
   } else {
     // Flag: is the input outside the printable gamut? (see the header). The CMYK
     // build comes from the biased conversion when the slider is engaged on a
-    // flagged colour.
+    // flagged color.
     const raw = convertColor(color);
     oog = raw.oog;
     const c = biasedBuild(raw, color, oog, bias);

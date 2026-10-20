@@ -27,7 +27,7 @@ function updateSwatch(index) {
   const p3SwatchEl = container.querySelector('.color-swatch.p3');
   p3SwatchEl.style.background = p3Css;
   p3SwatchEl.style.setProperty('--region-bg', p3Css);
-  // The chip strip's backdrop (swatch colour, or promoted Pantone colour) is
+  // The chip strip's backdrop (swatch color, or promoted Pantone color) is
   // owned by updateSwatchMatches, which knows the promotion state.
 
   const srgbEl = container.querySelector('.swatch-readout.srgb');
@@ -42,7 +42,7 @@ function updateSwatch(index) {
   }
 
   // CIELAB L* (D50, 0–100) readout — the "Lab lightness" a P3 doc reports in
-  // Photoshop. sRGB shows the clamped hex's L*, P3 the true colour's (they differ
+  // Photoshop. sRGB shows the clamped hex's L*, P3 the true color's (they differ
   // only when out of sRGB). CMYK's own L* is set in updateSwatchCMYK (the proof's,
   // which tracks the bias slider).
   const nH = parseInt(hex.slice(1), 16);
@@ -132,7 +132,7 @@ function removeColorAt(i) {
   for (const [k, p] of remapped) pantoneSelections.set(k, p);
 }
 
-// Rebuild the palette to match `list` (colour descriptors {h,s,L}): trim
+// Rebuild the palette to match `list` (color descriptors {h,s,L}): trim
 // extra swatches, overwrite the ones that remain, and create handles + swatch
 // DOM for any new indices. Callers own selection, promotion and history.
 function setPalette(list) {
@@ -164,7 +164,7 @@ function addLastDuplicate() {
   return i;
 }
 
-// Shared behaviour of the two gamut icons: binary-search the largest OKHSL
+// Shared behavior of the two gamut icons: binary-search the largest OKHSL
 // saturation (same hue/lightness) still inside the gamut per `isOut`, apply
 // it, drop any promoted Pantone, repaint, and snapshot. `hi` is the search's
 // upper bound — 1 for sRGB, the current s for CMYK.
@@ -189,7 +189,7 @@ function pullIntoGamut(container, isOut, hi) {
 
 function wireSwatch(container) {
   // sRGB gamut icon (the first .gamut-warning in the swatch is the P3 bar's):
-  // reduce chroma at the same hue/lightness until the colour falls inside sRGB.
+  // reduce chroma at the same hue/lightness until the color falls inside sRGB.
   container.querySelector('.gamut-warning')?.addEventListener('click', e => {
     e.stopPropagation();
     pullIntoGamut(container, c => computeP3AndSRGB(c).outOfSRGB, 1);
