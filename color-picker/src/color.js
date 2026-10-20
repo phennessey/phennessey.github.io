@@ -14,11 +14,11 @@ import {
   sRGB,
   DisplayP3Gamut,
   sRGBGamut,
-  gamutMapOKLCH,
-  findCuspOKLCH,
   findGamutIntersectionOKLCH,
   OKLabToOKHSL as texelOKLabToOKHSL,
-  MapToL,
+  OKLab_to_LMS_M,
+  LMS_to_linear_sRGB_M,
+  LMS_to_linear_DisplayP3_M,
 } from "https://esm.sh/@texel/color@1.1.11?bundle";
 
 // Single home for the vendored @texel/color dependency: every other module
@@ -30,7 +30,7 @@ export { convert, OKLab, XYZ, DisplayP3, sRGB };
 //
 // A port of Björn Ottosson's okhsl_to_srgb / srgb_to_okhsl (MIT; reference
 // bottosson.github.io/misc/colorpicker/colorconversion.js) on @texel/color's
-// gamut primitives (findCuspOKLCH, findGamutIntersectionOKLCH). Two pieces of
+// findGamutIntersectionOKLCH and an exact cusp (see "The cusp" below). Two pieces of
 // his method are fitted to the gamut: get_ST_mid ("a smooth approximation of
 // the location of the cusp", kept below it) and C_0's constant shape ("roughly
 // the average values of ST"). @texel/color's OKHSL reuses his sRGB fits for
@@ -81,13 +81,150 @@ for (const [g, p] of OKHSL_FIT) {
   p.c0T = (1 - p.blend) * base.c0T + p.blend * p.c0T;
 }
 
+// ── The cusp, computed exactly ───────────────────────────────────────
+//
+// The cusp (the most saturated color of a hue) anchors OKHSL's edge. Ottosson's
+// approximation (@texel/color's findCuspOKLCH) picks the wrong channel's
+// equation on the cyan side of pure blue (hue 264.05°), so the wheel's edge
+// stopped ~4% short there and snapped out at blue: a visible step, e.g. edge
+// colors #0126AD → #0300C4 across a hair of hue. Here it's exact: along a ray
+// from black at saturation S = C/L, each linear channel is a cubic in S, and
+// the cusp's S is the most saturated S at which every channel is ≥ 0. Then, as
+// in his find_cusp, the cusp's L scales that color until its largest channel
+// is 1.
+//
+// sRGB alone has a true break there too: just cyan-side of pure blue the gamut
+// grows a thin spike out to the blue primary — along those hues S runs in
+// gamut, out, then in again at the spike's tip — and pure #0000FF IS that tip.
+// Cutting the spike off would put every #0000xx 19% past the wheel's edge (user
+// decision 2026-10-20: no color may be unreachable). So the edge reaches the
+// tip and is ramped instead: the cusp's S may fall off at most CUSP_RAMP_SLOPE
+// per degree of hue from any neighbor (an upper envelope). The ramp runs ~1° on
+// the cyan side of blue, where the edge sits up to 2/255 outside sRGB (drawn
+// clipped). Elsewhere S never changes faster than 0.031/degree, so nothing else
+// moves. P3 has no spike and no ramp.
+//
+// Cusps are tabulated every 0.01° of hue per gamut (built on first use, ~70 ms)
+// and interpolated linearly. The gamut's six corners (R, G, B and C, M, Y — each
+// is the exact cusp at its own hue) are spliced in as extra points: the cusp
+// has a sharp corner there, and interpolating across it cut pure #0000FF off
+// the sRGB edge by 0.12% (the edge read #0001FF).
+const CUSP_STEPS = 36000, CUSP_DEG = 360 / CUSP_STEPS;
+const CUSP_RAMP_SLOPE = 0.1;   // max fall-off of the cusp's S per degree (sRGB only)
+const CUSP_GAMUT = new Map([
+  [sRGBGamut, { M: LMS_to_linear_sRGB_M, ramp: CUSP_RAMP_SLOPE, space: sRGB }],
+  [DisplayP3Gamut, { M: LMS_to_linear_DisplayP3_M, ramp: 0, space: DisplayP3 }],
+]);
+const CUSP_CORNERS = [[1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 1, 1], [0, 0, 1], [1, 0, 1]];
+
+/** Positive real roots of c0 + c1·S + c2·S² + c3·S³ (below 1000), ascending:
+ *  the cubic is monotone between its turning points, so bisect each stretch
+ *  whose ends differ in sign. */
+function cubicRoots(c0, c1, c2, c3, out) {
+  const f = S => c0 + S * (c1 + S * (c2 + S * c3));
+  const A = 3 * c3, B = 2 * c2, disc = B * B - 4 * A * c1, ends = [];
+  if (Math.abs(A) > 1e-15) {
+    if (disc >= 0) { const q = Math.sqrt(disc); ends.push((-B - q) / (2 * A), (-B + q) / (2 * A)); }
+  } else if (Math.abs(B) > 1e-15) ends.push(-c1 / B);
+  const stops = ends.filter(s => s > 0).sort((x, y) => x - y);
+  stops.push(1e3);
+  let lo = 0, flo = f(0);
+  for (const hi of stops) {
+    const fhi = f(hi);
+    if ((flo > 0) !== (fhi > 0)) {
+      let l = lo, h = hi;
+      for (let i = 0; i < 52; i++) { const m = (l + h) / 2; if ((f(m) > 0) === (flo > 0)) l = m; else h = m; }
+      out.push(l);
+    }
+    lo = hi; flo = fhi;
+  }
+  return out;
+}
+
+/** The most saturated S at which the color (L = 1, C = S) along unit hue (a, b)
+ *  has every linear channel ≥ 0. Channel i is Σⱼ M[i][j]·(1 + S·kⱼ)³ — a cubic
+ *  in S; the in-gamut S form one or more stretches between its roots, and the
+ *  answer is the top of the last one. */
+function cuspSaturation(M, a, b) {
+  const k = [0, 1, 2].map(j => OKLab_to_LMS_M[j][1] * a + OKLab_to_LMS_M[j][2] * b);
+  const coef = M.map(r => [
+    r[0] + r[1] + r[2],
+    3 * (r[0] * k[0] + r[1] * k[1] + r[2] * k[2]),
+    3 * (r[0] * k[0] ** 2 + r[1] * k[1] ** 2 + r[2] * k[2] ** 2),
+    r[0] * k[0] ** 3 + r[1] * k[1] ** 3 + r[2] * k[2] ** 3,
+  ]);
+  const inGamut = S => coef.every(([c0, c1, c2, c3]) => c0 + S * (c1 + S * (c2 + S * c3)) >= 0);
+  const roots = [];
+  for (const c of coef) cubicRoots(c[0], c[1], c[2], c[3], roots);
+  roots.sort((x, y) => x - y);
+  let top = 0, lo = 0;
+  for (const r of roots) {
+    if (r > lo && inGamut((lo + r) / 2)) top = r;   // [lo, r] is an in-gamut stretch
+    lo = r;
+  }
+  return top;
+}
+
+const cuspTables = new Map();   // gamut → { L, C } Float64Arrays over hue
+function cuspTable(g) {
+  let t = cuspTables.get(g);
+  if (t) return t;
+  const { M, ramp, space } = CUSP_GAMUT.get(g);
+  const S = new Float64Array(CUSP_STEPS), Lc = new Float64Array(CUSP_STEPS), Cc = new Float64Array(CUSP_STEPS);
+  const ang = i => i * CUSP_DEG * Math.PI / 180;
+  for (let i = 0; i < CUSP_STEPS; i++) S[i] = cuspSaturation(M, Math.cos(ang(i)), Math.sin(ang(i)));
+  if (ramp) {   // upper envelope: S falls off at most `ramp` per degree, around the circle
+    const d = ramp * CUSP_DEG, N = CUSP_STEPS;
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 0; i < N; i++) S[i] = Math.max(S[i], S[(i + N - 1) % N] - d);
+      for (let i = N - 1; i >= 0; i--) S[i] = Math.max(S[i], S[(i + 1) % N] - d);
+    }
+  }
+  const lms = [0, 0, 0];
+  for (let i = 0; i < CUSP_STEPS; i++) {
+    const a = Math.cos(ang(i)) * S[i], b = Math.sin(ang(i)) * S[i];
+    for (let j = 0; j < 3; j++) lms[j] = (1 + OKLab_to_LMS_M[j][1] * a + OKLab_to_LMS_M[j][2] * b) ** 3;
+    let top = 0;
+    for (const r of M) top = Math.max(top, r[0] * lms[0] + r[1] * lms[1] + r[2] * lms[2]);
+    Lc[i] = Math.cbrt(1 / top); Cc[i] = Lc[i] * S[i];
+  }
+  // The corners, keyed by the table step they fall in: [position in steps, L, C].
+  const corners = new Map(), ok = [0, 0, 0];
+  for (const rgb of CUSP_CORNERS) {
+    convert(rgb, space, OKLab, ok);
+    const x = ((Math.atan2(ok[2], ok[1]) * 180 / Math.PI % 360 + 360) % 360) / CUSP_DEG;
+    corners.set(Math.floor(x) % CUSP_STEPS, [x, ok[0], Math.hypot(ok[1], ok[2])]);
+  }
+  t = { L: Lc, C: Cc, corners };
+  cuspTables.set(g, t);
+  return t;
+}
+
+/** The cusp [L, C] for unit hue (a_, b_) in gamut `g` (see above). */
+const _cusp = [0, 0];
+function findCusp(a_, b_, g) {
+  const t = cuspTable(g);
+  const x = (((Math.atan2(b_, a_) * 180 / Math.PI) % 360 + 360) % 360) / CUSP_DEG;
+  const i = Math.floor(x) % CUSP_STEPS, j = (i + 1) % CUSP_STEPS, f = x - Math.floor(x);
+  const c = t.corners.get(i);
+  if (c) {   // a corner falls in this step: interpolate to or from it
+    const fc = c[0] - Math.floor(c[0]);
+    if (f <= fc) { const u = fc > 0 ? f / fc : 1; _cusp[0] = t.L[i] + (c[1] - t.L[i]) * u; _cusp[1] = t.C[i] + (c[2] - t.C[i]) * u; }
+    else { const u = (f - fc) / (1 - fc); _cusp[0] = c[1] + (t.L[j] - c[1]) * u; _cusp[1] = c[2] + (t.C[j] - c[2]) * u; }
+    return _cusp;
+  }
+  _cusp[0] = t.L[i] + (t.L[j] - t.L[i]) * f;
+  _cusp[1] = t.C[i] + (t.C[j] - t.C[i]) * f;
+  return _cusp;
+}
+
 // get_ST_mid's form: X = c0 + 1/(c1 + c2·b + a(c3 + c4·b + a(c5 + c6·b + a(c7 + c8·b + c9·a))))
 const stMid = (c, a, b) => c[0] + 1 / (c[1] + c[2]*b + a*(c[3] + c[4]*b + a*(c[5] + c[6]*b + a*(c[7] + c[8]*b + c[9]*a))));
 
 /** His get_Cs: [C_0, C_mid, C_max] at OKLab lightness L along unit hue (a_, b_). */
 function getCs(L, a_, b_, g, out) {
   const p = OKHSL_FIT.get(g);
-  const cusp = findCuspOKLCH(a_, b_, g);
+  const cusp = findCusp(a_, b_, g);
   const Cmax = findGamutIntersectionOKLCH(a_, b_, L, 1, L, cusp, g);
   const k = Cmax / Math.min(L * (cusp[1] / cusp[0]), (1 - L) * (cusp[1] / (1 - cusp[0])));
   let Sm = stMid(p.S, a_, b_), Tm = stMid(p.T, a_, b_);
@@ -229,25 +366,10 @@ function swatchHslFromLabRaw(lab, g, out) {
   if (Cmax > 0 && C > Cmax) out[1] = C / Cmax;
   return out;
 }
-// The library's cusp finder is unstable at exactly pure blue's hue (every
-// #0000xx shares it): that hue sits on a branch switch in Ottosson's cusp
-// approximation, and float noise picks different cusps (C/L 0.573, 0.693 or
-// 0.879 for the same hue), throwing s off by up to 21%. Past the edge, re-read
-// at the hue nudged ±1e-9 rad and keep the smallest (stable) s. The nudge moves
-// the color by ~1e-10 — far below any hex step.
-const _swNudge = [0, 0, 0], _swHsl = [0, 0, 0];
-function swatchHslFromLab(lab, g, out) {
-  swatchHslFromLabRaw(lab, g, out);
-  if (out[1] <= 1) return out;
-  const C = Math.hypot(lab[1], lab[2]), H = Math.atan2(lab[2], lab[1]);
-  _swNudge[0] = lab[0];
-  for (const d of [1e-9, -1e-9]) {
-    _swNudge[1] = C * Math.cos(H + d); _swNudge[2] = C * Math.sin(H + d);
-    swatchHslFromLabRaw(_swNudge, g, _swHsl);
-    if (_swHsl[1] < out[1]) { out[0] = _swHsl[0]; out[1] = _swHsl[1]; out[2] = _swHsl[2]; }
-  }
-  return out;
-}
+// (A ±1e-9 rad hue nudge used to live here: @texel/color's cusp finder was
+// unstable at exactly pure blue's hue, which every #0000xx shares. The exact
+// cusp above is stable there, so swatches read straight through.)
+const swatchHslFromLab = swatchHslFromLabRaw;
 
 const _rsLab = [0, 0, 0], _rsHsl = [0, 0, 0];
 /** The saturation a color {h, s, L} measured in `fromMode` has in `toMode`,
@@ -334,12 +456,12 @@ export function chromaOf(col) {
 }
 
 /** Lightness (col.L space) of the current gamut's chroma cusp for a hue — the
- *  lightness at which this hue can reach its maximum chroma. findCuspOKLCH
- *  returns OKLab L, which equals col.L (toeInv of the OKHSL lightness), so it
+ *  lightness at which this hue can reach its maximum chroma. The cusp's L is
+ *  OKLab L, which equals col.L (toeInv of the OKHSL lightness), so it
  *  can be assigned to col.L directly. Depends on hue only, not saturation. */
 export function cuspL(h) {
   const H = h * Math.PI * 2;
-  return findCuspOKLCH(Math.cos(H), Math.sin(H), gamut)[0];
+  return findCusp(Math.cos(H), Math.sin(H), gamut)[0];
 }
 
 /** Test whether an (h, s, lr) triple falls within the sRGB gamut. */
@@ -350,6 +472,7 @@ export function inSRGB(h, s, lr) {
 
 // ── Gamut-mapped output computation ──────────────────────────────────
 
+const _mapLab = [0, 0, 0];
 export function computeP3AndSRGB(color) {
   toOKLab(color.h, color.s, toe(color.L));
   convert(_lab, OKLab, DisplayP3, _p3);
@@ -366,13 +489,14 @@ export function computeP3AndSRGB(color) {
   // overshoot here is float noise at the edge — never a real P3-only color.
   const outOfSRGB = gamutMode === 'p3' && beyondSRGB;
   // Inside sRGB (within float noise), round the channels as they are. Only a
-  // color truly outside goes through gamutMapOKLCH: it maps to Ottosson's
-  // ESTIMATED edge, which falls short near blue — running in-gamut colors
-  // through it turned a typed #00005A (which sits exactly on the edge) into
-  // #000B4F.
+  // color truly outside is pulled in to the sRGB edge at the same hue and
+  // lightness (clampOKLabToSRGB — the sRGB wheel's own edge, exact cusp). Never
+  // run in-gamut colors through a mapping: @texel/color's gamutMapOKLCH (used
+  // here until 2026-10-20) turned a typed #00005A, exactly on the edge, into
+  // #000B4F, and its approximate cusp made P3-mode hex readouts jump at pure
+  // blue (#0126AD → #0300C4).
   if (beyondSRGB) {
-    convert(_lab, OKLab, OKLCH, _lch);
-    gamutMapOKLCH(_lch, sRGBGamut, sRGB, _rgb, MapToL);
+    convert(clampOKLabToSRGB(_lab, _mapLab), OKLab, sRGB, _rgb);
   }
   const hex = '#' + _rgb.map(v => to255(v).toString(16).padStart(2, '0').toUpperCase()).join('');
   // The sRGB swatch fill must agree with the hex readout exactly, so paint it
