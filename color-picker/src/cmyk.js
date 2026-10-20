@@ -21,7 +21,13 @@
 //     profile's own separation when it already does, otherwise the solver's
 //     (cmyk-ink.js). The profile's table misses some printable colors (its
 //     black generation can't reach K-heavy dark browns and olives).
-//   Build (out of gamut): the profile's own colorimetric clip.
+//   Build (out of gamut): the color pulled in to the ring — same OKLab hue and
+//     lightness, chroma cut to the table's edge (what click-to-pull gives) —
+//     then matched exactly like an in-gamut color. Continuous across the ring:
+//     the profile's own clip can't reach K-heavy olives and browns, so it jumped
+//     there (an olive went 0-7-100-41 → 36-36-100-3, ΔE00 3.5 → 5.6). User
+//     requirement 2026-10-19: no discontinuous CMYK change when only one
+//     parameter moves.
 //   Swatch: the proof of the build ROUNDED to whole percents — exactly what the
 //     numbers on the label print.
 //
@@ -85,22 +91,34 @@ function colorToLab(color) {
   return xyzD65ToLabD50(_xyz);
 }
 
-/** Out of gamut: the color's OKLab chroma exceeds the most the press prints at
- *  its hue and lightness (reads the OKLab left in _ok by colorToLab/toOKLab). */
+/** The most OKLab chroma the press prints at the hue and lightness of the
+ *  OKLab in _ok (left there by colorToLab/toOKLab); Infinity with no table. */
+function okEdgeChroma() {
+  if (!gamutTable) return Infinity;
+  return tableChroma(gamutTable, Math.atan2(_ok[2], _ok[1]) / (2 * Math.PI), toe(_ok[0]));
+}
+
+/** Out of gamut: the color's OKLab chroma exceeds the edge's (see above). */
 function okOutOfGamut() {
-  if (!gamutTable) return false;
-  const C = Math.hypot(_ok[1], _ok[2]);
-  const h = Math.atan2(_ok[2], _ok[1]) / (2 * Math.PI);
-  return C > tableChroma(gamutTable, h, toe(_ok[0]));
+  return Math.hypot(_ok[1], _ok[2]) > okEdgeChroma();
 }
 
 /** The standard conversion: the input's CIELAB(D50), whether it's out of gamut,
- *  its build (exact match in gamut, the profile's clip outside) and that build's
- *  float proof. */
+ *  its build and that build's float proof. In gamut the build matches the input;
+ *  out of gamut it matches the input pulled in to the ring (same hue and
+ *  lightness, chroma cut to the edge — see the header). */
 function convertColor(color) {
   const lab = colorToLab(color);
   const oog = okOutOfGamut();
-  const c = oog ? solver.clip(lab) : solver.solve(lab).c;
+  let target = lab;
+  const C = Math.hypot(_ok[1], _ok[2]);
+  if (oog && C > 0) {   // (a flagged neutral — the sliver above black — has no chroma to cut)
+    const f = Math.max(0, okEdgeChroma()) / C;
+    _ok[1] *= f; _ok[2] *= f;
+    convert(_ok, OKLab, XYZ, _xyz);
+    target = xyzD65ToLabD50(_xyz);
+  }
+  const c = solver.solve(target).c;
   return { lab, oog, c, back: proofOf(c) };
 }
 
