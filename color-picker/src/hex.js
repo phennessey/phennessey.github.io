@@ -19,7 +19,9 @@ function syncHexField() {
     const el = swatchEl(i)?.querySelector('.swatch-readout.srgb');
     lines.push(el?.textContent ?? '');
   }
-  hexTextarea.value = lines.join('\n');
+  // Runs on every render, drags included: write only when the text changed.
+  const text = lines.join('\n');
+  if (hexTextarea.value !== text) hexTextarea.value = text;
 }
 
 function parseHexList(text) {

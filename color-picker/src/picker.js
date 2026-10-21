@@ -6,7 +6,8 @@
 
 import {
   convert, OKLab, DisplayP3, sRGB,
-  toe, toOKLab, to255, clamp01, sForChroma, chromaOf, inSRGB, cuspL, isSRGBMode,
+  toe, toeInv, toOKLab, to255, clamp01, sForChroma, chromaOf, inSRGB, cuspL, isSRGBMode,
+  okhslHueTable, OKLab_to_LMS_M, LMS_to_linear_sRGB_M, LMS_to_linear_DisplayP3_M,
 } from './color.js';
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -25,30 +26,102 @@ const _p3 = [0, 0, 0];
 const BAYER4 = [0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5].map(v => (v / 16 - 0.46875) / 255);
 
 // ── Disc pixel rendering ─────────────────────────────────────────────
+//
+// Redrawn on every lightness change (a lightbar drag, switching swatches), so
+// it must be fast: ~3 ms instead of ~27 ms for the old per-pixel toOKLab +
+// convert. Same math, reorganized:
+//   • Each pixel's hue, saturation and direction never change — computed once
+//     (discGeometry). Only pixels the disc's circular clip can show are drawn.
+//   • At one lightness, OKHSL's hue-dependent part (C_0, C_mid, C_max) doesn't
+//     depend on saturation: it's read from a DISC_HUES-entry table built once
+//     per lightness (color.js okhslHueTable) and interpolated between entries.
+//   • OKLab → linear RGB uses @texel/color's own matrices, inlined; the transfer
+//     curve (the same for sRGB and Display P3) is a lookup table.
+// Display only — swatches, readouts and hex still convert exactly. Verified
+// against the exact per-pixel math over 15 lightnesses in both modes: 99.97%
+// of pixels identical, the rest 1 code off (rounding), except a few rim pixels
+// up to 3 codes where the gamut edge has a sharp corner between table entries.
+// (8192 entries would cut that to 2, but cost 3.8 ms instead of 2.2.)
+const DISC_HUES = 4096;
+const _discTable = new Float64Array(3 * DISC_HUES);
+let _discGeom = null;
 
-// `space` is the canvas's own color space (DisplayP3 or sRGB): pixels are
-// written as 8-bit codes in that space, so they must be computed in it too.
-export function renderDiscPixels(imageData, discSize, lr, space = DisplayP3) {
-  const d = imageData.data;
-  const discR = discSize / 2;
+function discGeometry(discSize) {
+  if (_discGeom && _discGeom.size === discSize) return _discGeom;
+  const R = discSize / 2, reach = R + 1;   // a pixel square can touch the clip circle out to R + √½
+  const pix = [], ss = [], ca = [], sa = [], i0 = [], i1 = [], fr = [], dith = [];
   for (let y = 0; y < discSize; y++) {
     for (let x = 0; x < discSize; x++) {
       // Sample each pixel at its center: pixel x covers [x, x+1] in the same
       // coordinates the pointer, handles and dots use. Sampling the corner
       // shifted the image half a pixel — up to ~31 8-bit steps in the outer
       // ring, where OKHSL chroma climbs steeply toward the edge.
-      const dx = x + 0.5 - discR, dy = y + 0.5 - discR;
-      const h  = (Math.atan2(-dy, dx) / TAU + 1) % 1;
-      const s  = Math.min(1, Math.sqrt(dx * dx + dy * dy) / discR);
-      convert(toOKLab(h, s, lr), OKLab, space, _p3);
-      const idx = (y * discSize + x) * 4;
-      // Bayer 4×4 ordered dither (±0.5 LSB) breaks 8-bit banding — a LUT lookup.
-      const n = BAYER4[(y & 3) * 4 + (x & 3)];
-      d[idx]     = to255(_p3[0] + n);
-      d[idx + 1] = to255(_p3[1] + n);
-      d[idx + 2] = to255(_p3[2] + n);
-      d[idx + 3] = 255;
+      const dx = x + 0.5 - R, dy = y + 0.5 - R, r = Math.sqrt(dx * dx + dy * dy);
+      if (r > reach) continue;
+      const h = (Math.atan2(-dy, dx) / TAU + 1) % 1, p = h * DISC_HUES, k = Math.floor(p);
+      pix.push((y * discSize + x) * 4);
+      ss.push(Math.min(1, r / R));
+      ca.push(dx / r); sa.push(-dy / r);   // the hue's unit direction (r > 0: centers are offset by ½)
+      i0.push(3 * (k % DISC_HUES)); i1.push(3 * ((k + 1) % DISC_HUES)); fr.push(p - k);
+      dith.push(BAYER4[(y & 3) * 4 + (x & 3)]);
     }
+  }
+  return (_discGeom = {
+    size: discSize, count: pix.length, pix: Int32Array.from(pix), s: Float64Array.from(ss),
+    ca: Float64Array.from(ca), sa: Float64Array.from(sa), i0: Int32Array.from(i0), i1: Int32Array.from(i1),
+    fr: Float64Array.from(fr), dith: Float64Array.from(dith),
+  });
+}
+
+// The sRGB transfer curve (Display P3 uses it too), sampled on [0, 1] in linear
+// light and interpolated — within 0.005 of an 8-bit step of the exact curve.
+const ENC_N = 4096;
+const ENC = new Float64Array(ENC_N + 2);
+for (let i = 0; i <= ENC_N + 1; i++) {
+  const v = Math.min(1, i / ENC_N);
+  ENC[i] = v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
+}
+function encode(v) {
+  if (v <= 0) return 0;
+  if (v >= 1) return 1;
+  const p = v * ENC_N, i = p | 0;
+  return ENC[i] + (ENC[i + 1] - ENC[i]) * (p - i);
+}
+
+// `space` is the canvas's own color space (DisplayP3 or sRGB): pixels are
+// written as 8-bit codes in that space, so they must be computed in it too.
+// Pixels outside the disc's clip are left untouched.
+export function renderDiscPixels(imageData, discSize, lr, space = DisplayP3) {
+  const d = imageData.data, G = discGeometry(discSize), L = toeInv(lr);
+  if (!(L > 0 && L < 1)) {   // pure black or white: no chroma (as in hslToLab)
+    const v = L >= 1 ? 255 : 0;
+    for (let k = 0; k < G.count; k++) { const o = G.pix[k]; d[o] = d[o + 1] = d[o + 2] = v; d[o + 3] = 255; }
+    return;
+  }
+  const T = okhslHueTable(lr, DISC_HUES, _discTable);
+  const [[, ka1, kb1], [, ka2, kb2], [, ka3, kb3]] = OKLab_to_LMS_M;
+  const [[m11, m12, m13], [m21, m22, m23], [m31, m32, m33]] =
+    space === sRGB ? LMS_to_linear_sRGB_M : LMS_to_linear_DisplayP3_M;
+  const { pix, s: S, ca, sa, i0, i1, fr, dith } = G;
+  for (let k = 0; k < G.count; k++) {
+    const a0 = i0[k], a1 = i1[k], f = fr[k];
+    const C0   = T[a0]     + (T[a1]     - T[a0])     * f;
+    const Cmid = T[a0 + 1] + (T[a1 + 1] - T[a0 + 1]) * f;
+    const Cmax = T[a0 + 2] + (T[a1 + 2] - T[a0 + 2]) * f;
+    // hslToLab's chroma for saturation s, given C_0, C_mid, C_max.
+    const s = S[k];
+    let C;
+    if (s < 0.8) { const t = 1.25 * s, k1 = 0.8 * C0, k2 = 1 - k1 / Cmid; C = t * k1 / (1 - k2 * t); }
+    else { const t = 5 * (s - 0.8), k1 = 0.2 * Cmid * Cmid * 1.25 * 1.25 / C0, k2 = 1 - k1 / (Cmax - Cmid); C = Cmid + t * k1 / (1 - k2 * t); }
+    const A = C * ca[k], B = C * sa[k];
+    let l = L + ka1 * A + kb1 * B, m = L + ka2 * A + kb2 * B, q = L + ka3 * A + kb3 * B;
+    l = l * l * l; m = m * m * m; q = q * q * q;
+    // Bayer 4×4 ordered dither (±0.5 LSB) breaks 8-bit banding.
+    const n = dith[k], o = pix[k];
+    d[o]     = Math.round(clamp01(encode(m11 * l + m12 * m + m13 * q) + n) * 255);
+    d[o + 1] = Math.round(clamp01(encode(m21 * l + m22 * m + m23 * q) + n) * 255);
+    d[o + 2] = Math.round(clamp01(encode(m31 * l + m32 * m + m33 * q) + n) * 255);
+    d[o + 3] = 255;
   }
 }
 
@@ -100,10 +173,14 @@ export function polarPath(steps, radiusFn, discR) {
 
 // ── sRGB gamut boundary ──────────────────────────────────────────────
 
+// 11 bisection steps put the edge within 1/2048 of the radius (0.06 px) — the
+// path is written to 0.01 px but drawn half a pixel wide; 25 steps (0.000004 px)
+// cost 2.7 ms per lightness change for nothing visible.
+const GAMUT_BOUNDARY_STEPS = 11;
 export function gamutBoundaryPath(lr, discR) {
   return polarPath(359, h => {
     let lo = 0, hi = 1;
-    for (let it = 0; it < 25; it++) {
+    for (let it = 0; it < GAMUT_BOUNDARY_STEPS; it++) {
       const m = (lo + hi) * 0.5;
       if (inSRGB(h, m, lr)) lo = m; else hi = m;
     }
@@ -349,17 +426,36 @@ export function createPicker(S, cfg) {
   function clearMesh() { discMesh.innerHTML = ''; }
 
   // ── Render cache ─────────────────────────────────────────────────
-  let discImg = null, discL = -1, discMode = '';
+  // Disc images by gamut mode and reference lightness, each with its sRGB
+  // gamut-boundary path (P3 mode) once traced. Entries for every swatch's
+  // current lightness are kept, so switching between swatches only repaints a
+  // cached image; anything else (a lightbar drag's passing lightnesses) is
+  // dropped once it's no longer current. shownDisc records what each canvas
+  // holds, so an unchanged disc isn't repainted at all.
+  const discCache = new Map();   // `${mode}|${L}` → { L, img, gamutD }
+  const DISC_CACHE_MAX = 24;     // ~280 KB each
+  const shownDisc = { p3: null, srgb: null };
+  // A canvas the browser discards and restores (e.g. after a GPU reset) comes
+  // back blank: forget what it showed so the next render repaints it.
+  wheelCanvas.addEventListener('contextrestored', () => { shownDisc.p3 = null; });
+  wheelCanvasSRGB.addEventListener('contextrestored', () => { shownDisc.srgb = null; });
+  let gamutShownD = null;        // the sRGB boundary path currently drawn
   let lightbarKey = null;
-  let gamutLr = -1, gamutD = '';
   // CMYK boundary: injected radius function, visibility, and an lr-keyed path cache.
   let cmykBoundaryFn = null, cmykShow = false, cmykLr = -1, cmykD = '';
 
   function invalidateCache() {
-    discImg = null; discL = -1;
+    discCache.clear();
+    shownDisc.p3 = shownDisc.srgb = null;
+    gamutShownD = null;
     lightbarKey = null;
-    gamutLr = -1;
     cmykLr = -1;
+  }
+
+  function pruneDiscCache(currentKey) {
+    const keep = new Set(S.colors.map(c => c.L));
+    for (const [k, e] of discCache) if (k !== currentKey && !keep.has(e.L)) discCache.delete(k);
+    while (discCache.size > DISC_CACHE_MAX) discCache.delete(discCache.keys().next().value);
   }
 
   const handles = [];
@@ -402,22 +498,22 @@ export function createPicker(S, cfg) {
     const refL = S.colors[S.lastActiveIndex]?.L ?? 0.5;
     const lr   = toe(refL);
 
-    if (discL === refL && discMode === mode && discImg) {
-      ctx.putImageData(discImg, 0, 0);
-      updateGamutBoundary(refL, lr);
-      return;
+    const key = `${mode}|${refL}`;
+    let entry = discCache.get(key);
+    if (entry) {
+      discCache.delete(key); discCache.set(key, entry);   // most recently used last
+    } else {
+      // Keep the ImageData we build rather than reading it back with
+      // getImageData — the pixels are identical, and this avoids a GPU→CPU
+      // readback (the source of Chrome's willReadFrequently hint).
+      const img = ctx.createImageData(DISC_SIZE, DISC_SIZE);
+      renderDiscPixels(img, DISC_SIZE, lr, srgbMode ? sRGB : DisplayP3);
+      entry = { L: refL, img, gamutD: null };
+      discCache.set(key, entry);
     }
-
-    const img = ctx.createImageData(DISC_SIZE, DISC_SIZE);
-    renderDiscPixels(img, DISC_SIZE, lr, srgbMode ? sRGB : DisplayP3);
-    ctx.putImageData(img, 0, 0);
-    // Cache the ImageData we just built rather than reading it back with
-    // getImageData — the pixels are identical, and this avoids a GPU→CPU
-    // readback (the source of Chrome's willReadFrequently hint).
-    discImg  = img;
-    discL    = refL;
-    discMode = mode;
-    updateGamutBoundary(refL, lr);
+    pruneDiscCache(key);
+    if (shownDisc[mode] !== entry) { ctx.putImageData(entry.img, 0, 0); shownDisc[mode] = entry; }
+    updateGamutBoundary(refL, lr, entry);
   }
 
   // The edge circle fades in over the last SRGB_CIRCLE_FADE of the lightbar at
@@ -425,13 +521,12 @@ export function createPicker(S, cfg) {
   // those ends before sRGB mode existed (gamutBoundaryStyle: 0.17 dark, 0.10 light).
   const SRGB_CIRCLE_FADE = 0.06;
 
-  function updateGamutBoundary(L, lr) {
+  function updateGamutBoundary(L, lr, entry) {
     const { stroke, opacity } = gamutBoundaryStyle(L, MIDDLE_GRAY);
     if (isSRGBMode()) {
       // No gamut boundary in sRGB mode: the disc edge IS the sRGB boundary.
       // Only the plain edge circle, at the ring's own end opacity at 0 and 100.
-      if (gamutBoundary.getAttribute('d')) gamutBoundary.setAttribute('d', '');
-      gamutLr = -1;   // P3's traced ring must be recomputed after a switch back
+      if (gamutShownD !== '') { gamutBoundary.setAttribute('d', ''); gamutShownD = ''; }
       const fade = Math.max(0, 1 - Math.min(lr, 1 - lr) / SRGB_CIRCLE_FADE);
       srgbEdgeCircle.setAttribute('stroke', stroke);
       srgbEdgeCircle.setAttribute('stroke-opacity', (parseFloat(opacity) * fade).toFixed(3));
@@ -439,13 +534,10 @@ export function createPicker(S, cfg) {
       srgbEdgeCircle.setAttribute('stroke-opacity', '0');
       gamutBoundary.setAttribute('stroke', stroke);
       gamutBoundary.setAttribute('stroke-opacity', opacity);
-      // The boundary path depends only on lr; recompute it (and re-parse the
-      // 359-point SVG path) only when lightness actually changes.
-      if (lr !== gamutLr) {
-        gamutD  = gamutBoundaryPath(lr, DISC_R);
-        gamutLr = lr;
-        gamutBoundary.setAttribute('d', gamutD);
-      }
+      // The boundary path depends only on lr: traced once per cached disc image,
+      // and the 359-point SVG path re-parsed only when it actually changes.
+      if (entry.gamutD == null) entry.gamutD = gamutBoundaryPath(lr, DISC_R);
+      if (gamutShownD !== entry.gamutD) { gamutBoundary.setAttribute('d', entry.gamutD); gamutShownD = entry.gamutD; }
     }
     updateCMYKBoundary(stroke, opacity, lr, L);
   }

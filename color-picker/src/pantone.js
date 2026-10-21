@@ -10,7 +10,7 @@ import {
   GAMUT_ICON_SVG, CLOSE_ICON_SVG,
 } from './constants.js';
 import { S, P, els, pantoneSelections } from './state.js';
-import { TAU, svgEl, idxOf } from './picker.js';
+import { TAU, idxOf } from './picker.js';
 import {
   toe, toOKLab, computeP3AndSRGB, isSRGBMode,
   oklabToOKHSL, okhslToOKLab, convert, OKLab, DisplayP3, sRGB,
@@ -39,12 +39,25 @@ function clearPromotedOnEdit() {
 // Every imported library's colors, active or not (a promotion from a library
 // that's switched off is kept, hidden, and restored when it's switched back on).
 // Each entry: { key, libId, libName, name, L, a, b (OKLab), metallic, cbCMYK,
-// outOfP3, outOfSRGB, h, s, outOfGamut, el }.
+// outOfP3, outOfSRGB, h, s, outOfGamut, x, y (dot position) }.
 const pantoneData = [];
 let activeLibIds = new Set();
 
-const discDots = svgEl('g', { 'pointer-events': 'none', id: 'pantone-dots' });
-els.discOverlay.insertBefore(discDots, els.discOverlay.firstChild.nextSibling);
+// The dots are drawn on one canvas rather than as one SVG element each: with
+// tens of thousands of library colors, per-element style and layout dominated
+// every lightness change. It sits between the disc and its SVG overlay — the
+// same stacking the dots had as the overlay's first visible layer, under the
+// gamut boundaries, guides and handles — and reaches DOT_MARGIN past the disc
+// on every side for out-of-gamut dots (compressed to ≤ 1.2× the radius, see
+// dotRadiusS). Drawn at the display's pixel ratio; never takes the pointer.
+const DOT_MARGIN = 40;
+const dotCanvas = document.createElement('canvas');
+dotCanvas.id = 'pantone-dots';
+dotCanvas.style.cssText = `position:absolute;left:${-DOT_MARGIN}px;top:${-DOT_MARGIN}px;` +
+  `width:${DISC_SIZE + 2 * DOT_MARGIN}px;height:${DISC_SIZE + 2 * DOT_MARGIN}px;pointer-events:none;`;
+els.discOverlay.before(dotCanvas);
+const dotCtx = dotCanvas.getContext('2d');
+let dotDpr = 0;
 
 // A color shows (dots, chips) when the Libraries section is open and its own
 // library is switched on.
@@ -70,7 +83,7 @@ function setLibraryEntries(entries, activeIds) {
   pantoneData.length = 0;
   const byKey = new Map();
   for (const src of entries) {
-    const e = { ...src, el: null };
+    const e = { ...src };
     _chk[0] = e.L; _chk[1] = e.a; _chk[2] = e.b;
     e.outOfP3 = outside(convert(_chk, OKLab, DisplayP3, [0, 0, 0]));
     e.outOfSRGB = outside(convert(_chk, OKLab, sRGB, [0, 0, 0]));
@@ -82,8 +95,7 @@ function setLibraryEntries(entries, activeIds) {
     const e = byKey.get(old.key);
     if (e) pantoneSelections.set(i, e); else pantoneSelections.delete(i);
   }
-  lastDotsFilterSig = '';
-  buildDots();
+  lastDotsFilterSig = '';   // force a redraw
   updateDots();
   updateMatchesVisibility();
   updateAllSwatchMatches();
@@ -110,21 +122,19 @@ function placeEntry(entry) {
   entry.h = _placeHsl[0] / 360;
   entry.s = _placeHsl[1];
   entry.outOfGamut = isSRGBMode() ? entry.outOfSRGB : entry.outOfP3;
+  // Its dot's disc position. Out-of-gamut colors sit beyond the rim,
+  // compressed (see dotRadiusS).
+  const R = DISC_SIZE / 2, ang = entry.h * TAU, r = dotRadiusS(entry.s) * R;
+  entry.x = R + Math.cos(ang) * r;
+  entry.y = R - Math.sin(ang) * r;
 }
 
 /** Re-place every Pantone for a gamut-mode switch: new disc coordinates, new
  *  out-of-gamut flags, rebuilt dots and match chips. */
 function remapPantoneToGamut() {
   if (!pantoneData.length) return;
-  // Move the existing dots rather than rebuilding ~5000 elements.
-  for (const entry of pantoneData) {
-    placeEntry(entry);
-    if (entry.el) {
-      const { cx, cy } = dotXY(entry);
-      entry.el.setAttribute('cx', cx);
-      entry.el.setAttribute('cy', cy);
-    }
-  }
+  for (const entry of pantoneData) placeEntry(entry);
+  lastDotsFilterSig = '';   // positions changed: force a redraw
   updateDots();
   updateAllSwatchMatches();
 }
@@ -158,34 +168,6 @@ function dotRadiusS(s) {
 }
 
 
-// A dot's disc position, as SVG attribute strings. Out-of-gamut colors sit
-// beyond the rim, compressed (see dotRadiusS).
-function dotXY(entry) {
-  const R   = DISC_SIZE / 2;
-  const ang = entry.h * TAU;
-  const s   = dotRadiusS(entry.s);
-  return {
-    cx: (R + Math.cos(ang) * s * R).toFixed(2),
-    cy: (R - Math.sin(ang) * s * R).toFixed(2),
-  };
-}
-
-function buildDots() {
-  discDots.innerHTML = '';
-  const frag = document.createDocumentFragment();
-  for (const entry of pantoneData) {
-    const { cx, cy } = dotXY(entry);
-    const circ = svgEl('circle', {
-      cx, cy, r: DOT_RADIUS,
-      fill: '#000', 'fill-opacity': '0',
-    });
-    frag.appendChild(circ);
-    entry.el = circ;
-    entry._stateKey = '';   // last applied-state key (see updateDots)
-  }
-  discDots.appendChild(frag);   // one DOM insertion instead of ~5000
-}
-
 let lastDotsActiveL   = NaN;
 let lastDotsFilterSig = '';
 
@@ -204,66 +186,61 @@ function swatchHandleOpacity(i) {
   return 0.1;
 }
 
+// Dot opacities are drawn in this many steps (0.3 / 64 ≈ 0.005 apart, finer
+// than the eye can tell on a 1.5 px dot), so each step's dots fill as one path.
+const DOT_ALPHA_STEPS = 64;
+const _dotBuckets = Array.from({ length: DOT_ALPHA_STEPS + 1 }, () => []);
+
 function updateDots() {
   const idx = S.activeIndex !== -1 ? S.activeIndex : S.lastActiveIndex;
   const activeL    = S.colors[idx]?.L ?? 0.5;
   const filterSig  = dotsFilterSig();
-  if (activeL === lastDotsActiveL && filterSig === lastDotsFilterSig) return;
+  if (activeL === lastDotsActiveL && filterSig === lastDotsFilterSig && dotDpr === devicePixelRatio) return;
   lastDotsActiveL   = activeL;
   lastDotsFilterSig = filterSig;
 
-  const color = activeL > MIDDLE_GRAY ? '#000' : '#fff';
+  // Size the backing store to the display (and again if the window moves to
+  // a display with another pixel ratio); draw in disc coordinates.
+  const dpr = devicePixelRatio || 1, side = DISC_SIZE + 2 * DOT_MARGIN;
+  if (dotDpr !== dpr) { dotCanvas.width = dotCanvas.height = Math.round(side * dpr); dotDpr = dpr; }
+  dotCtx.setTransform(1, 0, 0, 1, 0, 0);
+  dotCtx.clearRect(0, 0, dotCanvas.width, dotCanvas.height);
+  dotCtx.setTransform(dpr, 0, 0, dpr, DOT_MARGIN * dpr, DOT_MARGIN * dpr);
 
+  const color = activeL > MIDDLE_GRAY ? '#000' : '#fff';
   const promotedBy = new Map();
   for (const [i, entry] of pantoneSelections) promotedBy.set(entry, i);
 
+  // Plain dots: those within DOT_FALLOFF_L of the active lightness, fading
+  // out with distance, bucketed by opacity step.
+  for (const b of _dotBuckets) b.length = 0;
   for (const entry of pantoneData) {
-    const el = entry.el;
-    if (!el) continue;
-
-    // Derive this dot's desired applied-state key, then skip all DOM
-    // writes if it is unchanged since the last update. During a lightbar
-    // drag only the thin band of dots near the new lightness changes
-    // state, so this avoids re-touching ~5000 unchanged dots per frame.
-    const ownerIdx = promotedBy.get(entry);
-    let st, opacity;
-    if (ownerIdx !== undefined) {
-      st = `P${color}${swatchHandleOpacity(ownerIdx).toFixed(3)}`;
-    } else if (!isEntryVisible(entry)) {
-      st = 'H';
-    } else {
-      const dL = Math.abs(entry.L - activeL);
-      if (dL >= DOT_FALLOFF_L) {
-        st = 'H';
-      } else {
-        opacity = DOT_PEAK_OPACITY * (1 - dL / DOT_FALLOFF_L);
-        st = `D${color}${opacity.toFixed(3)}`;
-      }
-    }
-
-    if (st === entry._stateKey) continue;
-    entry._stateKey = st;
-
-    if (st === 'H') {
-      el.style.display = 'none';
-    } else if (st[0] === 'P') {
-      el.style.display = '';
-      el.setAttribute('r', DOT_PROMOTED_RADIUS);
-      el.setAttribute('fill', 'none');
-      el.setAttribute('stroke', color);
-      el.setAttribute('stroke-width', DOT_PROMOTED_STROKE);
-      el.setAttribute('stroke-opacity', swatchHandleOpacity(ownerIdx).toFixed(3));
-      el.removeAttribute('fill-opacity');
-    } else {
-      el.style.display = '';
-      el.setAttribute('r', DOT_RADIUS);
-      el.setAttribute('fill', color);
-      el.setAttribute('fill-opacity', opacity.toFixed(3));
-      el.removeAttribute('stroke');
-      el.removeAttribute('stroke-width');
-      el.removeAttribute('stroke-opacity');
-    }
+    if (promotedBy.has(entry) || !isEntryVisible(entry)) continue;
+    const dL = Math.abs(entry.L - activeL);
+    if (dL >= DOT_FALLOFF_L) continue;
+    _dotBuckets[Math.round(DOT_ALPHA_STEPS * (1 - dL / DOT_FALLOFF_L))].push(entry);
   }
+  dotCtx.fillStyle = color;
+  for (let k = 1; k <= DOT_ALPHA_STEPS; k++) {
+    const b = _dotBuckets[k];
+    if (!b.length) continue;
+    dotCtx.globalAlpha = DOT_PEAK_OPACITY * k / DOT_ALPHA_STEPS;
+    dotCtx.beginPath();
+    for (const e of b) { dotCtx.moveTo(e.x + DOT_RADIUS, e.y); dotCtx.arc(e.x, e.y, DOT_RADIUS, 0, TAU); }
+    dotCtx.fill();
+  }
+
+  // Promoted colors: a ring at their swatch handle's opacity, drawn on top so
+  // nearby dots never cover one (shown whatever the lightness or filter).
+  dotCtx.strokeStyle = color;
+  dotCtx.lineWidth = DOT_PROMOTED_STROKE;
+  for (const [entry, i] of promotedBy) {
+    dotCtx.globalAlpha = swatchHandleOpacity(i);
+    dotCtx.beginPath();
+    dotCtx.arc(entry.x, entry.y, DOT_PROMOTED_RADIUS, 0, TAU);
+    dotCtx.stroke();
+  }
+  dotCtx.globalAlpha = 1;
 }
 
 
@@ -497,13 +474,14 @@ function updateSwatchMatches(index) {
 
   // Keep only the closest `visibleMax` for display (pool is closest-first), but
   // scale every kept chip against the global maxDeltaE above.
-  const keptCount = Math.min(visibleMax, MAX_MATCHES);
+  // (The pool is shorter than MAX_MATCHES when the switched-on libraries hold
+  // fewer colors than that.)
+  const keptCount = Math.min(visibleMax, pool.length);
   const ratioByEntry = new Map();
   const kept = [];
   const span = 1 - SKYLINE_FLOOR;
   for (let i = 0; i < keptCount; i++) {
     const { entry, distSq } = pool[i];
-    if (!entry) break;
     const ratio = maxDeltaE > 0 ? (Math.sqrt(distSq) / maxDeltaE) * span : 0;
     ratioByEntry.set(entry, ratio);
     kept.push(entry);

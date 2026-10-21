@@ -25,6 +25,9 @@ import {
 // imports these through color.js, so the pinned version above is the only
 // place the URL lives.
 export { convert, OKLab, XYZ, DisplayP3, sRGB };
+// @texel/color's own OKLab → LMS and LMS → linear RGB matrices, for the wheel
+// renderer's inlined conversion (picker.js) — the same numbers convert() uses.
+export { OKLab_to_LMS_M, LMS_to_linear_sRGB_M, LMS_to_linear_DisplayP3_M };
 
 // ── OKHSL, owned here (Ottosson's method; P3 gets its own fit) ───────
 //
@@ -428,6 +431,22 @@ export function toOKLab(h, s, lr, out = _lab) {
   return swatchLabFromHsl(h * 360, s, lr, gamut, out);
 }
 
+/** For the wheel renderer (picker.js): OKHSL's hue-dependent part — getCs's
+ *  C_0, C_mid and C_max — at OKHSL lightness lr (0 < lr < 1) for n evenly
+ *  spaced hues h = i/n (turns), in the current gamut, packed [C0, Cmid, Cmax, …].
+ *  At one lightness these don't depend on saturation, so the wheel builds this
+ *  table once per lightness instead of recomputing it for every pixel; with
+ *  them, hslToLab's remaining step is a few multiplies. */
+export function okhslHueTable(lr, n, out = new Float64Array(3 * n)) {
+  const L = toeInv(lr);
+  for (let i = 0; i < n; i++) {
+    const a = 2 * Math.PI * i / n;
+    getCs(L, Math.cos(a), Math.sin(a), gamut, _cs);
+    out[3 * i] = _cs[0]; out[3 * i + 1] = _cs[1]; out[3 * i + 2] = _cs[2];
+  }
+  return out;
+}
+
 /** sRGB [0–1] → picker's {h, s, L} descriptor. Exact: toOKLab gives back the
  *  same OKLab, even for colors just past the wheel's edge. */
 export function srgbToOKHSL(r, g, b) {
@@ -438,15 +457,21 @@ export function srgbToOKHSL(r, g, b) {
 
 /** Binary-search for the OKHSL saturation that yields a given OKLCH chroma. */
 export function sForChroma(h, targetC, lr) {
-  convert(toOKLab(h, 1, lr), OKLab, OKLCH, _lch);
-  if (_lch[1] <= targetC) return 1;
-  let lo = 0, hi = 1;
-  for (let i = 0; i < 24; i++) {
-    const mid = (lo + hi) * 0.5;
-    convert(toOKLab(h, mid, lr), OKLab, OKLCH, _lch);
-    if (_lch[1] < targetC) lo = mid; else hi = mid;
+  // OKHSL's own inverse (labToHsl's chroma → s step) at this hue and
+  // lightness: exact, and one getCs instead of the 25 OKHSL conversions a
+  // bisection took (this runs per hue for the CMYK ring and the chroma guide,
+  // and per swatch during chroma-locked drags). s = 1 is C_max, the edge.
+  const L = toeInv(lr);
+  if (!(L > 0 && L < 1)) return 1;   // pure black / white: no chroma at all
+  if (!(targetC > 0)) return 0;
+  const [C0, Cmid, Cmax] = getCs(L, Math.cos(2 * Math.PI * h), Math.sin(2 * Math.PI * h), gamut, _cs);
+  if (Cmax <= targetC) return 1;
+  if (targetC < Cmid) {
+    const k1 = 0.8 * C0, k2 = 1 - k1 / Cmid;
+    return 0.8 * (targetC / (k1 + k2 * targetC));
   }
-  return (lo + hi) * 0.5;
+  const k1 = 0.2 * Cmid * Cmid * 1.25 * 1.25 / C0, k2 = 1 - k1 / (Cmax - Cmid), d = targetC - Cmid;
+  return 0.8 + 0.2 * (d / (k1 + k2 * d));
 }
 
 /** Return the OKLCH chroma of a color descriptor {h, s, L}. */
