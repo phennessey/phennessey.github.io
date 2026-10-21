@@ -6,7 +6,8 @@ import {
   setPalette, reindex, updateSwatch, updateAddButton, swatchEl,
   exitMultiSelect, deactivateSwatch, setActive, setHandles, applyMultiVisuals, computeFrozenEdges,
 } from './swatches.js';
-import { findPantoneByName, syncLibraryCheckboxState, updateMatchesVisibility } from './pantone.js';
+import { findPantoneByKey, updateMatchesVisibility } from './pantone.js';
+import { activateLibraries } from './libraries.js';
 import { requestRender } from './util.js';
 import { hexTextarea } from './hex.js';
 import { getGamutMode, resaturate } from './color.js';
@@ -26,7 +27,7 @@ function takeSnapshot() {
   return S.colors.map((c, i) => ({
     h: c.h, s: c.s, L: c.L, mode,
     selected: i === S.activeIndex || S.multiSelect.has(i),
-    pantoneName: pantoneSelections.get(i)?.name ?? null,
+    pantoneKey: pantoneSelections.get(i)?.key ?? null,
   }));
 }
 
@@ -38,7 +39,7 @@ function snapshotsEqual(a, b) {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
     if (a[i].h !== b[i].h || a[i].s !== b[i].s || a[i].L !== b[i].L
-        || a[i].pantoneName !== b[i].pantoneName) return false;
+        || a[i].pantoneKey !== b[i].pantoneKey) return false;
   }
   return true;
 }
@@ -98,33 +99,25 @@ function restoreSnapshot(snap) {
   const mode = getGamutMode();
   setPalette(snap.map(e => e.mode === mode ? e : { ...e, s: resaturate(e, e.mode, mode) }));
 
-  const neededCategories = new Set();
+  const neededLibs = new Set();
   for (let i = 0; i < snap.length; i++) {
-    const name = snap[i].pantoneName;
-    if (!name) continue;
-    const entry = findPantoneByName(name);
-    if (!entry) continue;
+    const key = snap[i].pantoneKey;
+    if (!key) continue;
+    const entry = findPantoneByKey(key);
+    if (!entry) continue;   // its library was removed since
     pantoneSelections.set(i, entry);
-    // A promoted swatch IS its Pantone, so re-place it from the Pantone itself
-    // (rim-clamped in this gamut) rather than from the other mode's clip.
+    // A promoted swatch IS its library color, so re-place it from the color
+    // itself (rim-clamped in this gamut) rather than from the other mode's clip.
     if (snap[i].mode !== mode) S.colors[i].s = Math.min(1, entry.s);
-    neededCategories.add(entry.category);
+    neededLibs.add(entry.libId);
   }
-  if (neededCategories.size > 0) {
+  if (neededLibs.size > 0) {
+    // Show what the restored promotions need: the Libraries section open and
+    // their libraries switched on (view state; no history of its own).
     S.libraryFilters.base = true;
-    for (const cat of neededCategories) {
-      if (cat !== 'base') S.libraryFilters[cat] = true;
-    }
-    // The base toggle lives outside #library-panel (in the section head), so
-    // query the whole document for every data-library checkbox.
-    document.querySelectorAll('input[type="checkbox"][data-library]').forEach(cb => {
-      cb.checked = !!S.libraryFilters[cb.dataset.library];
-    });
-    // Keep the collapsible pantone section's open-state in sync with the base
-    // filter when a restore turns it on (view-state only, no history effect).
-    const pantoneSection = document.querySelector('.section-pantone');
-    if (pantoneSection) pantoneSection.classList.toggle('open', S.libraryFilters.base);
-    syncLibraryCheckboxState();
+    const toggle = document.getElementById('toggle-libraries');
+    if (toggle && !toggle.checked) { toggle.checked = true; toggle.dispatchEvent(new Event('change')); }
+    activateLibraries(neededLibs);
     updateMatchesVisibility();
   }
 
@@ -181,7 +174,8 @@ function redo() {
 document.addEventListener('keydown', e => {
   const mod = e.metaKey || e.ctrlKey;
   if (!mod || e.key.toLowerCase() !== 'z') return;
-  if (document.activeElement === hexTextarea) return;
+  // Text fields (the hex box, library names) keep their own undo.
+  if (document.activeElement === hexTextarea || document.activeElement?.matches('input[type="text"]')) return;
   e.preventDefault();
   if (e.shiftKey) redo(); else undo();
 });

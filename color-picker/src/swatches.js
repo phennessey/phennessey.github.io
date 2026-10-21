@@ -88,12 +88,16 @@ function createSwatchDOM(index) {
         </div>
         <div class="color-swatch cmyk">
           <div class="swatch-top-bar">
-            <span class="cmyk-readout"><span class="cmyk-tag region-badge">CMYK</span><span class="cb-tag region-badge">CB</span><span class="cmyk-v">0-0-0-0</span><span class="icon gamut-warning cmyk-gamut">${GAMUT_ICON_SVG}</span><span class="lightness-readout"></span></span>
+            <span class="cmyk-readout"><span class="cmyk-tag region-badge">CMYK</span><span class="cmyk-v">0-0-0-0</span><span class="icon gamut-warning cmyk-gamut">${GAMUT_ICON_SVG}</span><span class="lightness-readout"></span></span>
           </div>
+          <button type="button" class="cmyk-alt-check" role="checkbox" aria-checked="false" title="Use the library's CMYK for this color">
+            <span class="cmyk-alt-box" aria-hidden="true"><svg class="cmyk-alt-mark" viewBox="0 0 16.17 15.09"><polygon points="13.51 0 5.61 9.8 2.46 6.75 0 9.21 5.88 15.09 16.17 2.2 13.51 0"/></svg></span>
+            <span class="cmyk-alt-label">LIBRARY</span>
+          </button>
           <div class="cmyk-swatch-bias">
             <div class="cmyk-bias-track">
               <input type="range" class="cmyk-bias-slider" min="0" max="100" value="0" step="1"
-                     aria-label="Move this swatch's CMYK build from Adobe's build to the exact lightness">
+                     aria-label="Move this swatch's CMYK build from the exact lightness toward Adobe's build">
             </div>
           </div>
         </div>
@@ -201,8 +205,22 @@ function wireSwatch(container) {
     pullIntoGamut(container, isOutOfCMYK, S.colors[idxOf(container)].s);
   });
 
+  // "LIBRARY" checkbox below the CMYK readout (shown only when this swatch's
+  // promoted color has a CMYK alternate in its library, e.g. Pantone Color
+  // Bridge): switches this swatch's CMYK output to that alternate. The choice
+  // lives on the element, keyed to the promoted color, so demoting (or
+  // promoting another color) clears it — see updateSwatchCMYK.
+  container.querySelector('.cmyk-alt-check')?.addEventListener('click', e => {
+    e.stopPropagation();
+    const ci = idxOf(container), p = pantoneSelections.get(ci);
+    if (!p || !p.cbCMYK) return;
+    if (container.dataset.cmykLibKey === p.key) delete container.dataset.cmykLibKey;
+    else container.dataset.cmykLibKey = p.key;
+    updateSwatchCMYK(container, S.colors[ci], ci);
+  });
+
   // Per-swatch CMYK slider (visible only on out-of-gamut CMYK swatches): the
-  // default build, Adobe's (0) ↔ the input's exact lightness (100); see cmyk.js. Its
+  // default build — exact hue and lightness (0) ↔ Adobe's build (100); see cmyk.js. Its
   // value biases just this swatch's build; updateSwatchCMYK reads it. Magnetic
   // snap to 0 (the default build) near the low end. Repaint only this
   // swatch's CMYK region — the gamut ring and other swatches are unaffected.

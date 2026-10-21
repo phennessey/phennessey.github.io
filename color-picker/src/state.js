@@ -28,7 +28,7 @@ export const S = {
   frozenEdges:      null,
   hueConvergeDrag:  null,
 
-  libraryFilters: { base: false, pastel: false, neon: false, sp: false, xgc: false, metallic: false },
+  libraryFilters: { base: false },   // base = the Libraries section is open (matches on)
 };
 
 // Renderer + derived geometry

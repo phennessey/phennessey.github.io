@@ -243,10 +243,10 @@ body.light-bg .top-ui {
      course instead of the box snapping to content size early. */
   max-width: 120px;
 }
-/* CMYK holds a wide ICC profile dropdown; Pantone's options text is wider
-   than the default 120px cap — both need more room. */
-.section-cmyk.open,
-.section-pantone.open { max-width: 240px; }
+/* CMYK holds a wide ICC profile dropdown — it needs more room than the default
+   120px cap. Libraries holds a row per library (name + space dropdown). */
+.section-cmyk.open { max-width: 240px; }
+.section-libraries.open { max-width: 380px; }
 .collapsible.open .section-label { display: block; }
 .collapsible.open .section-body { display: flex; }
 .collapsible.open .section-vlabel { opacity: 0; pointer-events: none; }
@@ -324,7 +324,6 @@ body.light-bg .section-divider { background: rgba(0,0,0,0.2); }
   letter-spacing: 0.12em;
   line-height: 1;
   color: var(--gt-text);
-  transition: color 0.15s ease;
 }
 /* The pill: an outline only, never filled. */
 .gamut-toggle-track {
@@ -335,9 +334,9 @@ body.light-bg .section-divider { background: rgba(0,0,0,0.2); }
   border: 1px solid var(--gt-ink);
   border-radius: 7px;
   background: transparent;
-  transition: border-color 0.12s ease;
 }
-/* The dot: filled, 2px inside the line; slides 10px right when on. */
+/* The dot: filled, 2px inside the line; jumps 10px right when on. Switches
+   change state instantly — no transitions (user decision 2026-10-20). */
 .gamut-toggle-knob {
   position: absolute;
   top: 2px;
@@ -346,7 +345,6 @@ body.light-bg .section-divider { background: rgba(0,0,0,0.2); }
   height: 8px;
   border-radius: 50%;
   background: var(--gt-ink);
-  transition: transform 0.12s ease, background-color 0.12s ease;
 }
 .gamut-toggle[aria-checked="true"] .gamut-toggle-label { color: var(--gt-text-on); }
 .gamut-toggle[aria-checked="true"] .gamut-toggle-track { border-color: var(--gt-ink-on); }
@@ -509,87 +507,176 @@ body.light-bg #add-color-btn {
 #add-color-btn:hover:not(:disabled) { color: var(--btn-fg-hover); opacity: 1; }
 #add-color-btn:disabled { opacity: 0.35; cursor: default; }
 
-/* Library Panel */
+/* Libraries panel */
 .library-panel {
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  gap: 4px;
+  gap: 6px;
   padding: 4px 10px 8px 0;
   font-size: 11px;
   line-height: 1.4;
   user-select: none;
   color: var(--ui-label);
+  --lib-line: rgba(255,255,255,0.38);
+  --lib-line-soft: rgba(255,255,255,0.18);
 }
+body.light-bg .library-panel { --lib-line: rgba(0,0,0,0.38); --lib-line-soft: rgba(0,0,0,0.18); }
+.library-panel [hidden] { display: none !important; }
 
-.libraries-label {
-  font-size: 11px;
-  color: var(--ui-label);
-  white-space: nowrap;
-}
-
-.libraries {
-  font-size: 10px;
+/* One grid per row: grab · on (14px checkbox) · name · space · remove. The space column fits
+   its widest label ("CIELAB D50", 53px at 10px) + padding + the chevron. */
+.lib-row {
   display: grid;
-  grid-template-columns: max-content;
-  gap: 4px;
-}
-
-
-.library-panel label {
-  display: flex;
+  grid-template-columns: 8px 14px 140px 78px 11px;
+  column-gap: 6px;
   align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  white-space: nowrap;
 }
+.lib-list { display: flex; flex-direction: column; gap: 3px; }
 
-.library-panel input[type="checkbox"] {
-  display: none;
+.lib-grab {
+  display: flex;
+  width: 8px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  opacity: 0.45;
+  touch-action: none;
 }
+.lib-grab svg { width: 6px; height: 10px; }
+.lib-row.dragging { opacity: 0.55; }
+.lib-row.dragging .lib-grab { cursor: grabbing; }
 
-/* Library filter switches — label IS the box */
-.libraries label {
+.lib-row input[type="checkbox"]:hover { color: var(--ui-label-hover); }
+
+.lib-name-wrap { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.lib-name {
+  font: inherit;
+  font-size: 10px;
+  color: var(--ui-label);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 2px 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+  text-overflow: ellipsis;
+}
+.lib-name:hover { border-color: var(--lib-line-soft); }
+.lib-name:focus { outline: none; border-color: var(--lib-line); color: var(--ui-label-hover); }
+
+/* [CMYK] add-on pill; its × shows on hover and removes just the add-on. */
+.lib-cmyk {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 0;
-  padding: 3px 6px;
-  border-radius: 6px;
-  border: 1px solid rgba(255,255,255,0.38);
-  color: rgba(255,255,255,0.38);
-  background: transparent;
-  white-space: nowrap;
+  gap: 2px;
+  font-size: 10px;              /* = the input-space dropdown beside it */
+  height: 20px;                 /* = the input-space dropdown beside it */
+  box-sizing: border-box;
+  padding: 0 5px;
+  border: 1px solid var(--lib-line);
+  border-radius: 4px;
 }
-.libraries label:hover {
-  color: var(--ui-label-hover);
-  border-color: var(--ui-label-hover);
-}
-body.light-bg .libraries label {
-  border-color: rgba(0,0,0,0.38);
-  color: rgba(0,0,0,0.38);
-}
-body.light-bg .libraries label:hover {
-  color: var(--ui-label-hover);
-  border-color: var(--ui-label-hover);
-}
-/* Checked pill: knocked-out text over a filled background. The shared
-   declarations are grouped (incl. the light-bg/:hover selectors, so they keep
-   beating the label:hover border/color rules above); only the fill differs. */
-.libraries label:has(input:checked),
-.libraries label:has(input:checked):hover,
-body.light-bg .libraries label:has(input:checked),
-body.light-bg .libraries label:has(input:checked):hover {
-  border-color: transparent;
-  color: var(--body-bg, #666);
-}
-.libraries label:has(input:checked) { background: rgba(255,255,255,0.5); }
-.libraries label:has(input:checked):hover { background: rgba(255,255,255,1); }
-body.light-bg .libraries label:has(input:checked) { background: rgba(0,0,0,0.5); }
-body.light-bg .libraries label:has(input:checked):hover { background: rgba(0,0,0,1); }
+.lib-cmyk-x { display: none; width: 8px; height: 8px; cursor: pointer; opacity: 0.7; }
+.lib-cmyk-x svg { width: 8px; height: 8px; display: block; }
+.lib-cmyk:hover .lib-cmyk-x { display: inline-flex; }
+.lib-cmyk-x:hover { opacity: 1; }
 
-.library-panel label:has(input:disabled) {
-  opacity: 0.35;
-  cursor: default;
+.lib-space {
+  font: inherit;
+  font-size: 10px;
+  color: var(--ui-label);
+  -webkit-appearance: none;
+  appearance: none;
+  border: 1px solid var(--lib-line);
+  border-radius: 4px;
+  padding: 2px 16px 2px 5px;
+  width: 100%;
+  box-sizing: border-box;
+  cursor: pointer;
+  background:
+    linear-gradient(45deg, transparent 50%, var(--ui-label) 50%) right 8px center / 4px 4px no-repeat,
+    linear-gradient(135deg, var(--ui-label) 50%, transparent 50%) right 4px center / 4px 4px no-repeat,
+    transparent;
+}
+.lib-space:focus { outline: none; border-color: var(--ui-label-hover); }
+.lib-space:disabled { cursor: default; opacity: 0.55; background: transparent; padding-right: 5px; }
+
+.lib-del { display: flex; width: 11px; height: 11px; cursor: pointer; opacity: 0.45; }
+.lib-del svg { width: 11px; height: 11px; display: block; }
+.lib-del:hover { opacity: 1; }
+
+.lib-empty { font-size: 10px; opacity: 0.7; white-space: nowrap; }
+
+.lib-actions { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
+.lib-add {
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  width: 24px;
+  height: 18px;
+  padding: 0;
+  color: var(--ui-label);
+  background: transparent;
+  border: 1px solid var(--lib-line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.lib-add:hover { color: var(--ui-label-hover); border-color: var(--ui-label-hover); }
+.lib-export {
+  font: inherit;
+  font-size: 10px;
+  color: var(--ui-label);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--lib-line);
+  text-underline-offset: 2px;
+}
+.lib-export:hover:not(:disabled) { color: var(--ui-label-hover); }
+.lib-export:disabled { opacity: 0.35; cursor: default; }
+
+
+/* The UI checkbox — every visible checkbox in the tool (library on/off, the
+   Libraries and CMYK options), matching the swatch's LIBRARY checkbox
+   (.cmyk-alt-check): a 14px rounded rect with the CMYK badge's 4px radius and a
+   check mark when checked. Drawn in the current text color (inherited from its
+   label), so it brightens with the label on hover. The mark is one filled
+   polygon, masked from the same SVG the LIBRARY checkbox uses. */
+.lib-row input[type="checkbox"],
+.pantone-options input[type="checkbox"],
+.cmyk-check input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.lib-row input[type="checkbox"]:checked::before,
+.pantone-options input[type="checkbox"]:checked::before,
+.cmyk-check input[type="checkbox"]:checked::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 7.46px;
+  transform: translate(-50%, -50%);
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16.17 15.09'%3E%3Cpolygon points='13.51 0 5.61 9.8 2.46 6.75 0 9.21 5.88 15.09 16.17 2.2 13.51 0'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16.17 15.09'%3E%3Cpolygon points='13.51 0 5.61 9.8 2.46 6.75 0 9.21 5.88 15.09 16.17 2.2 13.51 0'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
 .pantone-options {
@@ -609,15 +696,6 @@ body.light-bg .libraries label:has(input:checked):hover { background: rgba(0,0,0
 }
 .pantone-options label:hover {
   color: var(--ui-label-hover);
-}
-.pantone-options input[type="checkbox"] {
-  display: revert;
-  margin: 0;
-  width: 11px;
-  height: 11px;
-  accent-color: rgba(255,255,255,0.7);
-  cursor: pointer;
-  flex-shrink: 0;
 }
 
 /* Swatches */
@@ -1345,7 +1423,7 @@ body.swatch-dragging * { cursor: grabbing !important; }
 *:focus, *:focus-visible { outline: none; }
 * { -webkit-tap-highlight-color: transparent; }
 ::-moz-focus-inner { border: 0; padding: 0; }
-.cmyk-profile-select:focus { box-shadow: none; }
+.cmyk-profile-select:focus { box-shadow: none; border-color: var(--ui-label-hover); }   /* as .lib-space */
 
 /* While dragging the disc, the lightbar or a swatch, nothing may become
    selected — otherwise a hex readout / the hex textarea gets highlighted
@@ -1395,11 +1473,61 @@ body.lightbar-dragging, body.lightbar-dragging * {
 .swatch-container.light .p3-readout,
 .swatch-container.light .cmyk-readout { color: rgba(0,0,0,0.3); }
 
-/* "CB" badge: a second region badge beside "CMYK", shown only when the build is
-   substituted from the promoted Pantone's own Color Bridge values (.cmyk-bridge,
-   set in updateSwatchCMYK). Hidden otherwise so the CMYK badge stands alone. */
-.cmyk-readout .cb-tag { display: none; }
-.swatch-container.cmyk-bridge .cmyk-readout .cb-tag { display: inline-block; }
+/* "LIBRARY" checkbox below the CMYK readout, shown only when the swatch's
+   promoted color has a CMYK alternate in its library (.cmyk-has-lib). Checked
+   (.cmyk-lib-on, aria-checked) = the swatch's CMYK output is the library's
+   alternate. A custom box: a rounded rect with the CMYK badge's 4px radius, an
+   × inside when checked. Colored like the CMYK readout and badge — 0.3 white
+   (0.3 black on a light region) — and full strength on hover, as the region's
+   icons are. */
+.color-swatch.cmyk .cmyk-alt-check {
+  position: absolute;
+  top: calc(var(--swatch-padding) + 20px);   /* just under the CMYK label row */
+  left: calc(var(--swatch-padding) - 2px);   /* align the box with the readout */
+  z-index: 1;
+  display: none;
+  align-items: center;
+  gap: 5px;
+  padding: 2px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: inherit;   /* the CMYK badge's tracking (buttons don't inherit it) */
+  color: rgba(255,255,255,0.3);
+}
+.swatch-container.cmyk-has-lib .color-swatch.cmyk .cmyk-alt-check { display: flex; }
+.color-swatch.cmyk.light .cmyk-alt-check { color: rgba(0,0,0,0.3); }
+.color-swatch.cmyk:not(.light) .cmyk-alt-check:hover { color: rgb(255,255,255); }
+.color-swatch.cmyk.light .cmyk-alt-check:hover { color: rgb(0,0,0); }
+.cmyk-alt-box {
+  position: relative;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  border: 1px solid currentColor;
+  border-radius: 4px;   /* = .region-badge */
+}
+/* The check mark: one filled SVG polygon (a single shape, so the readout's 0.3
+   alpha stays even — overlapping shapes would draw darker where they cross),
+   8px wide, centered in the box. */
+.cmyk-alt-mark {
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: auto;
+  transform: translate(-50%, -50%);
+  fill: currentColor;
+}
+.cmyk-alt-check[aria-checked="true"] .cmyk-alt-mark { display: block; }
+.cmyk-alt-label { letter-spacing: inherit; }
+/* With the checkbox showing, the out-of-gamut slider moves down below it. */
+.swatch-container.cmyk-has-lib .cmyk-swatch-bias { top: calc(var(--swatch-padding) + 44px); }
 
 /* The CMYK region's chrome follows the SOFT PROOF's own lightness (.light is set
    on .color-swatch.cmyk in updateSwatchCMYK), NOT the input color's — the proof
@@ -1423,38 +1551,33 @@ body.lightbar-dragging, body.lightbar-dragging * {
 .cmyk-body { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 4px 10px 0 0; line-height: 1.4; font-size: 11px; }
 /* Inner wrapper: single max-content grid column so the select's intrinsic size
    drives the width and the slider below stretches to match. */
-.cmyk-controls { display: flex; flex-direction: column; gap: 6px; max-width: 100px; }
-.cmyk-profile-row { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.cmyk-controls { display: flex; flex-direction: column; gap: 6px; }
+/* Label and dropdown on one line. */
+.cmyk-profile-row { display: flex; flex-direction: row; align-items: center; gap: 6px; }
 .cmyk-profile-label { font-size: 11px; color: var(--ui-label); white-space: nowrap; }
 
-/* Custom dropdown: outlined rounded rect with a CSS chevron, no native chrome.
-   Outline, text, and arrow all follow the page-lightness UI color. */
+/* ICC profile dropdown: the same control as the Libraries input-space dropdown
+   (.lib-space) — 10px text, 20px tall, 4px corners, drawn chevron, no native
+   chrome — sized to its widest label ("GRACoL 2006", 62px) + padding + chevron. */
 .cmyk-profile-select-wrap { position: relative; display: inline-flex; }
 .cmyk-profile-select {
   font: inherit;
   font-size: 10px;
+  color: var(--ui-label);
   -webkit-appearance: none;
   appearance: none;
-  background: transparent;
-  color: var(--ui-label);
   border: 1px solid rgba(255,255,255,0.38);
-  border-radius: 6px;
-  padding: 3px 24px 3px 8px;
-  width: 100%;
+  border-radius: 4px;
+  padding: 2px 16px 2px 5px;
+  width: 86px;
   box-sizing: border-box;
   cursor: pointer;
+  background:
+    linear-gradient(45deg, transparent 50%, var(--ui-label) 50%) right 8px center / 4px 4px no-repeat,
+    linear-gradient(135deg, var(--ui-label) 50%, transparent 50%) right 4px center / 4px 4px no-repeat,
+    transparent;
 }
 body.light-bg .cmyk-profile-select { border-color: rgba(0,0,0,0.38); }
-.cmyk-profile-select-wrap::after {       /* downward chevron */
-  content: "";
-  position: absolute;
-  right: 9px; top: 50%;
-  width: 6px; height: 6px;
-  pointer-events: none;
-  border-right: 1.5px solid var(--ui-label);
-  border-bottom: 1.5px solid var(--ui-label);
-  transform: translateY(-65%) rotate(45deg);
-}
 /* "Show CMYK gamut boundary" checkbox — UI text color, native check tinted. */
 .cmyk-check {
   display: flex;
@@ -1468,7 +1591,7 @@ body.light-bg .cmyk-profile-select { border-color: rgba(0,0,0,0.38); }
   cursor: pointer;
   user-select: none;
 }
-.cmyk-check input { margin: 0; cursor: pointer; accent-color: var(--ui-label); }
+.cmyk-check:hover { color: var(--ui-label-hover); }
 
 /* Per-swatch out-of-gamut build-lightness slider: sits just below the CMYK label
    inside the CMYK region. Shown only on an out-of-gamut CMYK swatch that isn't
@@ -1497,7 +1620,7 @@ body.light-bg .cmyk-profile-select { border-color: rgba(0,0,0,0.38); }
 /* Shown only when it can do something: out-of-gamut, not Color-Bridge substituted,
    and not inert (.cmyk-bias-inert = full slider travel rounds to the same build,
    e.g. a deep color whose vendor build already sits at the press's TAC limit). */
-.swatches.cmyk-active .swatch-container.out-of-cmyk:not(.cmyk-bridge):not(.cmyk-bias-inert) .cmyk-swatch-bias {
+.swatches.cmyk-active .swatch-container.out-of-cmyk:not(.cmyk-lib-on):not(.cmyk-bias-inert) .cmyk-swatch-bias {
   display: block;
 }
 /* Hover or drag the slider area → brighten toward (but not to) full. */

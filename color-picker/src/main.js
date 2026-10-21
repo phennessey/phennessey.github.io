@@ -11,7 +11,8 @@
 
 import { S, P, els } from './state.js';
 import { updateSwatch, createSwatchDOM, wireSwatch, swatchEl, updateAddButton, updateBackground, updateMesh, setActive } from './swatches.js';
-import { updateSwatchMatches, updateDots, scheduleMatches, loadPantoneLibrary } from './pantone.js';
+import { updateSwatchMatches, updateDots, scheduleMatches } from './pantone.js';
+import { initLibraries } from './libraries.js';
 import { syncHexField, hexTextarea } from './hex.js';
 import { recordSnapshot } from './history.js';
 import { applyBgLevel } from './interactions.js';
@@ -48,8 +49,8 @@ P.render = function () {
 
 // Collapsible tool sections. The toggle checkbox expands/collapses its section
 // (animated via the .open class). These are view-state only — they never touch
-// undo history. The pantone toggle additionally drives the library "base"
-// filter (wired in pantone.js via its data-library="base" attribute).
+// undo history. The Libraries toggle additionally switches library matches
+// on and off (wired in pantone.js).
 document.querySelectorAll('.section-toggle').forEach(cb => {
   const section = cb.closest('.ui-section');
   // Open instantly; collapse via a transient `.collapsing` class so the body
@@ -95,7 +96,7 @@ setActive(0);
 P.render();
 updateAddButton();
 recordSnapshot();
-loadPantoneLibrary();
+initLibraries();
 
 // Pre-warm the default CMYK profile (transforms + gamut LUT) in the background so
 // the first CMYK-section open is instant — no fetch/build delay. The build runs

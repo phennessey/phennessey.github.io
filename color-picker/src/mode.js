@@ -37,10 +37,10 @@ function switchGamut(mode) {
 // handlers don't record the switch as an undo step.
 toggle?.addEventListener('pointerdown', e => e.stopPropagation());
 
-// Move the switch first, then redraw: flip it now so the dot starts sliding on
-// this frame, and run the ~50 ms of re-placing and repainting two frames later,
-// once the slide is underway. `target` tracks rapid clicks, so the redraw
-// always lands on the switch's final position.
+// Move the switch first, then redraw: flip it now so it shows its new state on
+// this frame, and run the ~50 ms of re-placing and repainting two frames later.
+// `target` tracks rapid clicks, so the redraw always lands on the switch's
+// final position.
 let target = getGamutMode();
 toggle?.addEventListener('click', () => {
   target = target === 'p3' ? 'srgb' : 'p3';

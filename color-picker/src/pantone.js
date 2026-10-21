@@ -1,6 +1,7 @@
-// Pantone library: loading the data file, rendering disc dots, finding
-// closest matches per swatch, the match-chip row, and the library filter
-// checkboxes.
+// Library colors on the wheel and in the swatches: disc dots, closest matches
+// per swatch, the match-chip row and promotion. The colors come from the
+// imported libraries (libraries.js → setLibraryEntries); this module only
+// renders and matches them. (Named for the Pantone feature it grew out of.)
 
 import {
   DOT_RADIUS, DOT_PEAK_OPACITY, DOT_FALLOFF_L, DOT_PROMOTED_RADIUS, DOT_PROMOTED_STROKE,
@@ -16,8 +17,6 @@ import {
 } from './color.js';
 import { swatchEl, updateSwatch } from './swatches.js';
 import { flushPendingWheelSnapshot, recordSnapshot } from './history.js';
-
-const PANTONE_URL = new URL('../lib/Pantone_OKLAB.txt', import.meta.url);
 
 function clearPromotedOnEdit() {
   const targets = S.isMultiMode() ? S.multiSelect
@@ -35,90 +34,70 @@ function clearPromotedOnEdit() {
 }
 
 
-// Pantone library
+// Library colors
 
+// Every imported library's colors, active or not (a promotion from a library
+// that's switched off is kept, hidden, and restored when it's switched back on).
+// Each entry: { key, libId, libName, name, L, a, b (OKLab), metallic, cbCMYK,
+// outOfP3, outOfSRGB, h, s, outOfGamut, el }.
 const pantoneData = [];
+let activeLibIds = new Set();
 
 const discDots = svgEl('g', { 'pointer-events': 'none', id: 'pantone-dots' });
 els.discOverlay.insertBefore(discDots, els.discOverlay.firstChild.nextSibling);
 
-function categoryOf(name) {
-  if (name.includes('PASTEL')) return 'pastel';
-  if (name.includes('NEON'))   return 'neon';
-  if (/\bSP\b/.test(name))     return 'sp';   // skin-tone library, e.g. "SP 1-1 C"
-  if (name.includes('XGC'))    return 'xgc';
-  if (name.includes('METALLIC'))    return 'metallic';
-  return 'base';
-}
+// A color shows (dots, chips) when the Libraries section is open and its own
+// library is switched on.
+function isEntryVisible(e) { return !!S.libraryFilters.base && activeLibIds.has(e.libId); }
+// Matching is on when the Libraries section is open AND at least one library
+// is switched on; otherwise the match strip hides entirely (unchecking the last
+// library hides the chips at once, user decision 2026-10-20).
+function anyLibraryEnabled() { return !!S.libraryFilters.base && activeLibIds.size > 0; }
+function isEntryEnabled(e) { return activeLibIds.has(e.libId); }
+/** Whether a promotion is in effect (its library is switched on). */
+const isPromotionShown = isEntryEnabled;
 
-function isCategoryVisible(cat) {
-  if (!S.libraryFilters.base) return false;
-  if (cat === 'base') return true;
-  return !!S.libraryFilters[cat];
-}
+const _chk = [0, 0, 0];
+const outside = rgb => rgb[0] < -1e-4 || rgb[0] > 1 + 1e-4
+                    || rgb[1] < -1e-4 || rgb[1] > 1 + 1e-4
+                    || rgb[2] < -1e-4 || rgb[2] > 1 + 1e-4;
 
-function anyLibraryEnabled() { return !!S.libraryFilters.base; }
-
-function isCategoryEnabled(category) {
-  if (category === 'base') return true;
-  return !!S.libraryFilters[category];
-}
-
-async function loadPantoneLibrary() {
-  let text;
-  try {
-    const res = await fetch(PANTONE_URL);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    text = await res.text();
-  } catch (err) {
-    console.warn('Pantone library failed to load:', err);
-    return;
+/** Replace the library colors (from libraries.js): `entries` carry key, libId,
+ *  libName, name, OKLab L/a/b, metallic and cbCMYK. Promotions are carried
+ *  over by key; one whose color no longer exists is dropped. */
+function setLibraryEntries(entries, activeIds) {
+  activeLibIds = new Set(activeIds);
+  pantoneData.length = 0;
+  const byKey = new Map();
+  for (const src of entries) {
+    const e = { ...src, el: null };
+    _chk[0] = e.L; _chk[1] = e.a; _chk[2] = e.b;
+    e.outOfP3 = outside(convert(_chk, OKLab, DisplayP3, [0, 0, 0]));
+    e.outOfSRGB = outside(convert(_chk, OKLab, sRGB, [0, 0, 0]));
+    placeEntry(e);
+    pantoneData.push(e);
+    byKey.set(e.key, e);
   }
-
-  const labBuf = [0, 0, 0];
-  const rgbCheck = [0, 0, 0];
-  const outside = rgb => rgb[0] < -1e-4 || rgb[0] > 1 + 1e-4
-                      || rgb[1] < -1e-4 || rgb[1] > 1 + 1e-4
-                      || rgb[2] < -1e-4 || rgb[2] > 1 + 1e-4;
-  for (const line of text.split('\n')) {
-    if (!line.trim()) continue;
-    // Tab-separated columns: name, [OKLab], [C,M,Y,K], #hex. The last two are
-    // Pantone's own Color Bridge build + its published soft-proof hex, present
-    // ONLY for coated-process colors; every other library leaves them empty
-    // (the merged file still tabs them out, so split() yields blank strings).
-    const parts = line.split('\t');
-    if (parts.length < 2) continue;
-    const name = parts[0].trim();
-    let lab;
-    try { lab = JSON.parse(parts[1].trim()); } catch { continue; }
-    if (!Array.isArray(lab) || lab.length !== 3) continue;
-
-    // Color Bridge CMYK + hex, when this color has them. Empty/whitespace
-    // columns (most of the library) → null, i.e. "no Pantone build available".
-    let cbCMYK = null, cbHex = null;
-    const cmykRaw = (parts[2] || '').trim();
-    if (cmykRaw) {
-      try { const a = JSON.parse(cmykRaw); if (Array.isArray(a) && a.length === 4) cbCMYK = a; } catch {}
-    }
-    const hexRaw = (parts[3] || '').trim();
-    if (/^#[0-9a-fA-F]{6}$/.test(hexRaw)) cbHex = hexRaw.toUpperCase();
-
-    const L = lab[0];
-    labBuf[0] = L; labBuf[1] = lab[1]; labBuf[2] = lab[2];
-    convert(labBuf, OKLab, DisplayP3, rgbCheck);
-    const outOfP3 = outside(rgbCheck);
-    convert(labBuf, OKLab, sRGB, rgbCheck);
-    const outOfSRGB = outside(rgbCheck);
-
-    const entry = { name, category: categoryOf(name), L, a: lab[1], b: lab[2], outOfP3, outOfSRGB, cbCMYK, cbHex, el: null };
-    placeEntry(entry);
-    pantoneData.push(entry);
+  for (const [i, old] of [...pantoneSelections]) {
+    const e = byKey.get(old.key);
+    if (e) pantoneSelections.set(i, e); else pantoneSelections.delete(i);
   }
-
+  lastDotsFilterSig = '';
   buildDots();
   updateDots();
   updateMatchesVisibility();
   updateAllSwatchMatches();
+  for (let i = 0; i < S.colors.length; i++) updateSwatch(i);
+}
+
+/** Which libraries are switched on (from libraries.js). */
+function setActiveLibraries(activeIds) {
+  activeLibIds = new Set(activeIds);
+  updateDots();
+  updateMatchesVisibility();
+  updateAllSwatchMatches();
+  for (let i = 0; i < S.colors.length; i++) updateSwatch(i);
+  P.render();   // the CMYK swatch layout follows match visibility (side vs bottom)
 }
 
 // A Pantone's wheel coordinates in the current gamut. `s` can exceed 1: a
@@ -150,21 +129,37 @@ function remapPantoneToGamut() {
   updateAllSwatchMatches();
 }
 
-// sRGB mode: how far beyond the rim an out-of-sRGB Pantone dot may be drawn, as
-// a fraction of the wheel's radius. Their true positions reach ~1.56× the radius
-// (well outside the interface), so the excess beyond the rim is squeezed into
-// this band: x → m·x / (x + m). Smooth at the rim (slope 1, so dots just outside
-// don't jump), order-preserving, and never reaching m. Display only — the
-// Pantone's real saturation (entry.s) is untouched for matching and promotion.
-const SRGB_DOT_OVERSHOOT = 0.20;
+// How far beyond the rim an out-of-gamut library dot may be drawn, as a
+// fraction of the wheel's radius. True positions can reach far outside the
+// interface (out-of-sRGB colors ~1.56× the radius in sRGB mode, neons well past
+// the P3 rim), so the excess x beyond the rim is compressed exponentially:
+//
+//     x → m · (1 − e^(−k·x/m))      m = band, k = falloff
+//
+// The farther a color sits the harder it's squeezed; dots approach m but never
+// reach it, and order is preserved. k is the curve's intensity — its slope at
+// the rim: 1 leaves dots just outside the rim at their true spot; below 1
+// pulls every dot in harder (they bunch near the rim); above 1 pushes them out
+// toward the band's edge sooner. Each gamut mode has its own pair (user
+// decision 2026-10-20), since sRGB mode has far more, and farther, out-of-gamut
+// colors: P3 0.2 / 8 (a dot just past the rim → 1.11×, the farthest neon,
+// truly 1.26× → 1.20×); sRGB 0.6 / 0.5 (just past → 1.01×, the farthest,
+// truly 1.55× → 1.22×). Display only — the color's real saturation (entry.s)
+// is untouched for matching and promotion.
+const DOT_COMPRESSION = {
+  p3:   { band: 0.2, falloff: 8 },
+  srgb: { band: 0.6, falloff: 0.5 },
+};
 function dotRadiusS(s) {
-  if (s <= 1 || !isSRGBMode()) return s;
-  const x = s - 1, m = SRGB_DOT_OVERSHOOT;
-  return 1 + m * x / (x + m);
+  if (s <= 1) return s;
+  const { band, falloff } = DOT_COMPRESSION[isSRGBMode() ? 'srgb' : 'p3'];
+  if (band <= 0) return 1;   // no band: every out-of-gamut dot sits on the rim
+  return 1 + band * (1 - Math.exp(-falloff * (s - 1) / band));
 }
 
-// A dot's disc position, as SVG attribute strings. Out-of-gamut Pantones sit
-// beyond the rim (compressed in sRGB mode, see dotRadiusS).
+
+// A dot's disc position, as SVG attribute strings. Out-of-gamut colors sit
+// beyond the rim, compressed (see dotRadiusS).
 function dotXY(entry) {
   const R   = DISC_SIZE / 2;
   const ang = entry.h * TAU;
@@ -195,10 +190,9 @@ let lastDotsActiveL   = NaN;
 let lastDotsFilterSig = '';
 
 function dotsFilterSig() {
-  const f = S.libraryFilters;
-  const filterPart = `${f.base ? 1 : 0}${f.pastel ? 1 : 0}${f.neon ? 1 : 0}${f.sp ? 1 : 0}${f.xgc ? 1 : 0}${f.metallic ? 1 : 0}`;
+  const filterPart = `${S.libraryFilters.base ? 1 : 0}/${[...activeLibIds].sort().join(',')}`;
   const promotedPart = [...pantoneSelections.entries()]
-    .map(([i, e]) => `${i}:${e.name}`).sort().join('|');
+    .map(([i, e]) => `${i}:${e.key}`).sort().join('|');
   const multi = [...S.multiSelect].sort((a, b) => a - b).join(',');
   const selPart = `${S.activeIndex}/${multi}`;
   return `${filterPart}:${promotedPart}:${selPart}`;
@@ -211,7 +205,6 @@ function swatchHandleOpacity(i) {
 }
 
 function updateDots() {
-  if (!pantoneData.length) return;
   const idx = S.activeIndex !== -1 ? S.activeIndex : S.lastActiveIndex;
   const activeL    = S.colors[idx]?.L ?? 0.5;
   const filterSig  = dotsFilterSig();
@@ -236,7 +229,7 @@ function updateDots() {
     let st, opacity;
     if (ownerIdx !== undefined) {
       st = `P${color}${swatchHandleOpacity(ownerIdx).toFixed(3)}`;
-    } else if (!isCategoryVisible(entry.category)) {
+    } else if (!isEntryVisible(entry)) {
       st = 'H';
     } else {
       const dL = Math.abs(entry.L - activeL);
@@ -286,7 +279,7 @@ const oklabBuf    = [0, 0, 0];
 function findClosestMatches(targetL, targetA, targetB, n = MAX_MATCHES) {
   const top = [];
   for (const e of pantoneData) {
-    if (!isCategoryVisible(e.category)) continue;
+    if (!isEntryVisible(e)) continue;
     const dL = e.L - targetL, da = e.a - targetA, db = e.b - targetB;
     const distSq = dL*dL + da*da + db*db;
     if (top.length < n) {
@@ -363,11 +356,13 @@ function renderPromoted(cell, p) {
   const matchCells = cell.parentElement;
   const warn = cell.querySelector('.promoted-gamut-warning');
   if (matchCells) {
-    matchCells._metalPromoted = !!(p && p.category === 'metallic');
+    matchCells._metalPromoted = !!(p && p.metallic);
     syncFieldMetallic(matchCells);
   }
   if (p) {
-    cell.dataset.pantoneName = p.name;
+    cell.dataset.pantoneKey = p.key;
+    const badge = cell.querySelector('.region-badge');
+    if (badge && badge.textContent !== p.libName) badge.textContent = p.libName;
     renderPantoneLabel(cell.querySelector('.match-label'), p.name);
     cell.classList.toggle('out-of-gamut', !!p.outOfGamut);
     if (warn) warn.style.display = p.outOfGamut ? '' : 'none';
@@ -376,7 +371,7 @@ function renderPromoted(cell, p) {
     }
     if (matchCells) matchCells.classList.add('has-promotion');
   } else {
-    delete cell.dataset.pantoneName;
+    delete cell.dataset.pantoneKey;
     cell.classList.remove('out-of-gamut');
     if (warn) warn.style.display = 'none';
     if (matchCells && matchCells.classList.contains('has-promotion')) {
@@ -397,7 +392,7 @@ function startChipTransition(matchCells) {
 function clearChipCell(cell) {
   cell.style.display = 'none';
   cell.classList.remove('out-of-gamut', 'chip-short', 'metallic', 'promoted-match', 'hue-match');
-  delete cell.dataset.pantoneName;
+  delete cell.dataset.pantoneKey;
 }
 
 function renderChipCell(cell, m, isHueMatch, isPromoted, chipTopRatio, hideGamut) {
@@ -408,10 +403,10 @@ function renderChipCell(cell, m, isHueMatch, isPromoted, chipTopRatio, hideGamut
   // without re-running the (expensive) match scan (see applyGamutCutoff).
   cell._chipRatio = chipTopRatio;
   cell.querySelector('.chip-fill').style.background = pantoneP3Css(m);
-  cell.dataset.pantoneName = m.name;
+  cell.dataset.pantoneKey = m.key;
   cell.classList.toggle('out-of-gamut', !!m.outOfGamut);
   cell.classList.toggle('chip-short', !!hideGamut);
-  cell.classList.toggle('metallic', m.category === 'metallic');
+  cell.classList.toggle('metallic', !!m.metallic);
   cell.classList.toggle('promoted-match', !!isPromoted);
   cell.classList.toggle('hue-match', !!isHueMatch);
   renderPantoneLabel(cell.querySelector('.match-label'), m.name);
@@ -463,7 +458,7 @@ function updateSwatchMatches(index) {
   // the library back on restores it, and the toggle records no history) but is
   // hidden — rendered as if un-promoted. Only explicit edits/depromotions, which
   // delete it outright, count as demotions.
-  if (selected && !isCategoryEnabled(selected.category)) selected = null;
+  if (selected && !isEntryEnabled(selected)) selected = null;
 
   const hideAllChips = () => {
     for (const cell of cells) cell.style.display = 'none';
@@ -558,7 +553,7 @@ function updateSwatchMatches(index) {
     const hideGamut = (1 - ratio) * stripH < MIN_GAMUT_BAR_H;
     renderChipCell(
       cells[i], entry, showHueMark && i === markDomIdx,
-      !!selected && entry.name === selected.name, ratio, hideGamut,
+      !!selected && entry.key === selected.key, ratio, hideGamut,
     );
   }
 
@@ -584,8 +579,8 @@ function labelWraps(el) {
   return range.getClientRects().length > 1;
 }
 
-function findPantoneByName(name) {
-  for (const e of pantoneData) if (e.name === name) return e;
+function findPantoneByKey(key) {
+  for (const e of pantoneData) if (e.key === key) return e;
   return null;
 }
 
@@ -633,14 +628,14 @@ function buildMatchCells(container) {
     pantoneSelections.delete(i);
     updateSwatchMatches(i);
     updateDots();
-    updateSwatch(i);   // refresh CMYK region (Color Bridge substitution depends on promotion)
+    updateSwatch(i);   // refresh CMYK region (the library alternate depends on promotion)
     flushPendingWheelSnapshot();
     recordSnapshot();
   };
   // Badge left of the name
   const promotedBadge = document.createElement('span');
   promotedBadge.className = 'region-badge';
-  promotedBadge.textContent = 'Pantone';
+  promotedBadge.textContent = 'Library';   // replaced by the library's name on promotion
   promotedCell.appendChild(promotedBadge);
   const promotedLabel = document.createElement('div');
   promotedLabel.className = 'match-label';
@@ -800,9 +795,9 @@ function wireMatchRowClick(matchRow, container) {
     const i = idxOf(container);
     if (!Number.isInteger(i) || i < 0 || i >= S.colors.length) return;
 
-    const name = cell.dataset.pantoneName;
-    if (!name) return;
-    const entry = findPantoneByName(name);
+    const key = cell.dataset.pantoneKey;
+    if (!key) return;
+    const entry = findPantoneByKey(key);
     if (!entry) return;
 
     // Clicking a match chip promotes it; clicking the already-promoted chip's
@@ -811,7 +806,7 @@ function wireMatchRowClick(matchRow, container) {
     else pantoneSelections.set(i, entry);
     updateSwatchMatches(i);
     updateDots();
-    updateSwatch(i);   // refresh CMYK region (Color Bridge substitution depends on promotion)
+    updateSwatch(i);   // refresh CMYK region (the library alternate depends on promotion)
     flushPendingWheelSnapshot();
     recordSnapshot();
   });
@@ -823,8 +818,8 @@ function wireMatchRowClick(matchRow, container) {
 // leaving the swatch area clears it. Other features can call setStatus() too.
 const statusRegion = document.getElementById('status-region');
 const gamutStatus = () => isSRGBMode()
-  ? "This Pantone color is outside the sRGB color gamut of this browser's current display mode."
-  : "This Pantone color is outside the Display P3 color gamut of this browser's current display mode.";
+  ? "This library color is outside the sRGB color gamut of this browser's current display mode."
+  : "This library color is outside the Display P3 color gamut of this browser's current display mode.";
 function setStatus(text) { if (statusRegion) statusRegion.textContent = text || ''; }
 
 els.swatches.addEventListener('pointerover', ev => {
@@ -834,6 +829,14 @@ els.swatches.addEventListener('pointerover', ev => {
   const chipHit = ev.target.closest('.chip-fill, .chip-gamut-warning');
   const onChip = chipHit && chipHit.closest('.match-cell.out-of-gamut');
   const onPromoted = ev.target.closest('.promoted-gamut-warning');
+  // A swatch's own gamut warnings say what clicking them does (swatches.js):
+  // the P3 bar's snaps to sRGB; the CMYK region's names the current mode's gamut.
+  const swatchWarn = ev.target.closest('.gamut-warning');
+  if (swatchWarn) {
+    const space = swatchWarn.classList.contains('cmyk-gamut') && !isSRGBMode() ? 'P3' : 'sRGB';
+    setStatus(`Snap swatch to closest in-gamut ${space} color`);
+    return;
+  }
   setStatus(onChip || onPromoted ? gamutStatus() : '');
 });
 els.swatches.addEventListener('pointerleave', () => setStatus(''));
@@ -846,15 +849,15 @@ function chipBgPreview(ev) {
   if (!matchCells) return;
   const hit = ev.target.closest('.chip-fill, .chip-gamut-warning');
   const cell = hit && hit.closest('.match-cell');
-  const name = cell && cell.dataset.pantoneName;
-  if (name) {
-    const entry = findPantoneByName(name);
+  const key = cell && cell.dataset.pantoneKey;
+  if (key) {
+    const entry = findPantoneByKey(key);
     if (entry) {
       clearTimeout(matchCells._chipHoverTimer);
       matchCells._chipHover = true;
       matchCells.classList.add('chip-hover-preview');
       matchCells.style.background = pantoneP3Css(entry);
-      matchCells._metalHover = entry.category === 'metallic';
+      matchCells._metalHover = !!entry.metallic;
       syncFieldMetallic(matchCells);
       return;
     }
@@ -901,31 +904,19 @@ if (hideOnPromoteCb) {
   });
 }
 
-// The "base" toggle lives in the collapsible section head (#toggle-pantone),
-// outside #library-panel; the per-library checkboxes live inside it. Wire both.
-const libraryCheckboxes = document.querySelectorAll('input[type="checkbox"][data-library]');
-if (libraryCheckboxes.length) {
-  libraryCheckboxes.forEach(cb => {
-    cb.addEventListener('change', () => {
-      S.libraryFilters[cb.dataset.library] = cb.checked;
-      syncLibraryCheckboxState();
-      updateDots();
-      updateMatchesVisibility();
-      updateAllSwatchMatches();
-      // CMYK swatch layout depends on Pantone visibility (bottom vs side mode),
-      // so trigger a render whenever library state changes.
-      P.render();
-    });
-  });
-
-  syncLibraryCheckboxState();
-}
-
-function syncLibraryCheckboxState() {
-  const baseOn = S.libraryFilters.base;
-  libraryCheckboxes.forEach(cb => {
-    if (cb.dataset.library === 'base') return;
-    cb.disabled = !baseOn;
+// The Libraries section's own toggle (#toggle-libraries, in the section head)
+// switches the whole feature on or off — matches, dots, promotions on view.
+const sectionToggle = document.getElementById('toggle-libraries');
+if (sectionToggle) {
+  S.libraryFilters.base = sectionToggle.checked;
+  sectionToggle.addEventListener('change', () => {
+    S.libraryFilters.base = sectionToggle.checked;
+    updateDots();
+    updateMatchesVisibility();
+    updateAllSwatchMatches();
+    // CMYK swatch layout depends on match visibility (bottom vs side mode),
+    // so trigger a render whenever library state changes.
+    P.render();
   });
 }
 
@@ -936,8 +927,8 @@ function updateMatchesVisibility() {
 
 
 export {
-  clearPromotedOnEdit, loadPantoneLibrary, updateSwatchMatches, updateDots,
-  scheduleMatches, updateMatchesVisibility, syncLibraryCheckboxState,
-  findPantoneByName, pantoneP3Css, buildMatchCells, matchRowObserver,
+  clearPromotedOnEdit, setLibraryEntries, setActiveLibraries, isPromotionShown, updateSwatchMatches, updateDots,
+  scheduleMatches, updateMatchesVisibility,
+  findPantoneByKey, pantoneP3Css, buildMatchCells, matchRowObserver,
   remapPantoneToGamut,
 };

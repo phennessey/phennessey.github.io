@@ -39,23 +39,22 @@
 
     <div class="section-divider"></div>
 
-    <div class="ui-section section-pantone collapsible">
+    <div class="ui-section section-libraries collapsible">
       <div class="section-head">
         <span class="section-toggle-box">
-          <input type="checkbox" class="section-toggle" id="toggle-pantone" data-library="base">
+          <input type="checkbox" class="section-toggle" id="toggle-libraries">
           <span class="section-tri" aria-hidden="true"></span>
         </span>
-        <label class="section-label" for="toggle-pantone">Pantone</label>
+        <label class="section-label" for="toggle-libraries">Libraries</label>
       </div>
-      <div class="section-vlabel">Pantone</div>
+      <div class="section-vlabel">Libraries</div>
       <div class="section-body library-panel" id="library-panel">
-        <div class="libraries-label">Additional libraries</div>
-        <div class="libraries">
-          <label><input type="checkbox" data-library="pastel"> Pastel</label>
-          <label><input type="checkbox" data-library="neon"> Neon</label>
-          <label><input type="checkbox" data-library="sp"> Skin tones</label>
-          <label><input type="checkbox" data-library="xgc"> Extended gamut</label>
-          <label><input type="checkbox" data-library="metallic"> Metallic</label>
+        <div class="lib-list" id="lib-list"></div>
+        <div class="lib-empty" id="lib-empty">No libraries yet. Import .ase, .acb,<br>.aco, .gpl, .csv or .json files.</div>
+        <div class="lib-actions">
+          <button type="button" class="lib-add" id="lib-add" aria-label="Import libraries" title="Import libraries">+</button>
+          <input type="file" id="lib-file" multiple hidden>
+          <button type="button" class="lib-export" id="lib-export">Export all libraries</button>
         </div>
         <div class="pantone-options">
           <label><input type="checkbox" id="toggle-metallic-texture"> Simulate texture<br>for metallic inks</label>
@@ -90,11 +89,7 @@
         </div>
         <label class="cmyk-check">
           <input type="checkbox" id="cmyk-show-boundary" checked>
-          <span>Show CMYK<br>gamut boundary</span>
-        </label>
-        <label class="cmyk-check">
-          <input type="checkbox" id="cmyk-use-bridge">
-          <span>Use Pantone Color Bridge<br>values when possible</span>
+          <span>Show gamut boundary</span>
         </label>
       </div>
     </div>
