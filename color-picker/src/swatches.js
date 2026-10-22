@@ -57,7 +57,55 @@ function updateSwatch(index) {
   container.classList.toggle('light', S.colors[index].L > MIDDLE_GRAY);
 
   updateSwatchCMYK(container, S.colors[index], index);
+  fitTopBars(container);
 }
+
+// A region's label row (badge + values) that doesn't fit on one line wraps to
+// two: the badge alone, then the values (.wrapped; user decision 2026-10-21).
+// Decided from the row's one-line width — the sum of its items, which wrapping
+// doesn't change — against the room it has (region width less its inset and
+// the delete button's 20px), so it can't flip-flop. Then measure how much
+// taller each row came out, so what's positioned below it moves down by that
+// much: --srgb-extra (the out-of-sRGB strip and the P3 row under it) and
+// --cmyk-extra (the CMYK slider). Runs on every
+// swatch update and when the swatch resizes.
+const ROW_GAP = 4, DELETE_ROOM = 20;
+function fitBar(bar) {
+  const region = bar?.parentElement;
+  if (!bar || !region || !region.offsetWidth) return 0;   // region hidden
+  bar.classList.remove('wrapped');   // measure the one-line widths unwrapped (same frame, never painted)
+  const items = [];
+  for (const ch of bar.children) {
+    if (ch.matches('.p3-readout, .cmyk-readout')) items.push(...ch.children); else items.push(ch);
+  }
+  const widths = items.map(x => x.offsetWidth).filter(w => w > 0);
+  const oneLine = widths.reduce((a, b) => a + b, 0) + ROW_GAP * Math.max(0, widths.length - 1);
+  bar.classList.toggle('wrapped', oneLine > region.clientWidth - bar.offsetLeft - DELETE_ROOM);
+  const badge = bar.querySelector('.region-badge');
+  const extra = bar.offsetHeight - (badge ? badge.offsetHeight : bar.offsetHeight);
+  return extra > 3 ? extra : 0;
+}
+function setExtra(container, name, px) {
+  const v = `${px}px`;
+  if (container.style.getPropertyValue(name) !== v) container.style.setProperty(name, v);
+}
+// The promoted library color's row (library badge, color name, gamut icon,
+// close box) wraps the same way: badge alone, then the rest.
+function fitPromoted(cell) {
+  if (!cell || !cell.offsetWidth) return;
+  cell.classList.remove('wrapped');
+  const cs = getComputedStyle(cell);
+  const room = cell.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const oneLine = [...cell.children].reduce((sum, ch) => sum + ch.offsetWidth, 0);   // (no flex gap)
+  cell.classList.toggle('wrapped', oneLine > room);
+}
+function fitTopBars(container) {
+  setExtra(container, '--srgb-extra', fitBar(container.querySelector('.color-swatch.srgb .swatch-top-bar')));
+  fitBar(container.querySelector('.color-swatch.p3 .swatch-top-bar'));
+  setExtra(container, '--cmyk-extra', fitBar(container.querySelector('.color-swatch.cmyk .swatch-top-bar')));
+  fitPromoted(container.querySelector('.promoted-cell'));
+}
+const topBarObserver = new ResizeObserver(entries => { for (const e of entries) fitTopBars(e.target); });
 
 function createSwatchDOM(index) {
   const { p3Css, p3Str, srgbCss, hex, outOfSRGB } = computeP3AndSRGB(S.colors[index]);
@@ -88,12 +136,8 @@ function createSwatchDOM(index) {
         </div>
         <div class="color-swatch cmyk">
           <div class="swatch-top-bar">
-            <span class="cmyk-readout"><span class="cmyk-tag region-badge">CMYK</span><span class="cmyk-v">0-0-0-0</span><span class="icon gamut-warning cmyk-gamut">${GAMUT_ICON_SVG}</span><span class="lightness-readout"></span></span>
+            <span class="cmyk-readout"><span class="cmyk-tag region-badge">CMYK</span><span class="cmyk-v">0-0-0-0</span><span class="icon gamut-warning cmyk-gamut">${GAMUT_ICON_SVG}</span><button type="button" class="cmyk-alt-check" role="checkbox" aria-checked="false" title="Use the book's CMYK for this color"><span class="cmyk-alt-box" aria-hidden="true"><svg class="cmyk-alt-mark" viewBox="0 0 16.17 15.09"><polygon points="13.51 0 5.61 9.8 2.46 6.75 0 9.21 5.88 15.09 16.17 2.2 13.51 0"/></svg></span><span class="cmyk-alt-label">BOOK</span></button><span class="lightness-readout"></span></span>
           </div>
-          <button type="button" class="cmyk-alt-check" role="checkbox" aria-checked="false" title="Use the library's CMYK for this color">
-            <span class="cmyk-alt-box" aria-hidden="true"><svg class="cmyk-alt-mark" viewBox="0 0 16.17 15.09"><polygon points="13.51 0 5.61 9.8 2.46 6.75 0 9.21 5.88 15.09 16.17 2.2 13.51 0"/></svg></span>
-            <span class="cmyk-alt-label">LIBRARY</span>
-          </button>
           <div class="cmyk-swatch-bias">
             <div class="cmyk-bias-track">
               <input type="range" class="cmyk-bias-slider" min="0" max="100" value="0" step="1"
@@ -122,6 +166,7 @@ function removeColorAt(i) {
   if (sw) {
     const mc = sw.querySelector('.match-cells');
     if (mc) matchRowObserver.unobserve(mc);
+    topBarObserver.unobserve(sw);
     els.swatches.removeChild(sw);
   }
   P.handles.splice(i, 1);
@@ -192,6 +237,7 @@ function pullIntoGamut(container, isOut, hi) {
 }
 
 function wireSwatch(container) {
+  topBarObserver.observe(container);
   // sRGB gamut icon (the first .gamut-warning in the swatch is the P3 bar's):
   // reduce chroma at the same hue/lightness until the color falls inside sRGB.
   container.querySelector('.gamut-warning')?.addEventListener('click', e => {
@@ -205,7 +251,7 @@ function wireSwatch(container) {
     pullIntoGamut(container, isOutOfCMYK, S.colors[idxOf(container)].s);
   });
 
-  // "LIBRARY" checkbox below the CMYK readout (shown only when this swatch's
+  // "BOOK" checkbox on the CMYK readout's row (shown only when this swatch's
   // promoted color has a CMYK alternate in its library, e.g. Pantone Color
   // Bridge): switches this swatch's CMYK output to that alternate. The choice
   // lives on the element, keyed to the promoted color, so demoting (or
@@ -217,6 +263,7 @@ function wireSwatch(container) {
     if (container.dataset.cmykLibKey === p.key) delete container.dataset.cmykLibKey;
     else container.dataset.cmykLibKey = p.key;
     updateSwatchCMYK(container, S.colors[ci], ci);
+    fitTopBars(container);   // the CMYK value's length may have changed
   });
 
   // Per-swatch CMYK slider (visible only on out-of-gamut CMYK swatches): the
@@ -230,6 +277,7 @@ function wireSwatch(container) {
     if (+sl.value <= 5) sl.value = '0';
     const ci = idxOf(container);
     updateSwatchCMYK(container, S.colors[ci], ci);
+    fitTopBars(container);   // the CMYK value's length may have changed
   });
   // A finished drag leaves the input FOCUSED, which pins the slider's hover alpha
   // via :focus-within until something else is clicked. Release focus when the

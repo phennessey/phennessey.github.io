@@ -28,7 +28,7 @@ export const S = {
   frozenEdges:      null,
   hueConvergeDrag:  null,
 
-  libraryFilters: { base: false },   // base = the Libraries section is open (matches on)
+  libraryFilters: { base: false },   // base = the Libraries checkbox is on (matches on)
 };
 
 // Renderer + derived geometry

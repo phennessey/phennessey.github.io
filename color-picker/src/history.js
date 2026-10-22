@@ -9,7 +9,7 @@ import {
 import { findPantoneByKey, updateMatchesVisibility } from './pantone.js';
 import { activateLibraries } from './libraries.js';
 import { requestRender } from './util.js';
-import { hexTextarea } from './hex.js';
+import { stateField } from './state-console.js';
 import { getGamutMode, resaturate } from './color.js';
 
 // History
@@ -112,7 +112,7 @@ function restoreSnapshot(snap) {
     neededLibs.add(entry.libId);
   }
   if (neededLibs.size > 0) {
-    // Show what the restored promotions need: the Libraries section open and
+    // Show what the restored promotions need: the Libraries checkbox on and
     // their libraries switched on (view state; no history of its own).
     S.libraryFilters.base = true;
     const toggle = document.getElementById('toggle-libraries');
@@ -174,8 +174,8 @@ function redo() {
 document.addEventListener('keydown', e => {
   const mod = e.metaKey || e.ctrlKey;
   if (!mod || e.key.toLowerCase() !== 'z') return;
-  // Text fields (the hex box, library names) keep their own undo.
-  if (document.activeElement === hexTextarea || document.activeElement?.matches('input[type="text"]')) return;
+  // Text fields (the State box, library names) keep their own undo.
+  if (document.activeElement === stateField || document.activeElement?.matches('input[type="text"]')) return;
   e.preventDefault();
   if (e.shiftKey) redo(); else undo();
 });

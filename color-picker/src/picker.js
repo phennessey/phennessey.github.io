@@ -177,6 +177,9 @@ export function polarPath(steps, radiusFn, discR) {
 // path is written to 0.01 px but drawn half a pixel wide; 25 steps (0.000004 px)
 // cost 2.7 ms per lightness change for nothing visible.
 const GAMUT_BOUNDARY_STEPS = 11;
+// The sRGB boundary eases (CSS transition) only within this much lightness of
+// either end, where it morphs into the edge circle.
+const GAMUT_EASE_BAND = 0.01;
 export function gamutBoundaryPath(lr, discR) {
   return polarPath(359, h => {
     let lo = 0, hi = 1;
@@ -532,6 +535,11 @@ export function createPicker(S, cfg) {
       srgbEdgeCircle.setAttribute('stroke-opacity', (parseFloat(opacity) * fade).toFixed(3));
     } else {
       srgbEdgeCircle.setAttribute('stroke-opacity', '0');
+      // Eased (a 0.1s CSS transition) only in the last 1% of lightness at
+      // each end, where the boundary morphs into the edge circle; everywhere
+      // else it follows instantly (user decision 2026-10-21). Set before the
+      // new values so the change on entering the band eases too.
+      gamutBoundary.classList.toggle('eased', lr < GAMUT_EASE_BAND || lr > 1 - GAMUT_EASE_BAND);
       gamutBoundary.setAttribute('stroke', stroke);
       gamutBoundary.setAttribute('stroke-opacity', opacity);
       // The boundary path depends only on lr: traced once per cached disc image,

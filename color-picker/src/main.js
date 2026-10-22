@@ -13,7 +13,7 @@ import { S, P, els } from './state.js';
 import { updateSwatch, createSwatchDOM, wireSwatch, swatchEl, updateAddButton, updateBackground, updateMesh, setActive } from './swatches.js';
 import { updateSwatchMatches, updateDots, scheduleMatches } from './pantone.js';
 import { initLibraries } from './libraries.js';
-import { syncHexField, hexTextarea } from './hex.js';
+import { syncStateField } from './state-console.js';
 import { recordSnapshot } from './history.js';
 import { applyBgLevel } from './interactions.js';
 import { setCMYKActive, setCMYKProfile, cmyk } from './cmyk.js';
@@ -44,45 +44,28 @@ P.render = function () {
   updateBackground();
   updateMesh();
   updateDots();
-  syncHexField();
+  syncStateField();
 };
 
-// Collapsible tool sections. The toggle checkbox expands/collapses its section
-// (animated via the .open class). These are view-state only — they never touch
-// undo history. The Libraries toggle additionally switches library matches
-// on and off (wired in pantone.js).
+// Tool sections: Libraries and CMYK are each switched on and off by the
+// checkbox in their header (.open marks a section on; the body always shows).
+// View state only — never in undo history. The Libraries checkbox also switches
+// library matches on and off (wired in pantone.js); the CMYK one drives CMYK
+// "mode" (convert + show per swatch). (No section collapses any more — State
+// was the last collapsible one, 2026-10-21.)
+// While a section is switched off its (faded) body is inert — no clicks,
+// hover, typing or keyboard focus — so nothing faded is usable (user decision
+// 2026-10-21). Only the header switch stays live.
 document.querySelectorAll('.section-toggle').forEach(cb => {
   const section = cb.closest('.ui-section');
-  // Open instantly; collapse via a transient `.collapsing` class so the body
-  // clips + fades while the width animates, then is hidden once the 0.3s width
-  // transition finishes. A timeout (not transitionend) finalizes it so it can't
-  // get stuck if the transition is throttled/interrupted.
+  const body = section.querySelector('.section-body');
   const sync = () => {
-    clearTimeout(section._collapseTimer);
-    if (cb.checked) {
-      section.classList.remove('collapsing');
-      section.classList.add('open');
-    } else if (section.classList.contains('open')) {
-      section.classList.remove('open');
-      section.classList.add('collapsing');
-      section._collapseTimer = setTimeout(() => section.classList.remove('collapsing'), 200);
-    } else {
-      section.classList.remove('collapsing');
-    }
+    section.classList.toggle('open', cb.checked);
+    if (body) body.inert = !cb.checked;
   };
   cb.addEventListener('change', sync);
-  // CMYK section open/closed drives CMYK "mode" (convert + show per-swatch).
   if (cb.id === 'toggle-cmyk') cb.addEventListener('change', () => setCMYKActive(cb.checked));
   sync();
-  // While collapsed, a click ANYWHERE in the narrow column (triangle, the gap
-  // below it, the vertical label) opens the section — no dead zones. When open
-  // this is a no-op so the body's own controls keep working. Clicks on the
-  // checkbox itself are skipped since it toggles natively.
-  section.addEventListener('click', (e) => {
-    if (section.classList.contains('open') || e.target === cb) return;
-    cb.checked = !cb.checked;
-    cb.dispatchEvent(new Event('change', { bubbles: true }));
-  });
 });
 
 // Init
@@ -99,6 +82,6 @@ recordSnapshot();
 initLibraries();
 
 // Pre-warm the default CMYK profile (transforms + gamut LUT) in the background so
-// the first CMYK-section open is instant — no fetch/build delay. The build runs
+// switching CMYK on the first time is instant — no fetch/build delay. The build runs
 // after the profile fetch resolves, so it doesn't block the initial paint.
 setCMYKProfile(cmyk.profileKey);

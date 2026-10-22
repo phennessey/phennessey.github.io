@@ -3,7 +3,7 @@
 // ══════════════════════════════════════════════════════════════════════
 // Converts the picker's true (P3-gamut) OKLab color to CMYK through a real
 // ICC output profile, and renders the build back to a Display-P3 swatch as a
-// soft proof. CMYK "mode" is active while the CMYK tool section is open (see
+// soft proof. CMYK "mode" is active while the CMYK checkbox is on (see
 // main.js).
 //
 // Relative colorimetric WITH black-point compensation (cmyk-ink.js USE_BPC),
@@ -64,7 +64,7 @@ const PROFILE_URLS = {
 };
 const TABLE_URL = key => `lib/gamut/${key}.f32`;
 
-// Public mode state. `active` mirrors the CMYK section open/closed; `ready` is
+// Public mode state. `active` mirrors the CMYK checkbox; `ready` is
 // true once a profile is parsed and its transforms are built. The out-of-gamut
 // build-lightness preference is PER SWATCH: each out-of-gamut CMYK swatch
 // carries its own slider (see updateSwatchCMYK), so there is no global bias here.
@@ -165,6 +165,43 @@ function biasedBuild(raw, bias) {
 }
 
 const cl3 = v => Math.max(0, Math.min(1, v)).toFixed(3);
+const buildLabel = c => { const r = roundBuild(c); return `${r.C}-${r.M}-${r.Y}-${r.K}`; };
+
+/** The per-swatch slider's reset key: the slider returns to 0 whenever its
+ *  swatch's color no longer matches the key it was set for. */
+const colorKeyOf = color => `${color.h.toFixed(6)}:${color.s.toFixed(6)}:${color.L.toFixed(6)}`;
+
+// The slider snaps positions 1–5 to 0 (swatches.js), so those can't be reached.
+const SLIDER_SNAP = 5;
+
+/** For the State console: the out-of-gamut slider position (0–100) at which
+ *  `color`'s build rounds to `label` ("C-M-Y-K"), or -1 if no position does. In
+ *  gamut there is only the build itself (position 0). Needs CMYK active. */
+export function cmykSliderPositionFor(color, label) {
+  if (!engineOK || !cmyk.ready) return -1;
+  const raw = convertColor(color);
+  if (buildLabel(raw.c) === label) return 0;
+  if (!raw.oog) return -1;
+  for (let k = SLIDER_SNAP + 1; k <= 100; k++) if (buildLabel(biasedBuild(raw, k / 100)) === label) return k;
+  return -1;
+}
+
+/** For the State console's messages: the builds `color` can show — its
+ *  default and, out of gamut, the slider's far end (Adobe's build). */
+export function cmykReachableRange(color) {
+  if (!engineOK || !cmyk.ready) return null;
+  const raw = convertColor(color);
+  return { oog: raw.oog, from: buildLabel(raw.c), to: raw.oog ? buildLabel(biasedBuild(raw, 1)) : null };
+}
+
+/** For the State console: put swatch `container`'s slider at position k for
+ *  `color` (so the next render keeps it rather than resetting it to 0). */
+export function setSwatchCMYKBias(container, color, k) {
+  const slider = container?.querySelector(".cmyk-bias-slider");
+  if (!slider) return;
+  slider.value = String(k);
+  slider.dataset.colorKey = colorKeyOf(color);
+}
 
 /** Whether a picker color lies outside the active profile's printable gamut
  *  (see the header). Also drives click-to-pull in swatches.js. */
@@ -197,7 +234,7 @@ function syncBoundary() {
  * and a profile is ready. `index` is the swatch index, used to look up the
  * promoted library color for the library alternate below.
  *
- * Library alternate: when the swatch's "LIBRARY" checkbox is on, the ICC conversion
+ * Library alternate: when the swatch's "BOOK" checkbox is on, the ICC conversion
  * is bypassed — the label shows the library's own CMYK for the promoted color
  * and the fill is that recipe as the active press profile prints it. Such
  * swatches get .cmyk-lib-on (and the checkbox shows checked).
@@ -225,14 +262,14 @@ export function updateSwatchCMYK(container, color, index) {
   const biasSlider = container.querySelector(".cmyk-bias-slider");
   let bias = 0;
   if (biasSlider) {
-    const key = `${color.h.toFixed(6)}:${color.s.toFixed(6)}:${color.L.toFixed(6)}`;
+    const key = colorKeyOf(color);
     if (biasSlider.dataset.colorKey !== key) { biasSlider.value = "0"; biasSlider.dataset.colorKey = key; }
     bias = +biasSlider.value / 100;
   }
 
   // Library alternate, per swatch: when this swatch's promoted color has a CMYK
   // alternate in its library (a CMYK add-on such as Pantone Color Bridge), a
-  // "LIBRARY" checkbox appears below the CMYK readout; checking it (swatches.js) stores
+  // "BOOK" checkbox appears on the CMYK readout's row; checking it (swatches.js) stores
   // the promoted color's key on the element and the build becomes that
   // alternate. Demoting, or promoting another color, clears it. Hidden — not
   // cleared — while the promoted color's library is switched off.
@@ -398,7 +435,7 @@ export async function setCMYKProfile(key) {
   }
 }
 
-/** Enter/leave CMYK mode (driven by the CMYK section open/closed). */
+/** Enter/leave CMYK mode (driven by the CMYK checkbox). */
 export function setCMYKActive(on) {
   if (!engineOK) return;
   cmyk.active = on;

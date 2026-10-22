@@ -673,7 +673,8 @@ els.swatches.addEventListener('pointerdown', ev => {
 
 
 document.addEventListener('pointerdown', ev => {
-  if (ev.target.closest('.top-ui') || ev.target.closest('.swatches')) return;
+  // (.lib-menu: a library row's menu floats at the page level, outside .top-ui.)
+  if (ev.target.closest('.top-ui, .swatches, .lib-menu')) return;
   if (S.activeIndex === -1 && !S.isMultiMode()) return;
   deselect();
 });
@@ -694,7 +695,7 @@ function applyBgLevel() {
 }
 
 document.addEventListener('wheel', ev => {
-  if (ev.target.closest('.top-ui, .swatch-container')) return;
+  if (ev.target.closest('.top-ui, .swatch-container, .lib-menu')) return;
   ev.preventDefault();
   // Holding Shift makes the OS deliver wheel scroll on the X axis, so deltaY is
   // 0 and the value lands in deltaX — read whichever axis carries the scroll,

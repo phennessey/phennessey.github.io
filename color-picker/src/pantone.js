@@ -38,7 +38,7 @@ function clearPromotedOnEdit() {
 
 // Every imported library's colors, active or not (a promotion from a library
 // that's switched off is kept, hidden, and restored when it's switched back on).
-// Each entry: { key, libId, libName, name, L, a, b (OKLab), metallic, cbCMYK,
+// Each entry: { key, libId, libName, name, L, a, b (OKLab), metallicTexture, cbCMYK,
 // outOfP3, outOfSRGB, h, s, outOfGamut, x, y (dot position) }.
 const pantoneData = [];
 let activeLibIds = new Set();
@@ -59,10 +59,10 @@ els.discOverlay.before(dotCanvas);
 const dotCtx = dotCanvas.getContext('2d');
 let dotDpr = 0;
 
-// A color shows (dots, chips) when the Libraries section is open and its own
+// A color shows (dots, chips) when Libraries is switched on and its own
 // library is switched on.
 function isEntryVisible(e) { return !!S.libraryFilters.base && activeLibIds.has(e.libId); }
-// Matching is on when the Libraries section is open AND at least one library
+// Matching is on when Libraries is switched on AND at least one library
 // is switched on; otherwise the match strip hides entirely (unchecking the last
 // library hides the chips at once, user decision 2026-10-20).
 function anyLibraryEnabled() { return !!S.libraryFilters.base && activeLibIds.size > 0; }
@@ -76,7 +76,8 @@ const outside = rgb => rgb[0] < -1e-4 || rgb[0] > 1 + 1e-4
                     || rgb[2] < -1e-4 || rgb[2] > 1 + 1e-4;
 
 /** Replace the library colors (from libraries.js): `entries` carry key, libId,
- *  libName, name, OKLab L/a/b, metallic and cbCMYK. Promotions are carried
+ *  libName, name, OKLab L/a/b, metallicTexture (draw the metallic texture: a
+ *  metallic library with "Simulate metallic texture" on) and cbCMYK. Promotions are carried
  *  over by key; one whose color no longer exists is dropped. */
 function setLibraryEntries(entries, activeIds) {
   activeLibIds = new Set(activeIds);
@@ -333,7 +334,7 @@ function renderPromoted(cell, p) {
   const matchCells = cell.parentElement;
   const warn = cell.querySelector('.promoted-gamut-warning');
   if (matchCells) {
-    matchCells._metalPromoted = !!(p && p.metallic);
+    matchCells._metalPromoted = !!(p && p.metallicTexture);
     syncFieldMetallic(matchCells);
   }
   if (p) {
@@ -383,7 +384,7 @@ function renderChipCell(cell, m, isHueMatch, isPromoted, chipTopRatio, hideGamut
   cell.dataset.pantoneKey = m.key;
   cell.classList.toggle('out-of-gamut', !!m.outOfGamut);
   cell.classList.toggle('chip-short', !!hideGamut);
-  cell.classList.toggle('metallic', !!m.metallic);
+  cell.classList.toggle('metallic', !!m.metallicTexture);
   cell.classList.toggle('promoted-match', !!isPromoted);
   cell.classList.toggle('hue-match', !!isHueMatch);
   renderPantoneLabel(cell.querySelector('.match-label'), m.name);
@@ -488,6 +489,17 @@ function updateSwatchMatches(index) {
   }
 
   const matchCellsEl = container.querySelector('.match-cells');
+
+  // Chip ink (labels, gamut icons, hue marker) follows the chips, not the
+  // swatch: the average of the lineup's lightest and darkest chip decides dark
+  // or light ink (user decision 2026-10-22 — a mid-gray swatch put white labels
+  // on pale pastel chips). With no chips, the swatch decides, as before.
+  if (matchCellsEl) {
+    let lo = Infinity, hi = -Infinity;
+    for (const e of kept) { if (e.L < lo) lo = e.L; if (e.L > hi) hi = e.L; }
+    const chipsLight = kept.length ? (lo + hi) / 2 > MIDDLE_GRAY : c.L > MIDDLE_GRAY;
+    matchCellsEl.classList.toggle('chips-light', chipsLight);
+  }
 
   renderPromoted(promotedCell, selected);
 
@@ -835,7 +847,7 @@ function chipBgPreview(ev) {
       matchCells._chipHover = true;
       matchCells.classList.add('chip-hover-preview');
       matchCells.style.background = pantoneP3Css(entry);
-      matchCells._metalHover = !!entry.metallic;
+      matchCells._metalHover = !!entry.metallicTexture;
       syncFieldMetallic(matchCells);
       return;
     }
@@ -862,14 +874,7 @@ els.swatches.addEventListener('pointerout', ev => {
 });
 
 
-// Library filter checkboxes + pantone option checkboxes
-
-const metallicTextureCb = document.getElementById('toggle-metallic-texture');
-if (metallicTextureCb) {
-  metallicTextureCb.addEventListener('change', () => {
-    els.swatches.classList.toggle('metallic-texture', metallicTextureCb.checked);
-  });
-}
+// Library option checkbox (Hide matches after promotion)
 
 const hideOnPromoteCb = document.getElementById('toggle-hide-on-promote');
 if (hideOnPromoteCb) {
@@ -882,7 +887,7 @@ if (hideOnPromoteCb) {
   });
 }
 
-// The Libraries section's own toggle (#toggle-libraries, in the section head)
+// The Libraries checkbox (#toggle-libraries, in the section head)
 // switches the whole feature on or off — matches, dots, promotions on view.
 const sectionToggle = document.getElementById('toggle-libraries');
 if (sectionToggle) {
@@ -904,9 +909,38 @@ function updateMatchesVisibility() {
 
 
 
+// ── For the State console (state-console.js) ────────────────────────
+
+const normName = n => n.trim().replace(/\s+/g, ' ').toLowerCase();
+
+/** A color in a switched-on library by name (case and spacing ignored; the
+ *  first match in library order), or null — always null while the Libraries
+ *  section is closed, since nothing can be promoted then. */
+function findEnabledEntryByName(name) {
+  if (!S.libraryFilters.base) return null;
+  const want = normName(name);
+  return pantoneData.find(e => isEntryEnabled(e) && normName(e.name) === want) || null;
+}
+
+/** Whether swatch `index`, at color `c`, would show `entry` as a chip — so
+ *  promoting it keeps the swatch's color. */
+function isChipCandidate(index, c, entry) {
+  const n = Math.min(visibleMaxForRow(swatchEl(index)), MAX_MATCHES);
+  return closestN(c, n).some(m => m.entry === entry);
+}
+
+/** The swatch color a promoted library color places the swatch at (as
+ *  dropping a chip on a swatch does): its true position, saturation clamped to
+ *  the rim. */
+const entryColor = e => ({ h: e.h, s: Math.min(1, e.s), L: e.L });
+
+/** Whether promotions are on view at all (Libraries is switched on). */
+const promotionsOnView = () => !!S.libraryFilters.base;
+
 export {
   clearPromotedOnEdit, setLibraryEntries, setActiveLibraries, isPromotionShown, updateSwatchMatches, updateDots,
   scheduleMatches, updateMatchesVisibility,
   findPantoneByKey, pantoneP3Css, buildMatchCells, matchRowObserver,
   remapPantoneToGamut,
+  findEnabledEntryByName, isChipCandidate, entryColor, promotionsOnView,
 };

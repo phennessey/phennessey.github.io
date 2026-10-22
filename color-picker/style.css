@@ -37,8 +37,8 @@ body {
 
 /* Top UI: a single outer frame (1px squircle outline via border-radius +
    corner-shape) that encompasses everything. Inside, on the left, the filled COLOR MAP panel
-   (tinted by the selected lightness); to its right the SETUP / PANTONE / CMYK /
-   EXPORT sections. The frame's 4px padding gives an even gap to the color map
+   (tinted by the selected lightness); to its right a column holding
+   LIBRARIES over CMYK, then the STATE section. The frame's 4px padding gives an even gap to the color map
    panel, and its radius is 4px larger so the two squircles stay concentric.
    The frame + sections follow the PAGE background (body.light-bg). */
 .top-ui {
@@ -72,6 +72,13 @@ body {
   outline: 1px solid rgba(255,255,255,0.2);
   outline-offset: -1px;
 }
+
+/* Nothing in the top UI is selectable text (user decision 2026-10-21) — no
+   highlight from a drag or Cmd+A — except where you type: the State box and a
+   library name being renamed. */
+.top-ui, .top-ui * { -webkit-user-select: none; user-select: none; }
+.top-ui .hex-input,
+.top-ui .lib-row.renaming .lib-name { -webkit-user-select: text; user-select: text; }
 
 /* When no swatch is active, dim the whole top UI and make it dead to the mouse
    — no clicks, no text cursor on hover. Only the .swatches area (a sibling of
@@ -124,52 +131,13 @@ body.light-bg .top-ui {
   margin-bottom: var(--tools-vpad);
 }
 
-/* Header row: the toggle checkbox + the horizontal section label, aligned. */
+/* Header row: the section label (and, for Libraries/CMYK, its checkbox). */
 .section-head {
   display: flex;
   align-items: center;
   gap: 6px;
   height: var(--section-label-h);
   margin-bottom: var(--section-label-gap);
-}
-
-/* Toggle hit area: a square ~30% wider than the triangle, holding the marker. */
-.section-toggle-box {
-  position: relative;
-  flex: 0 0 auto;
-  width: 13px;                                  /* 30% wider than the 10px triangle */
-  height: 13px;
-}
-/* The checkbox is an invisible, clickable region. It fills the hit box and
-   extends 6px to the right (the head gap) so the space between the triangle and
-   the section label is also clickable, reaching right up to the label. */
-.section-toggle {
-  appearance: none;
-  -webkit-appearance: none;
-  position: absolute;
-  inset: 0 -6px 0 0;       /* top right bottom left — right edge stretched into the gap */
-  height: 100%;
-  margin: 0;
-  cursor: pointer;
-}
-/* Visual marker: a right triangle (half as tall as wide) in the label color,
-   centered in the hit box. Points down while inactive; snaps to point right when
-   active — the rotation is intentionally NOT animated. */
-.section-tri {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 10px;
-  height: 5px;
-  background: var(--label-color);
-  clip-path: polygon(0 0, 100% 0, 50% 100%);   /* points down */
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);   /* easeOutExpo */
-}
-.section-toggle:checked ~ .section-tri {
-  transform: translate(-50%, -50%) rotate(-90deg);   /* points right */
-  background: var(--label-color-active);
 }
 
 .section-label {
@@ -185,99 +153,82 @@ body.light-bg .top-ui {
   color: var(--label-color);
   transition: color 0.3s ease;
 }
-.collapsible .section-label { cursor: pointer; }
-.collapsible.open .section-label { color: var(--label-color-active); }
-/* Highlight the label to the active alpha on hover — including hovering the
-   triangle or the gap. When collapsed, hovering anywhere in the clickable column
-   lights the vertical label; when open, hovering the head lights the horizontal
-   label. */
-.collapsible .section-label:hover,
-.section-head:hover .section-label,
-.section-vlabel:hover,
-.collapsible:not(.open):hover .section-vlabel { color: var(--label-color-active); }
 
-/* 90°-rotated label under the toggle while a collapsible section is closed.
-   Absolutely positioned (out of flow) so it can cross-fade with the body via
-   opacity without shifting layout; it stays in the triangle's left column so it
-   never overlaps the (label-aligned) option checkboxes. */
-.section-vlabel {
+/* Libraries over CMYK in one column, each switched on and off by the checkbox
+   in its header. No section collapses (user decisions 2026-10-21: Libraries,
+   CMYK and then State all were collapsible regions): bodies always show — a
+   switched-off one at 0.2 alpha. The header control is the P3 switch's design
+   (user decision 2026-10-21): a 24 × 14 outlined pill whose 8px dot jumps 10px
+   right when on, 0.4 → 0.85 alpha, instant (no transition). It's still the
+   checkbox underneath, so everything listening to it is unchanged. */
+.ui-column { display: flex; flex-direction: column; }
+/* Its gap from the color map panel matches State's from its divider: 60% over
+   the frame's 16px section gap, 25.6px (user decision 2026-10-21). */
+.ui-column { margin-left: calc(var(--section-gap) * 0.6); }
+.ui-column > .ui-section + .ui-section { margin-top: 0; }
+.section-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--label-color-active);
+  cursor: pointer;
+}
+.section-check .section-label { cursor: pointer; color: inherit; }
+.section-check {
+  --sw-ink: rgba(255,255,255,0.4);
+  --sw-ink-on: rgba(255,255,255,0.85);
+}
+body.light-bg .section-check {
+  --sw-ink: rgba(0,0,0,0.4);
+  --sw-ink-on: rgba(0,0,0,0.8);
+}
+.section-check input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 24px;
+  height: 14px;
+  margin: 0;
+  border: 1px solid var(--sw-ink);
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+}
+.section-check input[type="checkbox"]::before {
+  content: "";
   position: absolute;
-  top: calc(var(--section-label-h) + var(--section-label-gap));   /* just below the head */
-  left: 3px;                                                      /* = section padding-left, under the toggle */
-  font-family: 'Roboto Mono', monospace;
-  writing-mode: vertical-rl;
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  user-select: none;
-  color: var(--label-color);
-  transition: opacity 0.1s ease, color 0.15s ease;
+  top: 2px;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sw-ink);
 }
+.section-check input[type="checkbox"]:checked { border-color: var(--sw-ink-on); }
+.section-check input[type="checkbox"]:checked::before { background: var(--sw-ink-on); transform: translateX(10px); }
+.section-check input[type="checkbox"]:focus { outline: none; }
+.section-check input[type="checkbox"]:focus-visible { outline: 1px solid var(--sw-ink-on); outline-offset: 2px; }
+/* Section labels (State, Libraries, CMYK — and the header checkboxes) always
+   show at the active label alpha, on or off (user decision 2026-10-21). */
+.section-setup .section-label { color: var(--label-color-active); }
+.checkable .section-body { display: flex; margin-left: 30px; }   /* under the label: 24px switch + 6px gap */
+/* Switched off: the body stays in view but fades to show it's inactive — and
+   is unusable (main.js makes it inert; pointer-events here as a backstop). */
+.checkable:not(.open) .section-body { opacity: 0.2; pointer-events: none; }
 
-/* Collapsible sections: closed by default. The horizontal label and body are
-   hidden; the vertical label shows. Opening animates the width and swaps the
-   labels. */
-.collapsible {
-  position: relative;             /* positioning context for the absolute vlabel */
-  overflow: hidden;
-  /* clamp to the toggle column width while closed; expands on open */
-  max-width: 13px;
-  padding-left: 3px;
-  padding-right: 3px;
-  transition: max-width 0.2s cubic-bezier(0.16, 1, 0.3, 1);   /* easeOutExpo */
-}
-/* The entire collapsed column is clickable (handled in main.js), so show the
-   pointer cursor across it — not just on the triangle. */
-.collapsible:not(.open) { cursor: pointer; }
-/* At rest the horizontal label and body are hidden and the vertical label shows. */
-.collapsible .section-label { display: none; }
-.collapsible .section-body {
-  display: none;
-  /* Indent so the options align under the horizontal section label (past the
-     toggle + head gap), not under the triangle/vertical label. */
-  margin-left: calc(13px + 6px);
-}
-.collapsible.open {
-  /* Snug to the widest content so the width animation runs (almost) its full
-     course instead of the box snapping to content size early. */
-  max-width: 120px;
-}
-/* CMYK holds a wide ICC profile dropdown — it needs more room than the default
-   120px cap. Libraries holds a row per library (name + space dropdown). */
-.section-cmyk.open { max-width: 240px; }
-.section-libraries.open { max-width: 380px; }
-.collapsible.open .section-label { display: block; }
-.collapsible.open .section-body { display: flex; }
-.collapsible.open .section-vlabel { opacity: 0; pointer-events: none; }
-
-/* Animated collapse (.collapsing is added by JS, removed when the width
-   transition ends): the body/label stay fully opaque and are simply cropped/
-   revealed by the shrinking box, while the vertical label fades IN. They occupy
-   different columns, so no conflict. */
-.collapsible.collapsing .section-label { display: block; }
-.collapsible.collapsing .section-body { display: flex; }
-.collapsible.collapsing .section-vlabel { opacity: 1; }
-
-/* During the width animation the section narrows past its content width. Pin the
-   head and body to their intrinsic width so they DON'T reflow/wrap as the box
-   shrinks — they're simply clipped by the section's overflow:hidden instead. */
-.collapsible .section-head,
-.collapsible .section-body { width: max-content; }
-
-/* Bodies fill the remaining column height so the SETUP hex field stretches. */
+/* Bodies fill the remaining column height. */
 .section-body { flex: 1 1 auto; min-height: 0; }
 
-/* SETUP keeps the original (un-reduced) horizontal breathing room: the global
-   --section-gap was halved for the collapsible sections, so add the difference
-   back as margin on each side of SETUP. */
-.section-setup {
-  margin-inline: calc(32px - var(--section-gap));
-}
+/* The divider-to-State gap is 60% wider than the frame's section gap (user
+   decision 2026-10-21): 16px → 25.6px. */
+.section-setup { margin-left: calc(var(--section-gap) * 0.6); }
 
-/* The last section faces the frame on its right, so inset it to match the
-   sections' top/bottom breathing room instead of colliding with the outline. */
-.section-export { margin-right: var(--tools-vpad); }
+/* The last section (State) faces the frame on its right, so inset it to match
+   the sections' top/bottom breathing room instead of colliding with the
+   outline. */
+.top-ui > :last-child { margin-right: var(--tools-vpad); }
 
 /* 1px dividers between tool sections. Stretch to the content box, inset by the
    same vertical pad as the sections so they don't touch the frame. */
@@ -301,7 +252,7 @@ body.light-bg .section-divider { background: rgba(0,0,0,0.2); }
   --gt-ink: rgba(255,255,255,0.4);       /* pill line + dot, off */
   --gt-ink-on: rgba(255,255,255,0.85);   /* pill line + dot, on */
   position: absolute;
-  top: 14px;
+  top: 14px;      /* top-left of the color map panel (back here 2026-10-21, after a spell bottom-left) */
   left: 16px;
   z-index: 1;
   display: flex;
@@ -381,8 +332,11 @@ canvas {
 
 #gamut-boundary {
   cursor: crosshair;
-  transition-duration: 0.1s;
+  transition: none;
 }
+/* Only near the lightness extremes (last 1% at each end), where the boundary
+   morphs into the edge circle, does it ease (picker.js adds .eased). */
+#gamut-boundary.eased { transition: all 0.1s; }
 
 body.disc-dragging-single #disc-overlay,
 body.disc-dragging-single #disc-overlay * { cursor: none !important; }
@@ -400,17 +354,24 @@ body.disc-dragging-single.cursor-outside-disc #disc-overlay * { cursor: auto !im
   corner-shape: var(--squircle-shape);
 }
 
-.hex-panel {
+/* The State section: the State console (state-console.js) — one swatch per
+   line, never wrapped, wide enough for hex | p3 | name | CMYK (longer lines
+   scroll sideways). (The + button moved to the color map panel.) */
+.section-setup .hex-panel {
   position: relative;
   display: flex;
   flex-direction: column;
   padding: 4px 0;
-  width: 69px;
+  width: 380px;
   gap: 17px;
 }
 
 .hex-input {
-  flex: 1 1 auto;
+  /* Exactly ten lines tall — the palette's maximum (MAX_COLORS) — rather than
+     the full column (user decision 2026-10-21): 10 × (11px × 1.85) + 6px
+     padding top and bottom + the 1px border. */
+  flex: 0 0 auto;
+  height: calc(10 * 11px * 1.85 + 12px + 2px);
   width: 100%;
   box-sizing: border-box;
   --input-fg: rgba(255,255,255,0.2);
@@ -424,11 +385,12 @@ body.disc-dragging-single.cursor-outside-disc #disc-overlay * { cursor: auto !im
   color: var(--input-fg);
   font-size: 11px;
   line-height: 1.85;
-  padding: 6px 0px;
-  text-align: center;
+  padding: 6px 10px;
+  text-align: left;
+  white-space: pre;
   resize: none;
   outline: none;
-  overflow-y: auto;
+  overflow: auto;
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 
@@ -445,6 +407,12 @@ body.light-bg .hex-input:focus {
   --input-fg: rgba(0,0,0,1);
   border-color: rgba(0,0,0,0.2);
 }
+/* Long lines scroll sideways on a thin, faint scrollbar. */
+.hex-input { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.18) transparent; }
+body.light-bg .hex-input { scrollbar-color: rgba(0,0,0,0.18) transparent; }
+/* An edit that the picker can't reach (the status line says why). */
+.hex-input.invalid,
+body.light-bg .hex-input.invalid { border-color: rgba(255,92,92,0.8); }
 
 /* Handles */
 .handle {
@@ -477,34 +445,40 @@ body.light-bg .hex-input:focus {
   filter: drop-shadow(0px 0px 0px rgba(0,0,0,0));
 }
 
+/* Add swatch — an outlined 24px circle with a + in the bottom-right corner of
+   the top UI frame (user decisions 2026-10-21; it was top-left of the color map
+   panel). Inked like the frame's own chrome, so it follows the page's
+   light/dark background. */
 #add-color-btn {
-  flex: 0 0 auto;
-  width: 100%;
-  height: 26px;
-  margin-bottom: 17px;
-  border: 0;
-  border-radius: 999px;
-  padding: 0 0 1px 0;
+  --ab-ink: rgba(255,255,255,0.4);
+  --ab-ink-hover: rgba(255,255,255,0.85);
+  position: absolute;
+  right: 24px;     /* placed from the user's mockup (2026-10-21) */
+  bottom: 22px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1.75px solid var(--ab-ink);   /* = the handles' line (HANDLE_SW, the lightness pill) */
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ab-ink);
   cursor: pointer;
   user-select: none;
-  font: 15px/1 'SF Mono', 'Fira Code', monospace;
-  font-weight: bold;
-  --btn-bg: rgba(255,255,255,0.25);
-  --btn-fg: rgba(0,0,0,0.7);
-  --btn-fg-hover: #000;
-  background: var(--btn-bg);
-  color: var(--btn-fg);
-  opacity: 0.7;
-  transition: color 0.15s ease, opacity 0.15s ease;
 }
-
 body.light-bg #add-color-btn {
-  --btn-bg: rgba(0,0,0,0.25);
-  --btn-fg: rgba(255,255,255,0.7);
-  --btn-fg-hover: #fff;
+  --ab-ink: rgba(0,0,0,0.4);
+  --ab-ink-hover: rgba(0,0,0,0.8);
 }
-
-#add-color-btn:hover:not(:disabled) { color: var(--btn-fg-hover); opacity: 1; }
+#add-color-btn svg { width: 12px; height: 12px; display: block; }
+#add-color-btn path { stroke: currentColor; stroke-width: 2; fill: none; }   /* 1 unit = 1px: exactly 2px */
+#add-color-btn:hover:not(:disabled) { border-color: var(--ab-ink-hover); color: var(--ab-ink-hover); }
+#add-color-btn:focus { outline: none; }
+#add-color-btn:focus-visible { border-color: var(--ab-ink-hover); color: var(--ab-ink-hover); }
 #add-color-btn:disabled { opacity: 0.35; cursor: default; }
 
 /* Libraries panel */
@@ -520,134 +494,227 @@ body.light-bg #add-color-btn {
   color: var(--ui-label);
   --lib-line: rgba(255,255,255,0.38);
   --lib-line-soft: rgba(255,255,255,0.18);
+  --lib-line-off: rgba(255,255,255,0.1);          /* a disabled row's outline */
+  --lib-line-off-hover: rgba(255,255,255,0.3);    /* a disabled row's (quieter) hover outline */
 }
-body.light-bg .library-panel { --lib-line: rgba(0,0,0,0.38); --lib-line-soft: rgba(0,0,0,0.18); }
+body.light-bg .library-panel { --lib-line: rgba(0,0,0,0.38); --lib-line-soft: rgba(0,0,0,0.18); --lib-line-off: rgba(0,0,0,0.1); --lib-line-off-hover: rgba(0,0,0,0.3); }
 .library-panel [hidden] { display: none !important; }
 
-/* One grid per row: grab · on (14px checkbox) · name · space · remove. The space column fits
-   its widest label ("CIELAB D50", 53px at 10px) + padding + the chevron. */
+/* One outlined box per library (the dropdowns' 1px line, 6px corners):
+   check box · name · +CMYK badge (only with a CMYK add-on) · ▾ menu. Fixed
+   columns, so the ▾ lines up whether or not a row has a badge. */
 .lib-row {
   display: grid;
-  grid-template-columns: 8px 14px 140px 78px 11px;
+  grid-template-columns: 14px minmax(0, 1fr) auto 14px;
   column-gap: 6px;
   align-items: center;
+  width: 196px;
+  height: 24px;
+  box-sizing: border-box;
+  padding: 0 3px 0 4px;
+  border: 1px solid var(--lib-line);
+  border-radius: 6px;   /* = the + button below */
+  cursor: pointer;      /* the row toggles the library on and off */
 }
-.lib-list { display: flex; flex-direction: column; gap: 3px; }
+.lib-row:focus { outline: none; }
+.lib-row:focus-visible { border-color: var(--ui-label-hover); }
+.lib-list { display: flex; flex-direction: column; gap: 4px; }
 
-.lib-grab {
-  display: flex;
-  width: 8px;
+/* The check box before the name: the UI checkbox's look (14px, 4px corners,
+   the check polygon), showing whether the book is on — the whole row is the
+   toggle (user decision 2026-10-22). Inked like the name, so it fades and
+   lights with it. */
+.lib-check {
+  grid-column: 1;
+  position: relative;
+  box-sizing: border-box;
+  width: 14px;
   height: 14px;
-  align-items: center;
-  justify-content: center;
-  cursor: grab;
-  opacity: 0.45;
-  touch-action: none;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  color: var(--ui-label);
 }
-.lib-grab svg { width: 6px; height: 10px; }
-.lib-row.dragging { opacity: 0.55; }
-.lib-row.dragging .lib-grab { cursor: grabbing; }
+.lib-row:not(.lib-off) .lib-check::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 7.46px;
+  transform: translate(-50%, -50%);
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16.17 15.09'%3E%3Cpolygon points='13.51 0 5.61 9.8 2.46 6.75 0 9.21 5.88 15.09 16.17 2.2 13.51 0'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16.17 15.09'%3E%3Cpolygon points='13.51 0 5.61 9.8 2.46 6.75 0 9.21 5.88 15.09 16.17 2.2 13.51 0'/%3E%3C/svg%3E") center / contain no-repeat;
+}
 
-.lib-row input[type="checkbox"]:hover { color: var(--ui-label-hover); }
-
-.lib-name-wrap { display: flex; align-items: center; gap: 4px; min-width: 0; }
+/* The name reads as plain text; Rename makes it editable (.renaming). */
 .lib-name {
+  grid-column: 2;
   font: inherit;
   font-size: 10px;
   color: var(--ui-label);
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  padding: 2px 4px;
+  border: none;
+  border-radius: 3px;
+  padding: 2px 3px;
+  margin: 0 -3px;
   min-width: 0;
-  flex: 1 1 auto;
   text-overflow: ellipsis;
+  pointer-events: none;   /* clicks fall through to the row (the toggle) */
 }
-.lib-name:hover { border-color: var(--lib-line-soft); }
-.lib-name:focus { outline: none; border-color: var(--lib-line); color: var(--ui-label-hover); }
+.lib-name:focus { outline: none; }
+.lib-row.renaming .lib-name {
+  pointer-events: auto;
+  cursor: text;
+  color: var(--ui-label-hover);
+  background: var(--lib-line-soft);
+}
 
-/* [CMYK] add-on pill; its × shows on hover and removes just the add-on. */
+/* CMYK add-on badge — the swatches' .region-badge look, filled with the row
+   outline's own color (--lib-line, which flips for a light background), text
+   knocked out to the page color behind it. Not removable. */
 .lib-cmyk {
-  flex: 0 0 auto;
+  grid-column: 3;
+  /* "+CMYK", bold 9px, in a 15px-tall box padded 4px each side (user
+     decisions 2026-10-21). */
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  font-size: 10px;              /* = the input-space dropdown beside it */
-  height: 20px;                 /* = the input-space dropdown beside it */
+  justify-content: center;
   box-sizing: border-box;
-  padding: 0 5px;
-  border: 1px solid var(--lib-line);
+  height: 15px;
+  padding: 0 4px;
+  background: var(--lib-line);
   border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--body-bg, #666);
 }
-.lib-cmyk-x { display: none; width: 8px; height: 8px; cursor: pointer; opacity: 0.7; }
-.lib-cmyk-x svg { width: 8px; height: 8px; display: block; }
-.lib-cmyk:hover .lib-cmyk-x { display: inline-flex; }
-.lib-cmyk-x:hover { opacity: 1; }
 
-.lib-space {
+/* ▾ — opens the row's menu. */
+.lib-menu-btn {
+  grid-column: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  color: var(--ui-label);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.lib-menu-btn svg { width: 8px; height: 5px; display: block; }
+.lib-menu-btn:hover, .lib-row.menu-open .lib-menu-btn { color: var(--ui-label-hover); }
+.lib-menu-btn:focus { outline: none; }
+.lib-menu-btn:focus-visible { color: var(--ui-label-hover); }
+
+/* A disabled library: faded well below an active one (user decisions
+   2026-10-21) — name, badge and ▾ at 20% of normal, outline 10%. Hovered, it
+   lifts quietly: outline to 30%, name to 45%, and the ▾ to 45% when pointed at
+   or while its menu is open. */
+.lib-row.lib-off { border-color: var(--lib-line-off); }
+.lib-row.lib-off .lib-check,
+.lib-row.lib-off .lib-name,
+.lib-row.lib-off .lib-cmyk,
+.lib-row.lib-off .lib-menu-btn { opacity: 0.2; }
+.lib-row.lib-off .lib-menu-btn:hover,
+.lib-row.lib-off.menu-open .lib-menu-btn { opacity: 0.45; }
+
+/* Hover (the row is the on/off toggle) lights the border and, on an active
+   book, the name (user decisions 2026-10-21; at first border only). After the
+   rules above; a disabled book's quieter hover is set at the end of the file. */
+.lib-row:hover { border-color: var(--ui-label-hover); }
+.lib-row:not(.lib-off):hover .lib-check,
+.lib-row:not(.lib-off):hover .lib-name { color: var(--ui-label-hover); }
+
+/* The row menu and its "Set input space" submenu, floating at the page level. */
+.lib-menu {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  min-width: 112px;
+  padding: 4px;
+  box-sizing: border-box;
+  font-size: 11px;
+  color: rgba(255,255,255,0.85);
+  background: #2c2c2c;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  user-select: none;
+  --lib-menu-hover: rgba(255,255,255,0.1);
+}
+body.light-bg .lib-menu {
+  color: rgba(0,0,0,0.85);
+  background: #f3f3f3;
+  border-color: rgba(0,0,0,0.12);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+  --lib-menu-hover: rgba(0,0,0,0.07);
+}
+.lib-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  white-space: nowrap;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.lib-menu-item:hover:not(:disabled),
+.lib-menu-item:focus-visible,
+.lib-menu-item.open { background: var(--lib-menu-hover); outline: none; }
+.lib-menu-item:focus { outline: none; }
+.lib-menu-item:disabled { opacity: 0.45; cursor: default; }
+.lib-menu-label { flex: 1 1 auto; }
+.lib-menu-more { margin-left: 14px; opacity: 0.7; }
+/* Submenu check mark: the UI check polygon, shown on the current space. */
+.lib-menu-mark { flex: 0 0 auto; width: 8px; height: 7.46px; }
+.lib-menu-item[aria-checked="true"] .lib-menu-mark {
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16.17 15.09'%3E%3Cpolygon points='13.51 0 5.61 9.8 2.46 6.75 0 9.21 5.88 15.09 16.17 2.2 13.51 0'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16.17 15.09'%3E%3Cpolygon points='13.51 0 5.61 9.8 2.46 6.75 0 9.21 5.88 15.09 16.17 2.2 13.51 0'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* "Compatible files: …" — always shown, beside the IMPORT button. */
+.lib-files { font-size: 10px; line-height: 12px; opacity: 0.7; white-space: nowrap; }
+
+/* IMPORT — a library row's outline and corners, 22px tall, only as wide as its
+   word, with the compatible-files note beside it (user decisions 2026-10-21). */
+.lib-import-row { display: flex; align-items: center; gap: 8px; }
+.lib-add {
+  flex: 0 0 auto;
   font: inherit;
   font-size: 10px;
-  color: var(--ui-label);
-  -webkit-appearance: none;
-  appearance: none;
-  border: 1px solid var(--lib-line);
-  border-radius: 4px;
-  padding: 2px 16px 2px 5px;
-  width: 100%;
   box-sizing: border-box;
-  cursor: pointer;
-  background:
-    linear-gradient(45deg, transparent 50%, var(--ui-label) 50%) right 8px center / 4px 4px no-repeat,
-    linear-gradient(135deg, var(--ui-label) 50%, transparent 50%) right 4px center / 4px 4px no-repeat,
-    transparent;
-}
-.lib-space:focus { outline: none; border-color: var(--ui-label-hover); }
-.lib-space:disabled { cursor: default; opacity: 0.55; background: transparent; padding-right: 5px; }
-
-.lib-del { display: flex; width: 11px; height: 11px; cursor: pointer; opacity: 0.45; }
-.lib-del svg { width: 11px; height: 11px; display: block; }
-.lib-del:hover { opacity: 1; }
-
-.lib-empty { font-size: 10px; opacity: 0.7; white-space: nowrap; }
-
-.lib-actions { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
-.lib-add {
-  font: inherit;
-  font-size: 13px;
-  line-height: 1;
-  width: 24px;
-  height: 18px;
-  padding: 0;
+  height: 22px;    /* 1px less padding all around than before (24px, 0 9px) */
+  padding: 0 8px;
   color: var(--ui-label);
   background: transparent;
   border: 1px solid var(--lib-line);
   border-radius: 6px;
   cursor: pointer;
 }
-.lib-add:hover { color: var(--ui-label-hover); border-color: var(--ui-label-hover); }
-.lib-export {
-  font: inherit;
-  font-size: 10px;
-  color: var(--ui-label);
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  text-decoration: underline;
-  text-decoration-color: var(--lib-line);
-  text-underline-offset: 2px;
-}
-.lib-export:hover:not(:disabled) { color: var(--ui-label-hover); }
-.lib-export:disabled { opacity: 0.35; cursor: default; }
+.lib-add:hover:not(:disabled) { color: var(--ui-label-hover); border-color: var(--ui-label-hover); }
+.lib-add:disabled { opacity: 0.35; cursor: default; }   /* the 5-library limit is reached */
+.lib-add:focus { outline: none; }
+.lib-add:focus-visible { border-color: var(--ui-label-hover); }
 
 
-/* The UI checkbox — every visible checkbox in the tool (library on/off, the
-   Libraries and CMYK options), matching the swatch's LIBRARY checkbox
+/* The UI checkbox — every visible checkbox in the tool (the
+   Libraries and CMYK options), matching the swatch's BOOK checkbox
    (.cmyk-alt-check): a 14px rounded rect with the CMYK badge's 4px radius and a
    check mark when checked. Drawn in the current text color (inherited from its
    label), so it brightens with the label on hover. The mark is one filled
-   polygon, masked from the same SVG the LIBRARY checkbox uses. */
-.lib-row input[type="checkbox"],
+   polygon, masked from the same SVG the BOOK checkbox uses. */
 .pantone-options input[type="checkbox"],
 .cmyk-check input[type="checkbox"] {
   -webkit-appearance: none;
@@ -664,7 +731,6 @@ body.light-bg .library-panel { --lib-line: rgba(0,0,0,0.38); --lib-line-soft: rg
   color: inherit;
   cursor: pointer;
 }
-.lib-row input[type="checkbox"]:checked::before,
 .pantone-options input[type="checkbox"]:checked::before,
 .cmyk-check input[type="checkbox"]:checked::before {
   content: "";
@@ -690,8 +756,9 @@ body.light-bg .library-panel { --lib-line: rgba(0,0,0,0.38); --lib-line-soft: rg
 }
 .pantone-options label {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 5px;
+  white-space: nowrap;   /* one line (user decision 2026-10-21) */
   cursor: pointer;
 }
 .pantone-options label:hover {
@@ -802,7 +869,7 @@ body.light-bg .library-panel { --lib-line: rgba(0,0,0,0.38); --lib-line-soft: rg
   top: 0;
   left: 0;
   right: 0;
-  height: calc(var(--swatch-padding) * 2 + 13px);
+  height: calc(var(--swatch-padding) * 2 + 13px + var(--srgb-extra));
   z-index: 1;
 }
 
@@ -904,16 +971,37 @@ body.light-bg .swatch-container::before {
   top: var(--swatch-padding);
   left: var(--swatch-padding);
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px;
+  gap: 1px 4px;
   /* Leave room for the delete button at the right. */
   padding-right: 20px;
   z-index: 1;
 }
+/* Out of room (.wrapped, set in JS — fitTopBars — from the row's one-line
+   width, so it can't flip-flop): two lines, the badge alone on the first (it
+   never reaches the delete button, so the row drops its right padding) and the
+   values on the second, wrapping further only if even they don't fit (user
+   decision 2026-10-21; replaced a 4-line stack for swatches ≤150px). The
+   badge's 100% right margin is what forces the break. */
+.swatch-top-bar > .p3-readout,
+.swatch-top-bar > .cmyk-readout { min-width: 0; flex-wrap: wrap; row-gap: 1px; }
+.swatch-top-bar.wrapped { padding-right: 0; }
+.swatch-top-bar.wrapped .region-badge { margin-right: 100%; }
+.swatch-top-bar.wrapped .p3-readout,
+.swatch-top-bar.wrapped .cmyk-readout { justify-content: flex-start; }
+/* Last resort, when even the CMYK value alone is wider than its region: it may
+   break after a hyphen ("52-43-" / "44-17"). */
+.swatch-top-bar.wrapped .cmyk-v { white-space: normal; }
+
+/* How much taller a wrapped label row is (set per swatch in JS, fitTopBars):
+   what sits below it moves down by that much — the out-of-sRGB strip and the
+   P3 row under it, and the CMYK region's slider. */
+.swatch-container { --srgb-extra: 0px; --cmyk-extra: 0px; }
 
 /* When out-of-srgb, the p3 top bar needs to clear the srgb strip above. */
 .swatch-container.out-of-srgb .color-swatch.p3 .swatch-top-bar {
-  top: calc(var(--swatch-padding) * 3 + 13px);
+  top: calc(var(--swatch-padding) * 3 + 13px + var(--srgb-extra));
 }
 
 /* Swatch icons */
@@ -1109,6 +1197,12 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
   padding: 0 4px;
 }
 .swatch-container.light .promoted-cell .match-label { color: rgba(0,0,0,0.3); }
+/* Out of room (.wrapped, set in JS — fitPromoted): the library badge alone on
+   the first line, the name + icons on the second, the name breaking at spaces
+   only if even that doesn't fit (the swatches' label-row rule, 2026-10-21). */
+.promoted-cell { flex-wrap: wrap; row-gap: 1px; }
+.promoted-cell.wrapped .region-badge { margin-right: 100%; }
+.promoted-cell.wrapped .match-label { padding-left: 0; white-space: normal; }
 
 
 .match-cell {
@@ -1166,7 +1260,7 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
   transition: background-color 0.2s ease;
 }
 
-.swatch-container.light .chip-fill {
+.match-cells.chips-light .chip-fill {   /* the dividers between chips follow the chips' ink */
   border-right-color: rgba(0,0,0,0.2);
 }
 
@@ -1187,7 +1281,7 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
   background: rgba(255,255,255,0.2);
   pointer-events: none;
 }
-.swatch-container.light .match-cell.hue-match:not(.chip-rightmost) .chip-fill::after {
+.match-cells.chips-light .match-cell.hue-match:not(.chip-rightmost) .chip-fill::after {
   background: rgba(0,0,0,0.2);
 }
 
@@ -1202,7 +1296,10 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
   color: rgba(255,255,255,0.3);
   transition: opacity 0.1s ease;
 }
-.swatch-container.light .chip-gamut-warning { color: rgba(0,0,0,0.3); }
+/* Chip ink — labels, gamut icons, hue marker — is dark when .chips-light: the
+   lineup's lightest and darkest chip average above middle gray (set in
+   pantone.js), not when the swatch is light (user decision 2026-10-22). */
+.match-cells.chips-light .chip-gamut-warning { color: rgba(0,0,0,0.3); }
 /* The gamut icon brightens when hovering the chip body (the bar or the icon —
    not the empty strip above the bar); the promoted caution brightens with the
    whole promoted-cell group — name, caution, or close box. */
@@ -1210,7 +1307,7 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
 .promoted-gamut-warning:hover {
   color: rgba(255,255,255,1);
 }
-.swatch-container.light .match-cell:has(.chip-fill:hover, .chip-gamut-warning:hover) .chip-gamut-warning,
+.match-cells.chips-light .match-cell:has(.chip-fill:hover, .chip-gamut-warning:hover) .chip-gamut-warning,
 .swatch-container.light .promoted-gamut-warning:hover {
   color: rgba(0,0,0,1);
 }
@@ -1234,14 +1331,16 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
   display: none;
 }
 
-.swatches.metallic-texture .match-cell.metallic .noise-overlay {
+/* .metallic = a color whose library is metallic with "Simulate metallic
+   texture" on (set per library in its row menu). */
+.match-cell.metallic .noise-overlay {
   display: block;
 }
 
 /* Field-level metallic texture (first child of .match-cells, so it sits under the
    chips): shown over the color field while a metallic chip is hovered or a
    metallic Pantone is promoted. */
-.swatches.metallic-texture .match-cells.metallic-field > .match-field-noise {
+.match-cells.metallic-field > .match-field-noise {
   display: block;
 }
 
@@ -1305,15 +1404,15 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
 
 
 .swatch-container.light .match-label { color: rgba(0,0,0,0.5); }
-.swatch-container.light .match-cell .match-label { color: rgba(0,0,0,0.3); }
-.swatch-container.light .match-cell:has(.chip-fill:hover, .chip-gamut-warning:hover) .match-label {
+.match-cells.chips-light .match-cell .match-label { color: rgba(0,0,0,0.3); }
+.match-cells.chips-light .match-cell:has(.chip-fill:hover, .chip-gamut-warning:hover) .match-label {
   color: rgba(0,0,0,1);
 }
 
 /* The promoted pantone's chip in the match row keeps its label in the
    highlighted (hover-bright) state so you can see which chip is pinned. */
 .match-cell.promoted-match .match-label { color: rgba(255,255,255,1); }
-.swatch-container.light .match-cell.promoted-match .match-label { color: rgba(0,0,0,1); }
+.match-cells.chips-light .match-cell.promoted-match .match-label { color: rgba(0,0,0,1); }
 
 @container (max-width: 80px) {
   .match-label {
@@ -1375,7 +1474,7 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
    transition-hide, which is what used to flash it off-then-on for 250ms. */
 .match-cells.has-promotion .match-cell.promoted-match .promoted-chip { opacity: 1; }
 
-.swatch-container.light .hue-marker { color: rgba(0,0,0,0.3); }
+.match-cells.chips-light .hue-marker { color: rgba(0,0,0,0.3); }
 
 /* Chips collapse on promotion only in hide-matches mode — hide their hue-markers
    with them. In show-chips mode the chips stay, so the hue indicator stays too. */
@@ -1423,7 +1522,7 @@ body.swatch-dragging * { cursor: grabbing !important; }
 *:focus, *:focus-visible { outline: none; }
 * { -webkit-tap-highlight-color: transparent; }
 ::-moz-focus-inner { border: 0; padding: 0; }
-.cmyk-profile-select:focus { box-shadow: none; border-color: var(--ui-label-hover); }   /* as .lib-space */
+.cmyk-profile-select:focus { box-shadow: none; border-color: var(--ui-label-hover); }   /* as the old .lib-space */
 
 /* While dragging the disc, the lightbar or a swatch, nothing may become
    selected — otherwise a hex readout / the hex textarea gets highlighted
@@ -1458,37 +1557,29 @@ body.lightbar-dragging, body.lightbar-dragging * {
 .p3-readout > span,
 .cmyk-readout > span { white-space: nowrap; }
 
-/* Narrow swatch: stack the readout as four lines (P3 / r / g / b) instead
-   of letting one line overflow. The swatch-container is the size container. */
-@container (max-width: 150px) {
-  .p3-readout,
-  .cmyk-readout {
-    flex-direction: column;
-    align-items: flex-end;
-    line-height: 11px;
-  }
-}
 
 .swatch-container.out-of-srgb .p3-readout { display: flex; }
 .swatch-container.light .p3-readout,
 .swatch-container.light .cmyk-readout { color: rgba(0,0,0,0.3); }
 
-/* "LIBRARY" checkbox below the CMYK readout, shown only when the swatch's
-   promoted color has a CMYK alternate in its library (.cmyk-has-lib). Checked
-   (.cmyk-lib-on, aria-checked) = the swatch's CMYK output is the library's
-   alternate. A custom box: a rounded rect with the CMYK badge's 4px radius, an
-   × inside when checked. Colored like the CMYK readout and badge — 0.3 white
-   (0.3 black on a light region) — and full strength on hover, as the region's
-   icons are. */
+/* "BOOK" checkbox, inline on the CMYK readout's row after the value (user
+   decision 2026-10-21; it was "LIBRARY", on its own row below). Shown only when
+   the swatch's promoted color has a CMYK alternate in its book (.cmyk-has-lib).
+   Checked (.cmyk-lib-on, aria-checked) = the swatch's CMYK output is the book's
+   alternate. A custom box: a rounded rect with the CMYK badge's 4px radius, a
+   check inside when checked. Colored like the CMYK readout and badge — 0.3
+   white (0.3 black on a light region) — and full strength on hover, as the
+   region's icons are. It sits inside the (pointer-transparent) readout, so it
+   opts back into the pointer; a wrapped row keeps it on the value's line. */
 .color-swatch.cmyk .cmyk-alt-check {
-  position: absolute;
-  top: calc(var(--swatch-padding) + 20px);   /* just under the CMYK label row */
-  left: calc(var(--swatch-padding) - 2px);   /* align the box with the readout */
-  z-index: 1;
+  position: relative;
+  align-self: center;
   display: none;
   align-items: center;
   gap: 5px;
-  padding: 2px;
+  padding: 0 2px;
+  margin-left: 2px;
+  pointer-events: auto;
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -1498,7 +1589,7 @@ body.lightbar-dragging, body.lightbar-dragging * {
   letter-spacing: inherit;   /* the CMYK badge's tracking (buttons don't inherit it) */
   color: rgba(255,255,255,0.3);
 }
-.swatch-container.cmyk-has-lib .color-swatch.cmyk .cmyk-alt-check { display: flex; }
+.swatch-container.cmyk-has-lib .color-swatch.cmyk .cmyk-alt-check { display: inline-flex; }
 .color-swatch.cmyk.light .cmyk-alt-check { color: rgba(0,0,0,0.3); }
 .color-swatch.cmyk:not(.light) .cmyk-alt-check:hover { color: rgb(255,255,255); }
 .color-swatch.cmyk.light .cmyk-alt-check:hover { color: rgb(0,0,0); }
@@ -1526,8 +1617,6 @@ body.lightbar-dragging, body.lightbar-dragging * {
 }
 .cmyk-alt-check[aria-checked="true"] .cmyk-alt-mark { display: block; }
 .cmyk-alt-label { letter-spacing: inherit; }
-/* With the checkbox showing, the out-of-gamut slider moves down below it. */
-.swatch-container.cmyk-has-lib .cmyk-swatch-bias { top: calc(var(--swatch-padding) + 44px); }
 
 /* The CMYK region's chrome follows the SOFT PROOF's own lightness (.light is set
    on .color-swatch.cmyk in updateSwatchCMYK), NOT the input color's — the proof
@@ -1548,7 +1637,9 @@ body.lightbar-dragging, body.lightbar-dragging * {
 .color-swatch.cmyk.light .cmyk-swatch-bias { --bias-line: rgb(0,0,0); --bias-fg: rgb(0,0,0); }
 
 /* CMYK section: ICC profile picker */
-.cmyk-body { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 4px 10px 0 0; line-height: 1.4; font-size: 11px; }
+/* Spacing set from the user's mockup (2026-10-21): row centers 23.5px apart
+   (header → ICC profile) and 21.5px (ICC profile → gamut checkbox). */
+.cmyk-body { display: flex; flex-direction: column; gap: 0; align-items: flex-start; padding: 1px 10px 0 0; line-height: 1.4; font-size: 11px; }
 /* Inner wrapper: single max-content grid column so the select's intrinsic size
    drives the width and the slider below stretches to match. */
 .cmyk-controls { display: flex; flex-direction: column; gap: 6px; }
@@ -1557,7 +1648,7 @@ body.lightbar-dragging, body.lightbar-dragging * {
 .cmyk-profile-label { font-size: 11px; color: var(--ui-label); white-space: nowrap; }
 
 /* ICC profile dropdown: the same control as the Libraries input-space dropdown
-   (.lib-space) — 10px text, 20px tall, 4px corners, drawn chevron, no native
+   used to match (the old .lib-space) — 10px text, 20px tall, 4px corners, drawn chevron, no native
    chrome — sized to its widest label ("GRACoL 2006", 62px) + padding + chevron. */
 .cmyk-profile-select-wrap { position: relative; display: inline-flex; }
 .cmyk-profile-select {
@@ -1583,8 +1674,8 @@ body.light-bg .cmyk-profile-select { border-color: rgba(0,0,0,0.38); }
   display: flex;
   align-items: flex-start;
   align-self: flex-start;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 5px;
+  margin-top: 4.5px;
   font-size: 11px;
   line-height: 1.26;
   color: var(--ui-label);
@@ -1601,7 +1692,7 @@ body.light-bg .cmyk-profile-select { border-color: rgba(0,0,0,0.38); }
    alpha (0.3) and rises to 0.8 on hover or while dragging (:focus-within). */
 .cmyk-swatch-bias {
   position: absolute;
-  top: calc(var(--swatch-padding) + 22px);   /* clear the CMYK label row above */
+  top: calc(var(--swatch-padding) + 22px + var(--cmyk-extra));   /* clear the CMYK label row above */
   left: var(--swatch-padding);
   right: var(--swatch-padding);
   max-width: 111px;  /* 10px short of the gamut-icon's right edge for an all-2-digit
@@ -1676,3 +1767,22 @@ body.light-bg .cmyk-profile-select { border-color: rgba(0,0,0,0.38); }
   background: var(--bias-fg);
 }
 
+/* A disabled row's quieter hover (see above): outline 30%, name 45%. */
+.lib-row.lib-off:hover { border-color: var(--lib-line-off-hover); }
+.lib-row.lib-off:hover .lib-check,
+.lib-row.lib-off:hover .lib-name { opacity: 0.45; }
+
+/* ── No hover states in a switched-off section (user decision 2026-10-21) ──
+   With the Libraries or CMYK switch off, everything in that section looks the
+   same hovered as at rest. Kept last so these win over the hover rules above. */
+.section-libraries:not(.open) .lib-row.lib-off:hover { border-color: var(--lib-line-off); }
+.section-libraries:not(.open) .lib-row:not(.lib-off):hover { border-color: var(--lib-line); }
+.section-libraries:not(.open) .lib-row.lib-off:hover .lib-check,
+.section-libraries:not(.open) .lib-row.lib-off:hover .lib-name,
+.section-libraries:not(.open) .lib-row.lib-off .lib-menu-btn:hover { opacity: 0.2; }
+.section-libraries:not(.open) .lib-menu-btn:hover,
+.section-libraries:not(.open) .lib-row:hover .lib-check,
+.section-libraries:not(.open) .lib-row:hover .lib-name { color: var(--ui-label); }
+.section-libraries:not(.open) .lib-add:hover:not(:disabled) { color: var(--ui-label); border-color: var(--lib-line); }
+.section-libraries:not(.open) .pantone-options label:hover,
+.section-cmyk:not(.open) .cmyk-check:hover { color: var(--ui-label); }

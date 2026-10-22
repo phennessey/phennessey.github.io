@@ -455,7 +455,15 @@ export function srgbToOKHSL(r, g, b) {
   return { h: _hsl[0] / 360, s: _hsl[1], L: toeInv(_hsl[2]) };
 }
 
-/** Binary-search for the OKHSL saturation that yields a given OKLCH chroma. */
+/** Display P3 [0–1] → picker's {h, s, L} descriptor, like srgbToOKHSL (exact:
+ *  toOKLab gives back the same OKLab, even past the wheel's edge). */
+export function p3ToOKHSL(r, g, b) {
+  convert([r, g, b], DisplayP3, OKLab, _lab);
+  swatchHslFromLab(_lab, gamut, _hsl);
+  return { h: _hsl[0] / 360, s: _hsl[1], L: toeInv(_hsl[2]) };
+}
+
+/** The OKHSL saturation that yields a given OKLCH chroma (closed form). */
 export function sForChroma(h, targetC, lr) {
   // OKHSL's own inverse (labToHsl's chroma → s step) at this hue and
   // lightness: exact, and one getCs instead of the 25 OKHSL conversions a

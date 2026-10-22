@@ -6,13 +6,13 @@
 // later recomputes colors exactly), plus the library's settings and an optional
 // CMYK add-on. The imported file itself is not kept.
 //
-//   { id, name, active, format, fileName, importedAt,
+//   { id, name, active, format, fileName, importedAt, metallicTexture,
 //     family: 'rgb' | 'lab' | 'mixed',  space: a SPACES key or 'mixed',
 //     swatches: [{ n: name, m: 'rgb' | 'lab', v: [x, y, z] }],
 //     cmyk: null | { name, fileName, importedAt, map: { normalizedName: [c, m, y, k] } } }
 //
 // Libraries live in this browser's IndexedDB (one record, in list order), so
-// clearing site data removes them — hence "Export all libraries".
+// clearing site data removes them (re-import the original files then).
 
 import { detectSpace, normalizeName, EXPORT_TYPE } from "./library-formats.js";
 
@@ -86,7 +86,7 @@ export function libraryFromParsed(parsed, fileName) {
 /** Attach an ink-only (CMYK) file to the library it belongs with: any library
  *  sharing at least one swatch name, the most recently imported if several.
  *  Replaces that library's previous add-on. Returns the library, or null when
- *  nothing matches (the caller ignores the file). */
+ *  nothing matches or it already has this very add-on (nothing changes). */
 export function attachCMYK(libraries, parsed, fileName) {
   const map = {};
   for (const s of parsed.swatches) if (s.model === "cmyk") map[normalizeName(s.name)] = s.values.map(Number);
@@ -95,17 +95,16 @@ export function attachCMYK(libraries, parsed, fileName) {
     if (!lib.swatches.some(s => map[normalizeName(s.n)])) continue;
     if (!best || lib.importedAt > best.importedAt) best = lib;
   }
-  if (best) best.cmyk = { name: parsed.name, fileName, importedAt: Date.now(), map };
+  if (!best) return null;
+  // The same add-on imported again changes nothing.
+  if (best.cmyk && JSON.stringify(best.cmyk.map) === JSON.stringify(map)) return null;
+  best.cmyk = { name: parsed.name, fileName, importedAt: Date.now(), map };
   return best;
 }
 
-/** The "Export all libraries" file. */
-export function exportFile(libraries) {
-  return { type: EXPORT_TYPE, version: 1, exportedAt: new Date().toISOString(), libraries };
-}
-
-/** Libraries from an export file, with fresh ids so a re-import never collides
- *  with what's already here. */
+/** Libraries from an old "Export all libraries" file (the export feature was
+ *  removed 2026-10-21; its files still import), with fresh ids so a re-import
+ *  never collides with what's already here. */
 export function librariesFromExport(data) {
   if (!data || data.type !== EXPORT_TYPE || !Array.isArray(data.libraries)) return [];
   return data.libraries

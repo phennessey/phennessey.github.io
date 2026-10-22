@@ -8,6 +8,10 @@
 </head>
 <body>
   <div class="top-ui">
+    <!-- Add swatch: bottom-right corner of the top UI frame (user decision
+         2026-10-21). First child so the frame's last-section rules still see
+         the State section as last; it's absolutely positioned. -->
+    <button id="add-color-btn" type="button" aria-label="Add color" title="Add swatch"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1v10M1 6h10"/></svg></button>
 
     <div class="picker-wrap color-map-panel">
       <!-- P3 gamut switch: on = P3 mode, off = sRGB mode (see src/mode.js). -->
@@ -27,85 +31,61 @@
       </div>
     </div>
 
-    <div class="ui-section section-setup">
-      <div class="section-head">
-        <div class="section-label">Setup</div>
-      </div>
-      <div class="section-body hex-panel">
-        <textarea class="hex-input" spellcheck="false" autocomplete="off"></textarea>
-        <button id="add-color-btn" type="button" aria-label="Add color">+</button>
-      </div>
-    </div>
-
-    <div class="section-divider"></div>
-
-    <div class="ui-section section-libraries collapsible">
-      <div class="section-head">
-        <span class="section-toggle-box">
-          <input type="checkbox" class="section-toggle" id="toggle-libraries">
-          <span class="section-tri" aria-hidden="true"></span>
-        </span>
-        <label class="section-label" for="toggle-libraries">Libraries</label>
-      </div>
-      <div class="section-vlabel">Libraries</div>
-      <div class="section-body library-panel" id="library-panel">
-        <div class="lib-list" id="lib-list"></div>
-        <div class="lib-empty" id="lib-empty">No libraries yet. Import .ase, .acb,<br>.aco, .gpl, .csv or .json files.</div>
-        <div class="lib-actions">
-          <button type="button" class="lib-add" id="lib-add" aria-label="Import libraries" title="Import libraries">+</button>
-          <input type="file" id="lib-file" multiple hidden>
-          <button type="button" class="lib-export" id="lib-export">Export all libraries</button>
+    <!-- Libraries over CMYK, each switched on and off by the checkbox in its
+         header; never collapsible (user decisions 2026-10-21). The old empty
+         Export section is gone. -->
+    <div class="ui-column">
+      <div class="ui-section section-libraries checkable">
+        <div class="section-head">
+          <label class="section-check"><input type="checkbox" class="section-toggle" id="toggle-libraries"><span class="section-label">Libraries</span></label>
         </div>
-        <div class="pantone-options">
-          <label><input type="checkbox" id="toggle-metallic-texture"> Simulate texture<br>for metallic inks</label>
-          <label><input type="checkbox" id="toggle-hide-on-promote" checked> Hide matches<br>after promotion</label>
-        </div>
-      </div>
-    </div>
-
-    <div class="section-divider"></div>
-
-    <div class="ui-section section-cmyk collapsible">
-      <div class="section-head">
-        <span class="section-toggle-box">
-          <input type="checkbox" class="section-toggle" id="toggle-cmyk">
-          <span class="section-tri" aria-hidden="true"></span>
-        </span>
-        <label class="section-label" for="toggle-cmyk">CMYK</label>
-      </div>
-      <div class="section-vlabel">CMYK</div>
-      <div class="section-body cmyk-body">
-        <div class="cmyk-controls">
-          <div class="cmyk-profile-row">
-            <label class="cmyk-profile-label" for="cmyk-profile">ICC profile</label>
-            <div class="cmyk-profile-select-wrap">
-              <select class="cmyk-profile-select" id="cmyk-profile">
-                <option value="gracol">GRACoL 2006</option>
-                <option value="swop">U.S. SWOP v2</option>
-                <option value="fogra39">FOGRA39</option>
-              </select>
-            </div>
+        <div class="section-body library-panel" id="library-panel">
+          <div class="lib-list" id="lib-list"></div>
+          <div class="lib-import-row">
+            <button type="button" class="lib-add" id="lib-add" title="Import libraries">IMPORT</button>
+            <input type="file" id="lib-file" multiple hidden>
+            <div class="lib-files">Compatible files: .ase, .acb, .aco,<br>.gpl, .csv, .json</div>
+          </div>
+          <div class="pantone-options">
+            <label><input type="checkbox" id="toggle-hide-on-promote" checked> Hide matches after promotion</label>
           </div>
         </div>
-        <label class="cmyk-check">
-          <input type="checkbox" id="cmyk-show-boundary" checked>
-          <span>Show gamut boundary</span>
-        </label>
+      </div>
+
+      <div class="ui-section section-cmyk checkable">
+        <div class="section-head">
+          <label class="section-check"><input type="checkbox" class="section-toggle" id="toggle-cmyk"><span class="section-label">CMYK</span></label>
+        </div>
+        <div class="section-body cmyk-body">
+          <div class="cmyk-controls">
+            <div class="cmyk-profile-row">
+              <label class="cmyk-profile-label" for="cmyk-profile">ICC profile</label>
+              <div class="cmyk-profile-select-wrap">
+                <select class="cmyk-profile-select" id="cmyk-profile">
+                  <option value="gracol">GRACoL 2006</option>
+                  <option value="swop">U.S. SWOP v2</option>
+                  <option value="fogra39">FOGRA39</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <label class="cmyk-check">
+            <input type="checkbox" id="cmyk-show-boundary" checked>
+            <span>Show gamut boundary</span>
+          </label>
+        </div>
       </div>
     </div>
 
     <div class="section-divider"></div>
 
-    <div class="ui-section section-export collapsible">
+    <div class="ui-section section-setup">
       <div class="section-head">
-        <span class="section-toggle-box">
-          <input type="checkbox" class="section-toggle" id="toggle-export">
-          <span class="section-tri" aria-hidden="true"></span>
-        </span>
-        <label class="section-label" for="toggle-export">Export</label>
+        <div class="section-label">State</div>
       </div>
-      <div class="section-vlabel">Export</div>
-      <div class="section-body export-body"></div>
+      <div class="section-body hex-panel">
+        <textarea class="hex-input" spellcheck="false" autocomplete="off" aria-label="Swatch state, one swatch per line"></textarea>
+      </div>
     </div>
   </div>
   <div class="swatches"></div>
