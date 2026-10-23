@@ -6,9 +6,10 @@
 
 import {
   convert, OKLab, DisplayP3, sRGB,
-  toe, toeInv, toOKLab, to255, clamp01, sForChroma, chromaOf, inSRGB, cuspL, isSRGBMode,
+  toe, toeInv, toOKLab, to255, clamp01, sForChroma, chromaOf, inSRGB, cuspL, isSRGBMode, onRim,
   okhslHueTable, OKLab_to_LMS_M, LMS_to_linear_sRGB_M, LMS_to_linear_DisplayP3_M,
 } from './color.js';
+import { DOT_RADIUS } from './constants.js';
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -392,12 +393,17 @@ export function createPicker(S, cfg) {
   const discRadialGuides = svgEl('g', { 'pointer-events': 'none' });
   discOverlay.appendChild(discRadialGuides);
 
-  // Chroma-cusp marker on the lightbar: a thin horizontal line at the
-  // max-chroma lightness, shown while a Shift lightbar drag can snap to it.
-  const cuspLine = svgEl('line', {
-    x1: 0, x2: LB_WIDTH, 'stroke-width': '1', 'pointer-events': 'none', opacity: '0',
-  });
-  lightbarOverlay.appendChild(cuspLine);
+  // Chroma-cusp marker: a small diamond (a 5px square — a library dot's width
+  // + 2px — turned 45°) just outside the lightbar's right edge, at the selected
+  // swatch's hue's max-chroma lightness — always shown; Shift+drag snaps there
+  // (user decisions 2026-10-22; it was a Shift-only line, then a dot, and
+  // briefly a triangle tab).
+  const CUSP_DOT_GAP = 4;                          // px from the lightbar's edge to the diamond's near tip
+  const CUSP_SIDE = 2 * DOT_RADIUS + 2;                // 5px square
+  const CUSP_HALF = CUSP_SIDE * Math.SQRT1_2;           // half its diagonal
+  const CUSP_X = (LB_WIDTH + CUSP_DOT_GAP + CUSP_HALF).toFixed(2);
+  const cuspDot = svgEl('polygon', { 'pointer-events': 'none', opacity: '0' });
+  lightbarOverlay.appendChild(cuspDot);
 
   // Mesh lines between multi-selected handles. Owned by the picker;
   // `updateMesh` takes the edge list and a point lookup so the picker
@@ -650,27 +656,27 @@ export function createPicker(S, cfg) {
     }
   }
 
-  // Position/show the chroma-cusp marker. Visible only when a single-color
-  // Shift lightbar drag could snap to it: pointer on the lightbar, Shift held,
-  // Meta not (Meta is lock-chroma). Colored for contrast at that lightness.
-  function updateCuspLine() {
+  // Position/show the chroma-cusp diamond: whenever exactly one swatch is selected
+  // and it sits on the wheel's rim (full saturation — the cusp only means
+  // something when chroma is maxed; user decision 2026-10-23), at its hue's cusp.
+  // It sits on the color map panel, whose tint follows the selected swatch's
+  // lightness, so it's black or white (30%) by that.
+  function updateCuspDot() {
     const single = S.activeIndex !== -1 && !S.isMultiMode();
-    if (!(single && S.modKeys.shift && !S.modKeys.meta && S.pointerInLightbar)) {
-      cuspLine.setAttribute('opacity', '0');
-      return;
-    }
-    const cuspLval = cuspL(S.colors[S.activeIndex].h);
-    const y = toeLToY(toe(cuspLval));
-    setAttrs(cuspLine, {
-      y1: y.toFixed(2), y2: y.toFixed(2),
-      // Match the disc construction guides: 1px, 0.3-alpha black/white by lightness.
-      stroke: cuspLval > MIDDLE_GRAY ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)',
+    const col = single ? S.colors[S.activeIndex] : null;
+    // (s below 1e-4 counts as zero: a typed gray converts to s ≈ 1e-8, not 0.)
+    // Off the rim it hides; lightness 0 or 100 doesn't hide it (user decision 2026-10-22).
+    if (!col || !onRim(col)) { cuspDot.setAttribute('opacity', '0'); return; }
+    const y = toeLToY(toe(cuspL(col.h))), d = CUSP_HALF;
+    setAttrs(cuspDot, {
+      points: `${CUSP_X},${(y - d).toFixed(2)} ${(+CUSP_X + d).toFixed(2)},${y.toFixed(2)} ${CUSP_X},${(y + d).toFixed(2)} ${(+CUSP_X - d).toFixed(2)},${y.toFixed(2)}`,
+      fill: col.L > MIDDLE_GRAY ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)',   // 30% (was 60%)
       opacity: '1',
     });
   }
 
   function updateDiscGuides() {
-    updateCuspLine();
+    updateCuspDot();
     discHueLine.setAttribute('opacity', '0');
     discChromaPath.setAttribute('opacity', '0');
     discRadialGuides.innerHTML = '';

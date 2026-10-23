@@ -38,7 +38,7 @@ body {
 /* Top UI: a single outer frame (1px squircle outline via border-radius +
    corner-shape) that encompasses everything. Inside, on the left, the filled COLOR MAP panel
    (tinted by the selected lightness); to its right a column holding
-   LIBRARIES over CMYK, then the STATE section. The frame's 4px padding gives an even gap to the color map
+   CMYK over LIBRARIES, then the STATE section. The frame's 4px padding gives an even gap to the color map
    panel, and its radius is 4px larger so the two squircles stay concentric.
    The frame + sections follow the PAGE background (body.light-bg). */
 .top-ui {
@@ -154,7 +154,7 @@ body.light-bg .top-ui {
   transition: color 0.3s ease;
 }
 
-/* Libraries over CMYK in one column, each switched on and off by the checkbox
+/* CMYK over Libraries in one column, each switched on and off by the checkbox
    in its header. No section collapses (user decisions 2026-10-21: Libraries,
    CMYK and then State all were collapsible regions): bodies always show — a
    switched-off one at 0.2 alpha. The header control is the P3 switch's design
@@ -162,8 +162,8 @@ body.light-bg .top-ui {
    right when on, 0.4 → 0.85 alpha, instant (no transition). It's still the
    checkbox underneath, so everything listening to it is unchanged. */
 .ui-column { display: flex; flex-direction: column; }
-/* Its gap from the color map panel matches State's from its divider: 60% over
-   the frame's 16px section gap, 25.6px (user decision 2026-10-21). */
+/* Its gap from the color map panel, and State's from it, is 60% over the
+   frame's 16px section gap: 25.6px (user decisions 2026-10-21/22). */
 .ui-column { margin-left: calc(var(--section-gap) * 0.6); }
 .ui-column > .ui-section + .ui-section { margin-top: 0; }
 .section-check {
@@ -174,6 +174,9 @@ body.light-bg .top-ui {
   cursor: pointer;
 }
 .section-check .section-label { cursor: pointer; color: inherit; }
+/* Switched off, the label dims slightly: 0.7 × the active label alpha (0.78 →
+   ~0.55; user decision 2026-10-22). */
+.checkable:not(.open) .section-check .section-label { opacity: 0.7; }
 .section-check {
   --sw-ink: rgba(255,255,255,0.4);
   --sw-ink-on: rgba(255,255,255,0.85);
@@ -210,9 +213,8 @@ body.light-bg .section-check {
 .section-check input[type="checkbox"]:checked::before { background: var(--sw-ink-on); transform: translateX(10px); }
 .section-check input[type="checkbox"]:focus { outline: none; }
 .section-check input[type="checkbox"]:focus-visible { outline: 1px solid var(--sw-ink-on); outline-offset: 2px; }
-/* Section labels (State, Libraries, CMYK — and the header checkboxes) always
-   show at the active label alpha, on or off (user decision 2026-10-21). */
-.section-setup .section-label { color: var(--label-color-active); }
+/* Section labels (Libraries, CMYK — and the header switches) show at the
+   active label alpha (user decision 2026-10-21); dimmed slightly when off. */
 .checkable .section-body { display: flex; margin-left: 30px; }   /* under the label: 24px switch + 6px gap */
 /* Switched off: the body stays in view but fades to show it's inactive — and
    is unusable (main.js makes it inert; pointer-events here as a backstop). */
@@ -221,8 +223,9 @@ body.light-bg .section-check {
 /* Bodies fill the remaining column height. */
 .section-body { flex: 1 1 auto; min-height: 0; }
 
-/* The divider-to-State gap is 60% wider than the frame's section gap (user
-   decision 2026-10-21): 16px → 25.6px. */
+/* The column-to-State gap: 60% wider than the frame's section gap, 25.6px —
+   the same as the color map panel to the column (there's no divider since
+   2026-10-22). */
 .section-setup { margin-left: calc(var(--section-gap) * 0.6); }
 
 /* The last section (State) faces the frame on its right, so inset it to match
@@ -230,16 +233,6 @@ body.light-bg .section-check {
    outline. */
 .top-ui > :last-child { margin-right: var(--tools-vpad); }
 
-/* 1px dividers between tool sections. Stretch to the content box, inset by the
-   same vertical pad as the sections so they don't touch the frame. */
-.section-divider {
-  align-self: stretch;
-  width: 1px;
-  /* 2px less inset than --tools-vpad at each end → 4px longer than the sections. */
-  margin-block: calc(var(--tools-vpad) - 2px);
-  background: rgba(255,255,255,0.2);
-}
-body.light-bg .section-divider { background: rgba(0,0,0,0.2); }
 
 /* P3 gamut switch, in the color map panel's top-left corner: a monochrome
    switch, then its "P3" label. The switch is a transparent pill drawn as a 1px
@@ -361,7 +354,11 @@ body.disc-dragging-single.cursor-outside-disc #disc-overlay * { cursor: auto !im
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 4px 0;
+  /* Top flush with the top of the CMYK switch (user decision 2026-10-22): no
+     top padding, and up half a pixel — the 14px switch is centered in the
+     13px header row, so it starts 0.5px above the section's top. */
+  padding: 0 0 4px;
+  margin-top: -0.5px;
   width: 380px;
   gap: 17px;
 }
@@ -684,10 +681,10 @@ body.light-bg .lib-menu {
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16.17 15.09'%3E%3Cpolygon points='13.51 0 5.61 9.8 2.46 6.75 0 9.21 5.88 15.09 16.17 2.2 13.51 0'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
-/* "Compatible files: …" — always shown, beside the IMPORT button. */
+/* "Compatible files: …" — always shown, beside the ADD button. */
 .lib-files { font-size: 10px; line-height: 12px; opacity: 0.7; white-space: nowrap; }
 
-/* IMPORT — a library row's outline and corners, 22px tall, only as wide as its
+/* ADD (was IMPORT) — a library row's outline and corners, 22px tall, only as wide as its
    word, with the compatible-files note beside it (user decisions 2026-10-21). */
 .lib-import-row { display: flex; align-items: center; gap: 8px; }
 .lib-add {

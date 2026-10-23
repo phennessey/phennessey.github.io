@@ -497,6 +497,12 @@ export function cuspL(h) {
   return findCusp(Math.cos(H), Math.sin(H), gamut)[0];
 }
 
+/** Whether a color sits on the wheel's rim — full saturation (s = 1, or past
+ *  the edge for a typed-in color). The chroma cusp only means something there:
+ *  the cusp marker and the Shift snap to it are active only on the rim (user
+ *  decision 2026-10-23). */
+export const onRim = col => col.s >= 1 - 1e-4;
+
 /** Test whether an (h, s, lr) triple falls within the sRGB gamut. */
 export function inSRGB(h, s, lr) {
   convert(toOKLab(h, s, lr), OKLab, sRGB, _rgb);

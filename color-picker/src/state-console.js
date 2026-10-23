@@ -228,7 +228,9 @@ function planLine(i, f, cur) {
       const k = cmykSliderPositionFor(color, f.cmyk);
       if (k < 0) {
         const r = cmykReachableRange(color);
-        return { error: r && r.oog
+        return { error: r && r.adjustOff
+          ? `${f.cmyk} isn't reachable — adjustments are off, so this color's build is ${r.from}`
+          : r && r.oog
           ? `${f.cmyk} isn't reachable — its CMYK slider runs from ${r.from} to ${r.to}`
           : `${f.cmyk} isn't reachable — this color's build is ${r ? r.from : 'unknown'}` };
       }

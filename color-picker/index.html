@@ -31,27 +31,10 @@
       </div>
     </div>
 
-    <!-- Libraries over CMYK, each switched on and off by the checkbox in its
-         header; never collapsible (user decisions 2026-10-21). The old empty
-         Export section is gone. -->
+    <!-- CMYK over Libraries (order swapped 2026-10-22), each switched on and
+         off by the switch in its header; never collapsible (user decisions
+         2026-10-21). The old empty Export section is gone. -->
     <div class="ui-column">
-      <div class="ui-section section-libraries checkable">
-        <div class="section-head">
-          <label class="section-check"><input type="checkbox" class="section-toggle" id="toggle-libraries"><span class="section-label">Libraries</span></label>
-        </div>
-        <div class="section-body library-panel" id="library-panel">
-          <div class="lib-list" id="lib-list"></div>
-          <div class="lib-import-row">
-            <button type="button" class="lib-add" id="lib-add" title="Import libraries">IMPORT</button>
-            <input type="file" id="lib-file" multiple hidden>
-            <div class="lib-files">Compatible files: .ase, .acb, .aco,<br>.gpl, .csv, .json</div>
-          </div>
-          <div class="pantone-options">
-            <label><input type="checkbox" id="toggle-hide-on-promote" checked> Hide matches after promotion</label>
-          </div>
-        </div>
-      </div>
-
       <div class="ui-section section-cmyk checkable">
         <div class="section-head">
           <label class="section-check"><input type="checkbox" class="section-toggle" id="toggle-cmyk"><span class="section-label">CMYK</span></label>
@@ -73,16 +56,34 @@
             <input type="checkbox" id="cmyk-show-boundary" checked>
             <span>Show gamut boundary</span>
           </label>
+          <label class="cmyk-check">
+            <input type="checkbox" id="cmyk-allow-adjust" checked>
+            <span>Allow adjustments</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="ui-section section-libraries checkable">
+        <div class="section-head">
+          <label class="section-check"><input type="checkbox" class="section-toggle" id="toggle-libraries"><span class="section-label">Libraries</span></label>
+        </div>
+        <div class="section-body library-panel" id="library-panel">
+          <div class="lib-list" id="lib-list"></div>
+          <div class="lib-import-row">
+            <button type="button" class="lib-add" id="lib-add" title="Add libraries">ADD</button>
+            <input type="file" id="lib-file" multiple hidden>
+            <div class="lib-files">Compatible files: .ase, .acb, .aco,<br>.gpl, .csv, .json</div>
+          </div>
+          <div class="pantone-options">
+            <label><input type="checkbox" id="toggle-hide-on-promote" checked> Hide matches after promotion</label>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="section-divider"></div>
-
+    <!-- State: no label and no divider before it (user decision 2026-10-22) —
+         the box sits up where the label row was. -->
     <div class="ui-section section-setup">
-      <div class="section-head">
-        <div class="section-label">State</div>
-      </div>
       <div class="section-body hex-panel">
         <textarea class="hex-input" spellcheck="false" autocomplete="off" aria-label="Swatch state, one swatch per line"></textarea>
       </div>

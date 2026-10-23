@@ -5,7 +5,7 @@
 import { BG_LEVELS, MIDDLE_GRAY, LB_HEIGHT, CUSP_SNAP_PX } from './constants.js';
 import { S, P, els, DISC_R, handlePos, yToToeL, toeLToY, pantoneSelections } from './state.js';
 import { TAU, idxOf } from './picker.js';
-import { toe, toeInv, clamp01, lToRaw, rawToL, sForChroma, chromaOf, cuspL, hueDiff, computeP3AndSRGB } from './color.js';
+import { toe, toeInv, clamp01, lToRaw, rawToL, sForChroma, chromaOf, cuspL, hueDiff, computeP3AndSRGB, onRim } from './color.js';
 import { discXY, captureDrag, syncModKeys, requestRender } from './util.js';
 import { updateSwatch, setActive, toggleMultiSelect, deselect, updateMesh } from './swatches.js';
 import { clearPromotedOnEdit, pantoneP3Css } from './pantone.js';
@@ -370,10 +370,13 @@ function applyLightbarPointer(ev) {
   // Shift (without Meta) gives the lightbar a magnetic snap zone at the hue's
   // chroma cusp (its max-chroma lightness): the slider tracks the pointer as
   // usual, but within CUSP_SNAP_PX of the cusp's position it sticks to that
-  // value. An invisible single-color gesture; Meta still means lock-chroma,
+  // value — the cusp diamond just outside the lightbar's right edge marks it
+  // (always shown; picker.js). A single-color gesture; Meta still means lock-chroma,
   // and Shift+wheel stays the fine-tune scroll.
   const pointerY = ev.clientY - rect.top - lbDragOffset;
-  if (S.modKeys.shift && !S.modKeys.meta) {
+  // Only on the wheel's rim (full saturation): the cusp is the max-chroma
+  // lightness, which only means something when chroma is maxed (2026-10-23).
+  if (S.modKeys.shift && !S.modKeys.meta && onRim(col)) {
     const cuspLval = cuspL(col.h);
     const cuspY    = toeLToY(toe(cuspLval));
     col.L = Math.abs(pointerY - cuspY) <= CUSP_SNAP_PX

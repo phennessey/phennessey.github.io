@@ -68,7 +68,10 @@ const TABLE_URL = key => `lib/gamut/${key}.f32`;
 // true once a profile is parsed and its transforms are built. The out-of-gamut
 // build-lightness preference is PER SWATCH: each out-of-gamut CMYK swatch
 // carries its own slider (see updateSwatchCMYK), so there is no global bias here.
-export const cmyk = { active: false, profileKey: "gracol", ready: false, showBoundary: true };
+// `allowAdjust` mirrors the "Allow adjustments" checkbox: off hides every
+// swatch's out-of-gamut slider and builds as if it sat at 0 (each slider keeps
+// its value, which returns when switched back on; user decision 2026-10-22).
+export const cmyk = { active: false, profileKey: "gracol", ready: false, showBoundary: true, allowAdjust: true };
 
 // Float transforms ('objectFloat'), relative colorimetric, BPC per USE_BPC.
 let revLab50 = null;   // CMYK → native PCS CIELAB(D50): soft proof + bias probes
@@ -181,7 +184,7 @@ export function cmykSliderPositionFor(color, label) {
   if (!engineOK || !cmyk.ready) return -1;
   const raw = convertColor(color);
   if (buildLabel(raw.c) === label) return 0;
-  if (!raw.oog) return -1;
+  if (!raw.oog || !cmyk.allowAdjust) return -1;   // no slider to reach other builds
   for (let k = SLIDER_SNAP + 1; k <= 100; k++) if (buildLabel(biasedBuild(raw, k / 100)) === label) return k;
   return -1;
 }
@@ -191,7 +194,8 @@ export function cmykSliderPositionFor(color, label) {
 export function cmykReachableRange(color) {
   if (!engineOK || !cmyk.ready) return null;
   const raw = convertColor(color);
-  return { oog: raw.oog, from: buildLabel(raw.c), to: raw.oog ? buildLabel(biasedBuild(raw, 1)) : null };
+  const slider = raw.oog && cmyk.allowAdjust;
+  return { oog: raw.oog, adjustOff: raw.oog && !cmyk.allowAdjust, from: buildLabel(raw.c), to: slider ? buildLabel(biasedBuild(raw, 1)) : null };
 }
 
 /** For the State console: put swatch `container`'s slider at position k for
@@ -264,7 +268,7 @@ export function updateSwatchCMYK(container, color, index) {
   if (biasSlider) {
     const key = colorKeyOf(color);
     if (biasSlider.dataset.colorKey !== key) { biasSlider.value = "0"; biasSlider.dataset.colorKey = key; }
-    bias = +biasSlider.value / 100;
+    bias = cmyk.allowAdjust ? +biasSlider.value / 100 : 0;   // adjustments off: the default build
   }
 
   // Library alternate, per swatch: when this swatch's promoted color has a CMYK
@@ -332,7 +336,8 @@ export function updateSwatchCMYK(container, color, index) {
     // paints identically, so hide it (.cmyk-bias-inert, see CSS). The probe is
     // cheap (table lookups and one solve), so it runs on every render, drags
     // included — freezing it mid-drag left a stale slider showing or hidden.
-    if (oog) {
+    if (oog && !cmyk.allowAdjust) biasInert = true;   // adjustments off: no slider
+    else if (oog) {
       const b1 = bias === 1 ? c : biasedBuild(raw, 1);
       biasInert = Math.round(b1.C) === Math.round(raw.c.C) && Math.round(b1.M) === Math.round(raw.c.M)
                && Math.round(b1.Y) === Math.round(raw.c.Y) && Math.round(b1.K) === Math.round(raw.c.K);
@@ -451,6 +456,15 @@ const profileSel = document.getElementById("cmyk-profile");
 if (engineOK && profileSel) {
   cmyk.profileKey = profileSel.value;
   profileSel.addEventListener("change", () => setCMYKProfile(profileSel.value));
+}
+
+const adjustToggle = document.getElementById("cmyk-allow-adjust");
+if (adjustToggle) {
+  cmyk.allowAdjust = adjustToggle.checked;
+  adjustToggle.addEventListener("change", () => {
+    cmyk.allowAdjust = adjustToggle.checked;
+    if (cmyk.active) requestRender();   // rebuild every swatch with or without its slider
+  });
 }
 
 const boundaryToggle = document.getElementById("cmyk-show-boundary");

@@ -37,7 +37,7 @@ const list = document.getElementById("lib-list");
 const addBtn = document.getElementById("lib-add");
 
 // At most this many color libraries (user decision 2026-10-21). CMYK add-ons
-// (e.g. Color Bridge) ride on a library and don't take a slot. IMPORT is
+// (e.g. Color Bridge) ride on a library and don't take a slot. ADD is
 // disabled while the list is full.
 const MAX_LIBRARIES = 5;
 // A library's content, for spotting one that's already imported (renaming or
@@ -141,7 +141,7 @@ function render() {
   list.replaceChildren(...libraries.map(rowFor));
   const full = libraries.length >= MAX_LIBRARIES;
   addBtn.disabled = full;
-  addBtn.title = full ? `${MAX_LIBRARIES} libraries is the limit — remove one to import another` : "Import libraries";
+  addBtn.title = full ? `${MAX_LIBRARIES} libraries is the limit — remove one to add another` : "Add libraries";
 }
 
 const libOf = node => libraries.find(l => l.id === node.closest(".lib-row")?.dataset.id);
