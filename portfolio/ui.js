@@ -152,8 +152,8 @@
 	}
 
 	// Only the current slide is interactive. `inert` keeps the hidden slides out
-	// of the tab order and the accessibility tree, so the outro's resume link
-	// can't be reached from the cover.
+	// of the tab order and the accessibility tree, so nothing on a slide that
+	// isn't showing can be reached.
 	function updateInteractivity() {
 		for (var i = 0; i < slideEls.length; i++) {
 			if (i === current) slideEls[i].removeAttribute('inert');
@@ -171,6 +171,7 @@
 		if (wasOnCover !== null && onCover !== wasOnCover) quietArrows();
 		wasOnCover = onCover;
 		stage.classList.toggle('on-cover', onCover);
+		updateZone();   // which arrows exist may have changed
 	}
 
 	// An arrow that just changed position (into or out of the frame) would
@@ -277,6 +278,56 @@
 		var dx = e.clientX - swipeFrom;
 		swipeFrom = null;
 		if (Math.abs(dx) >= SWIPE_MIN) go(dx < 0 ? 1 : -1);
+	});
+
+	// Click zones: the slide's left and right thirds act like the arrows.
+	// Pointing at one lights that arrow (.zone-prev / .zone-next, styles.css)
+	// and a click there moves. A drag that selects text, or a click on a link,
+	// is left alone, so the bar copy stays selectable and any link still works.
+	var ZONE = 1 / 3;
+	var CLICK_SLOP = 5;       // px a click may wander and still count
+	var lastPointer = null;   // last mouse position, to re-check after a move
+	var downAt = null;
+
+	function zoneAt(x, y) {
+		var r = frame.getBoundingClientRect();
+		if (x < r.left || x > r.right || y < r.top || y > r.bottom) return 0;
+		var f = (x - r.left) / r.width;
+		if (f < ZONE && current > 0) return -1;
+		if (f > 1 - ZONE && current < slideEls.length - 1) return 1;
+		return 0;
+	}
+
+	function updateZone() {
+		var z = lastPointer ? zoneAt(lastPointer.x, lastPointer.y) : 0;
+		stage.classList.toggle('zone-prev', z === -1);
+		stage.classList.toggle('zone-next', z === 1);
+	}
+
+	stage.addEventListener('pointermove', function (e) {
+		if (e.pointerType !== 'mouse') return;
+		lastPointer = { x: e.clientX, y: e.clientY };
+		updateZone();
+	});
+
+	stage.addEventListener('pointerleave', function () {
+		lastPointer = null;
+		updateZone();
+	});
+
+	frame.addEventListener('pointerdown', function (e) {
+		downAt = { x: e.clientX, y: e.clientY };
+	});
+
+	frame.addEventListener('click', function (e) {
+		var start = downAt;
+		downAt = null;
+		if (!start || e.target.closest('a, button')) return;
+		if (Math.abs(e.clientX - start.x) + Math.abs(e.clientY - start.y) > CLICK_SLOP) return;
+		var selection = window.getSelection();
+		if (selection && !selection.isCollapsed) return;   // a drag-select, not a click
+		var z = zoneAt(e.clientX, e.clientY);
+		if (z) go(z);
 	});
 
 

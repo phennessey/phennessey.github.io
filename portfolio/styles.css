@@ -163,21 +163,6 @@ body {
 	color: var(--white);
 }
 
-.wm-resume { margin-top: 8px; }
-
-.wm-resume a {
-	color: var(--white);
-	text-decoration: none;
-	opacity: 0.7;
-	transition: opacity var(--nav-fade-ms) ease;
-}
-
-.wm-resume a:hover,
-.wm-resume a:focus-visible,
-.wm-resume a:active { opacity: 1; }
-
-.wm-resume-arrow { font-size: 85%; }
-
 .slide-name {
 	font-size: 15px;          /* content slides: 50% of the old 30px */
 	line-height: 1;
@@ -293,6 +278,16 @@ body {
 .nav-next:focus-visible svg { transform: translateX(var(--nav-scoot)); }
 .nav-prev:hover svg,
 .nav-prev:focus-visible svg { transform: translateX(calc(-1 * var(--nav-scoot))); }
+
+/* ui.js sets .zone-prev / .zone-next while the cursor is over the slide's
+   left / right third: that arrow lights and nudges as if hovered, and the
+   third shows a pointer since a click there moves. */
+.stage.zone-prev .nav-prev,
+.stage.zone-next .nav-next { opacity: 0.85; }
+.stage.zone-prev .nav-prev svg { transform: translateX(calc(-1 * var(--nav-scoot))); }
+.stage.zone-next .nav-next svg { transform: translateX(var(--nav-scoot)); }
+.stage.zone-prev .frame,
+.stage.zone-next .frame { cursor: pointer; }
 
 /* Set by ui.js for a moment after an arrow changes position: hidden at once
    (no fade-out in plain view) until the pointer moves. Mouse devices only —
