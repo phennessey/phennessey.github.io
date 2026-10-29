@@ -10,6 +10,7 @@
 	--accent: #f7931d;
 	--light-gray: #d2d2d2;
 	--gray: #acacac;
+	--dark-gray: #333;
 	--stage-bg: #333;
 
 	/* Authored frame size, unitless so it works in calc() and reads as a plain
@@ -21,10 +22,13 @@
 
 	--fade-ms: 100ms;        /* slide cross-fade */
 	--nav-fade-ms: 200ms;    /* nav-arrow reveal */
+	--nav-scoot-ms: 150ms;   /* nav-arrow hover nudge */
+	--nav-scoot: 6px;        /* nav-arrow hover nudge distance */
 
 	/* Viewport left over beside the scaled frame = the nav-arrow hit zones.
 	   Derived from --s, so the frame size is never restated. */
 	--margin-x: max(0px, calc((100vw - var(--frame-w) * 1px * var(--s)) / 2));
+	--margin-y: max(0px, calc((100vh - var(--frame-h) * 1px * var(--s)) / 2));
 }
 
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -264,6 +268,39 @@ body {
 .nav-arrow:hover,
 .nav-arrow:focus-visible { opacity: 0.85; }
 
+/* Cover only (ui.js sets .on-cover): the next arrow sits INSIDE the frame, on
+   the yellow against its right edge, inset to match the cover's 32px padding,
+   and fades in only while the cursor is over the slide. */
+.stage.on-cover .nav-next {
+	top: var(--margin-y);
+	bottom: var(--margin-y);
+	height: auto;
+	right: var(--margin-x);
+	width: auto;
+	padding-left: 0;
+	padding-right: calc(32px * var(--s));
+	justify-content: flex-end;
+	color: var(--dark-gray);
+}
+
+/* The arrow follows the frame in the markup, so the sibling selector works;
+   .nav-arrow:hover keeps it up while the cursor is on the arrow itself. */
+.stage.on-cover .frame:hover ~ .nav-next { opacity: 0.85; }
+
+/* Hovering an arrow itself nudges it in its direction of travel. */
+.nav-arrow svg { transition: transform var(--nav-scoot-ms) ease; }
+.nav-next:hover svg,
+.nav-next:focus-visible svg { transform: translateX(var(--nav-scoot)); }
+.nav-prev:hover svg,
+.nav-prev:focus-visible svg { transform: translateX(calc(-1 * var(--nav-scoot))); }
+
+/* Set by ui.js for a moment after an arrow changes position: hidden at once
+   (no fade-out in plain view) until the pointer moves. Mouse devices only —
+   touch has no hover, so its always-on arrows are left alone. */
+@media (hover: hover) {
+	.stage.nav-quiet .nav-arrow { opacity: 0; transition: none; }
+}
+
 /* Touch devices never hover, so the arrows would otherwise stay invisible. */
 @media (hover: none) {
 	.nav-arrow { opacity: 0.85; }
@@ -286,5 +323,5 @@ body {
 
 /* Respect a reduced-motion preference: cut the fades, keep the navigation. */
 @media (prefers-reduced-motion: reduce) {
-	:root { --fade-ms: 0ms; --nav-fade-ms: 0ms; }
+	:root { --fade-ms: 0ms; --nav-fade-ms: 0ms; --nav-scoot-ms: 0ms; }
 }

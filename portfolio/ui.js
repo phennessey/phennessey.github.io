@@ -161,9 +161,27 @@
 		}
 	}
 
+	var wasOnCover = null;
+
 	function updateArrows() {
 		prevBtn.classList.toggle('is-hidden', current === 0);
 		nextBtn.classList.toggle('is-hidden', current === slideEls.length - 1);
+		// On the cover the next arrow moves inside the frame (see styles.css).
+		var onCover = current === 0;
+		if (wasOnCover !== null && onCover !== wasOnCover) quietArrows();
+		wasOnCover = onCover;
+		stage.classList.toggle('on-cover', onCover);
+	}
+
+	// An arrow that just changed position (into or out of the frame) would
+	// otherwise keep the :hover it had at its old spot, or fade out in plain
+	// view at its new one. Hide it instantly and keep it hidden until the
+	// pointer next moves; from then on hover reflects where the cursor really is.
+	function quietArrows() {
+		stage.classList.add('nav-quiet');
+		window.addEventListener('pointermove', function () {
+			stage.classList.remove('nav-quiet');
+		}, { once: true });
 	}
 
 	function navigate(target) {
@@ -215,8 +233,11 @@
 
 	// --- Input ------------------------------------------------------------
 
-	prevBtn.addEventListener('click', function () { go(-1); });
-	nextBtn.addEventListener('click', function () { go(1); });
+	// A mouse click (detail > 0) drops focus from the button, so a later
+	// keypress can't light it up via :focus-visible. Keyboard activation
+	// (detail === 0) keeps focus where the user put it.
+	prevBtn.addEventListener('click', function (e) { if (e.detail) prevBtn.blur(); go(-1); });
+	nextBtn.addEventListener('click', function (e) { if (e.detail) nextBtn.blur(); go(1); });
 
 	document.addEventListener('keydown', function (e) {
 		if (e.key === 'ArrowRight' || e.key === 'ArrowDown') go(1);
