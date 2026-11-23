@@ -158,7 +158,7 @@ body.light-bg .top-ui {
    in its header. No section collapses (user decisions 2026-10-21: Libraries,
    CMYK and then State all were collapsible regions): bodies always show — a
    switched-off one at 0.2 alpha. The header control is the P3 switch's design
-   (user decision 2026-10-21): a 24 × 14 outlined pill whose 8px dot jumps 10px
+   (user decision 2026-10-21): a 26 × 16 outlined pill (24 × 14 until 2026-11-23) whose 8px dot jumps 10px
    right when on, 0.4 → 0.85 alpha, instant (no transition). It's still the
    checkbox underneath, so everything listening to it is unchanged. */
 .ui-column { display: flex; flex-direction: column; }
@@ -198,19 +198,19 @@ body.light-bg .section-check, body.light-bg .section-libraries {
   position: relative;
   flex: 0 0 auto;
   box-sizing: border-box;
-  width: 24px;
-  height: 14px;
+  width: 26px;    /* 24 × 14 grown 10%, rounded to even (user decision 2026-11-23) */
+  height: 16px;
   margin: 0;
   border: 1px solid var(--sw-ink);
-  border-radius: 7px;
+  border-radius: 8px;
   background: transparent;
   cursor: pointer;
 }
 .section-check input[type="checkbox"]::before {
   content: "";
   position: absolute;
-  top: 2px;
-  left: 2px;
+  top: 3px;
+  left: 3px;
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -246,7 +246,7 @@ body.light-bg .section-check, body.light-bg .section-libraries {
 
 
 /* Gamut mode switch, in the color map panel's top-left corner: the labels
-   SRGB · P3 · P3A, the active one wrapped in a pill drawn as a 1px line (the
+   SRGB · P3 · P3A stacked top to bottom, the active one wrapped in a pill drawn as a 1px line (the
    old P3 switch's outline). A radio group: click a label, or arrow keys.
    Switches change state instantly — no transitions (user decision
    2026-10-20). Tones follow the panel's light/dark tint (.light-bg on
@@ -260,8 +260,9 @@ body.light-bg .section-check, body.light-bg .section-libraries {
   left: 14px;
   z-index: 1;
   display: flex;
-  align-items: center;
-  gap: 1px;
+  flex-direction: column;   /* stacked, not inline (user decision 2026-11-23) */
+  align-items: stretch;     /* every pill as wide as the widest label */
+  gap: 2px;
 }
 .picker-wrap.light-bg .gamut-switch {
   --gt-text: rgba(0,0,0,0.4);
@@ -269,6 +270,7 @@ body.light-bg .section-check, body.light-bg .section-libraries {
 }
 .gamut-switch > button {
   box-sizing: border-box;
+  text-align: center;
   height: 14px;
   padding: 0 5px 0 calc(5px + 0.12em);   /* letter-spacing trails the last letter */
   border: 1px solid transparent;
@@ -486,13 +488,13 @@ body.light-bg .library-panel { --lib-line: rgba(0,0,0,0.38); --lib-line-soft: rg
 .library-panel [hidden] { display: none !important; }
 
 /* One row per library (user decisions 2026-11-22; it was an outlined box):
-   switch · name with its +CMYK badge right after it · gear menu. The list is
+   switch · name with its +CMYK badge right after it · menu button. The list is
    one grid that shrink-wraps its widest row; each row is a subgrid of it, so
-   the gears line up just past the widest name-and-badge. Only the switch
+   the menu buttons line up just past the widest name-and-badge. Only the switch
    turns a library on or off. Rows 15px (the badge) on a 21px pitch. */
 .lib-list {
   display: grid;
-  grid-template-columns: 24px max-content 14px;
+  grid-template-columns: 26px max-content 16px;
   column-gap: 6px;
   row-gap: 6px;
   justify-content: start;
@@ -506,18 +508,18 @@ body.light-bg .library-panel { --lib-line: rgba(0,0,0,0.38); --lib-line-soft: rg
 }
 .lib-label { grid-column: 2; display: flex; align-items: center; gap: 6px; min-width: 0; }
 
-/* The switch: the section switches' design (a 24 × 14 outlined pill whose 8px
+/* The switch: the section switches' design (a 26 × 16 outlined pill whose 8px
    dot jumps 10px right when on, 0.4 → 0.85 alpha, instant). */
 .lib-switch {
   grid-column: 1;
   position: relative;
   box-sizing: border-box;
-  width: 24px;
-  height: 14px;
+  width: 26px;
+  height: 16px;
   padding: 0;
   background: transparent;
   border: 1px solid var(--sw-ink);
-  border-radius: 7px;
+  border-radius: 8px;
   cursor: pointer;
 }
 .lib-switch:focus { outline: none; }
@@ -525,8 +527,8 @@ body.light-bg .library-panel { --lib-line: rgba(0,0,0,0.38); --lib-line-soft: rg
 .lib-switch::before {
   content: "";
   position: absolute;
-  top: 2px;
-  left: 2px;
+  top: 3px;
+  left: 3px;
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -584,24 +586,29 @@ body.light-bg .library-panel { --lib-line: rgba(0,0,0,0.38); --lib-line-soft: rg
   color: var(--body-bg, #666);
 }
 
-/* Gear — opens the row's menu. */
+/* The row's menu button (user decision 2026-11-23; was a gear): a 14px
+   circle — the switches' height and 1px outline — holding a right-angled
+   downward chevron stroked 1.5px like ADD LIBRARY's +. Dim at rest like the
+   + pill; full while hovered or while its menu is open. */
 .lib-menu-btn {
   grid-column: 3;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
   padding: 0;
-  color: var(--ui-label);
+  color: var(--sw-ink);
   background: none;
-  border: none;
+  border: 1px solid currentColor;
+  border-radius: 50%;
   cursor: pointer;
 }
-.lib-menu-btn svg { width: 14px; height: 14px; display: block; }
+.lib-menu-btn svg { width: 12px; height: 12px; display: block; }
 .lib-menu-btn:hover, .lib-row.menu-open .lib-menu-btn { color: var(--ui-label-hover); }
 .lib-menu-btn:focus { outline: none; }
-.lib-menu-btn:focus-visible { color: var(--ui-label-hover); }
+.lib-menu-btn:focus-visible { outline: 1px solid var(--sw-ink-on); outline-offset: 2px; }
 
 /* A switched-off library: its switch shows it, and its name and badge dim to
    45% (2026-11-22; 20% read as unusable without the old outline). */
@@ -699,7 +706,7 @@ body.light-bg .lib-menu {
 }
 
 /* ADD LIBRARY — under the last library (user decisions 2026-11-22): the +
-   pill in the switches' column (24 × 14, the switches' outline, a filled 6px
+   pill in the switches' column (26 × 16, the switches' outline, a filled 6px
    plus), then the label in the names' column, in the section labels' mono
    caps. The whole row is the button (it opens the file chooser; the
    compatible formats are in its tooltip). Dim at rest, full on hover. */
@@ -721,10 +728,10 @@ body.light-bg .lib-menu {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  width: 24px;
-  height: 14px;
+  width: 26px;
+  height: 16px;
   border: 1px solid currentColor;
-  border-radius: 7px;
+  border-radius: 8px;
 }
 .lib-add-pill svg { width: 6px; height: 6px; display: block; }   /* 1.5px strokes */
 .lib-add-label {

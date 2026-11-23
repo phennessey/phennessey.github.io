@@ -108,20 +108,23 @@ const P3AGamut = { space: P3A, coefficients: DisplayP3Gamut.coefficients };
 // ~0.79 of the edge chroma (his sRGB 0.852).
 const P3_SPACING_BLEND = 0.536;
 
-// P3A spacing: the P3 treatment again, one gamut out. At blend 1, P3's mid
-// curve is scaled hue by hue by the ratio of P3A's cusp to P3's (S = C/L and
-// T = C/(1−L)), and C_0 by the ratio of their average cusp S / T (1.05967 /
-// 1.05985); at 0 P3's curves run unscaled on P3A's edge. The blend puts the P3
-// ring at the measured size difference, since the wheel's radius represents
-// chroma (user decision 2026-11-21: distort the space as P3 over sRGB). P3 and
-// P3A share red and blue, so over ~64% of hue × lightness their edges coincide;
-// where they differ, the P3 edge reaches a median 0.807 of P3A's edge chroma,
-// and blend 1.19 puts the P3 ring at a median 0.807 of the radius (1 gives
-// 0.834; 0 gives 0.951, P3A-only colors crammed into the rim). Spacing at 1.19:
-// s = 0.2 / 0.5 / 0.8 reach a median 20 / 50 / 80% of the edge chroma, and
-// C_mid stays at least 13% inside C_max.
-const P3A_SPACING_BLEND = 1.19;
-const P3A_CUSP_RATIO_S = 1.0596669, P3A_CUSP_RATIO_T = 1.0598475;   // average cusp S, T: P3A ÷ P3
+// P3A spacing — its own fit, from scratch, by the method P3's came from
+// (user decision 2026-11-23: no creases; it was P3's fit rescaled hue by hue by
+// P3A ÷ P3 cusp, which carried P3's cusp corner at its green primary, ~146°,
+// into every P3A wheel as a crease). get_ST_mid: target = P3A cusp × (his
+// curve ÷ sRGB cusp) over 720 hues, refit to his rational formula by weighted
+// least squares (constant term grid-searched in 0.005 steps) — smooth by
+// construction, like his. C_0 = his 0.4 / 0.8 × the P3A/sRGB ratio of average
+// cusp S / T (1.21733 / 1.21624). P3A_SPACING_BLEND mixes it toward his sRGB
+// values, as P3's does, so the rings inside it enclose their gamuts' true
+// share (user rule 2026-11-23: the areas enclosed by P3A, P3 and sRGB match the
+// real gamut sizes). Measured as area — the mean of (C_gamut / C_P3A)² over hue
+// × lightness against the mean of the ring's s²: P3 is 0.8805 of P3A, sRGB
+// 0.6509. One blend can't hit both exactly (Ottosson's curve shape sets their
+// spacing); 0.76 balances them: each ring's radius within ±0.82% of its true
+// one (~1px on the wheel; P3 mode's sRGB ring is within 0.3% by this measure).
+// Smooth by construction: both curves blended are his rational formula.
+const P3A_SPACING_BLEND = 0.76;
 
 const OKHSL_FIT = new Map([
   [sRGBGamut, {
@@ -135,27 +138,22 @@ const OKHSL_FIT = new Map([
     c0S: 0.46013066, c0T: 0.91806165,
     blend: P3_SPACING_BLEND,   // mixed toward the sRGB entry's values (see above)
   }],
-  // P3A: P3's (blended) fit, distorted hue by hue toward P3A's cusp — the same
-  // transfer P3 got from sRGB (see "P3A spacing" below).
-  [P3AGamut, { over: DisplayP3Gamut, blend: P3A_SPACING_BLEND, ratioS: P3A_CUSP_RATIO_S, ratioT: P3A_CUSP_RATIO_T }],
+  [P3AGamut, {
+    S: [0.175, 10.16619801, 6.812496311, -1.031528968, -0.7009940147, -11.16156565, -10.46187400, -0.8842727343, 5.460830147, 6.652184595],
+    T: [0.445, 3.566644427, -2.744266825, 0.4061049388, 0.5767004986, -3.228512766, 2.920091669, -0.03528856468, 0.4483462231, 0.8378945045],
+    c0S: 0.48693324, c0T: 0.97299262,
+    blend: P3A_SPACING_BLEND,   // mixed toward the sRGB entry's values (see above)
+  }],
 ]);
 // Apply each fit's blend: C_0's constants mix directly; the mid curve mixes by
 // value in getCs (its coefficients aren't linear in the curve).
 for (const [g, p] of OKHSL_FIT) {
-  if (p.blend === undefined || p.over) continue;
+  if (p.blend === undefined) continue;
   const base = OKHSL_FIT.get(sRGBGamut);
   p.base = base;
   p.c0S = (1 - p.blend) * base.c0S + p.blend * p.c0S;
   p.c0T = (1 - p.blend) * base.c0T + p.blend * p.c0T;
 }
-// P3A's C_0: P3's (blended) constants scaled by the average-cusp ratio, blended.
-for (const [g, p] of OKHSL_FIT) {
-  if (!p.over) continue;
-  const q = OKHSL_FIT.get(p.over);
-  p.c0S = q.c0S * (1 + p.blend * (p.ratioS - 1));
-  p.c0T = q.c0T * (1 + p.blend * (p.ratioT - 1));
-}
-
 // ── The cusp, computed exactly ───────────────────────────────────────
 //
 // The cusp (the most saturated color of a hue) anchors OKHSL's edge. Ottosson's
@@ -303,15 +301,6 @@ const stMid = (c, a, b) => c[0] + 1 / (c[1] + c[2]*b + a*(c[3] + c[4]*b + a*(c[5
 const _mid = [0, 0];
 /** The fit's mid curve [S_mid, T_mid] along unit hue (a_, b_). */
 function midST(p, a_, b_, out) {
-  if (p.over) {   // P3A: P3's curve scaled by P3A's cusp ÷ P3's at this hue
-    midST(OKHSL_FIT.get(p.over), a_, b_, out);
-    const cP = findCusp(a_, b_, p.over), PL = cP[0], PC = cP[1];
-    const cA = findCusp(a_, b_, P3AGamut);
-    const rS = (cA[1] / cA[0]) / (PC / PL), rT = (cA[1] / (1 - cA[0])) / (PC / (1 - PL));
-    out[0] *= 1 + p.blend * (rS - 1);
-    out[1] *= 1 + p.blend * (rT - 1);
-    return out;
-  }
   let Sm = stMid(p.S, a_, b_), Tm = stMid(p.T, a_, b_);
   if (p.base) {
     Sm = (1 - p.blend) * stMid(p.base.S, a_, b_) + p.blend * Sm;

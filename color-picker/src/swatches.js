@@ -3,14 +3,14 @@
 // state — selection visuals and the picker-background tint. (The triangle
 // mesh that connected multi-selected handles was removed 2026-11-22.)
 
-import { MIDDLE_GRAY, MAX_COLORS, GAMUT_ICON_SVG, CLOSE_ICON_SVG } from './constants.js?v=917f20e';
-import { S, P, els, pantoneSelections, handlePos } from './state.js?v=917f20e';
-import { idxOf } from './picker.js?v=917f20e';
-import { computeP3AndSRGB, neutralP3, cielabL, cielabLOfSrgb, cielabLOfP3 } from './color.js?v=917f20e';
-import { updateSwatchCMYK, isOutOfCMYK } from './cmyk.js?v=917f20e';
-import { buildMatchCells, matchRowObserver, updateSwatchMatches } from './pantone.js?v=917f20e';
-import { syncModKeys, requestRender } from './util.js?v=917f20e';
-import { flushPendingWheelSnapshot, recordSnapshot } from './history.js?v=917f20e';
+import { MIDDLE_GRAY, MAX_COLORS, GAMUT_ICON_SVG, CLOSE_ICON_SVG } from './constants.js?v=312f5ef';
+import { S, P, els, pantoneSelections, handlePos } from './state.js?v=312f5ef';
+import { idxOf } from './picker.js?v=312f5ef';
+import { computeP3AndSRGB, neutralP3, cielabL, cielabLOfSrgb, cielabLOfP3 } from './color.js?v=312f5ef';
+import { updateSwatchCMYK, isOutOfCMYK } from './cmyk.js?v=312f5ef';
+import { buildMatchCells, matchRowObserver, updateSwatchMatches } from './pantone.js?v=312f5ef';
+import { syncModKeys, requestRender } from './util.js?v=312f5ef';
+import { flushPendingWheelSnapshot, recordSnapshot } from './history.js?v=312f5ef';
 
 // Swatch DOM helpers
 

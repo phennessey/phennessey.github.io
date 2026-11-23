@@ -2,14 +2,14 @@
 // hue-convergence), the lightbar, swatch & chip drag-and-drop, modifier
 // keys, and background-brightness scrolling.
 
-import { BG_LEVELS, MIDDLE_GRAY, LB_HEIGHT, CUSP_SNAP_PX } from './constants.js?v=917f20e';
-import { S, P, els, DISC_R, handlePos, yToToeL, toeLToY, pantoneSelections } from './state.js?v=917f20e';
-import { TAU, idxOf } from './picker.js?v=917f20e';
-import { toe, toeInv, clamp01, lToRaw, rawToL, sForChroma, chromaOf, cuspL, hueDiff, computeP3AndSRGB, onRim } from './color.js?v=917f20e';
-import { discXY, captureDrag, syncModKeys, requestRender } from './util.js?v=917f20e';
-import { updateSwatch, setActive, toggleMultiSelect, deselect } from './swatches.js?v=917f20e';
-import { clearPromotedOnEdit, pantoneP3Css } from './pantone.js?v=917f20e';
-import { flushPendingWheelSnapshot, recordSnapshot, scheduleWheelSnapshot } from './history.js?v=917f20e';
+import { BG_LEVELS, MIDDLE_GRAY, LB_HEIGHT, CUSP_SNAP_PX } from './constants.js?v=312f5ef';
+import { S, P, els, DISC_R, handlePos, yToToeL, toeLToY, pantoneSelections } from './state.js?v=312f5ef';
+import { TAU, idxOf } from './picker.js?v=312f5ef';
+import { toe, toeInv, clamp01, lToRaw, rawToL, sForChroma, chromaOf, cuspL, hueDiff, computeP3AndSRGB, onRim } from './color.js?v=312f5ef';
+import { discXY, captureDrag, syncModKeys, requestRender } from './util.js?v=312f5ef';
+import { updateSwatch, setActive, toggleMultiSelect, deselect } from './swatches.js?v=312f5ef';
+import { clearPromotedOnEdit, pantoneP3Css } from './pantone.js?v=312f5ef';
+import { flushPendingWheelSnapshot, recordSnapshot, scheduleWheelSnapshot } from './history.js?v=312f5ef';
 
 // Modifier-key tracking
 

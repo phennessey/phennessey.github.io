@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>OKHSL Color Picker</title>
-  <link rel="stylesheet" href="./style.css?v=917f20e">
+  <link rel="stylesheet" href="./style.css?v=312f5ef">
 </head>
 <body>
   <div class="top-ui">
@@ -14,9 +14,9 @@
     <button id="add-color-btn" type="button" aria-label="Add color" title="Add swatch"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1v10M1 6h10"/></svg></button>
 
     <div class="picker-wrap color-map-panel">
-      <!-- Gamut mode switch: sRGB, P3 (default) or P3A (see src/mode.js). -->
+      <!-- Gamut mode switch: sRGB, P3 (default) or P3A, stacked (see src/mode.js). -->
       <div class="gamut-switch" id="gamut-switch" role="radiogroup" aria-label="Gamut">
-        <button type="button" role="radio" data-mode="srgb" aria-checked="false" tabindex="-1">SRGB</button>
+        <button type="button" role="radio" data-mode="srgb" aria-checked="false" tabindex="-1">sRGB</button>
         <button type="button" role="radio" data-mode="p3" aria-checked="true" tabindex="0">P3</button>
         <button type="button" role="radio" data-mode="p3a" aria-checked="false" tabindex="-1">P3A</button>
       </div>
@@ -96,7 +96,7 @@
 
   <!-- Vendored Little-CMS-class ICC engine (UMD global `jsColorEngine`), loaded
        before the module so the CMYK feature can use it synchronously. -->
-  <script src="./lib/jsColorEngineWeb.js?v=917f20e"></script>
-  <script type="module" src="./src/main.js?v=917f20e"></script>
+  <script src="./lib/jsColorEngineWeb.js?v=312f5ef"></script>
+  <script type="module" src="./src/main.js?v=312f5ef"></script>
 </body>
 </html>

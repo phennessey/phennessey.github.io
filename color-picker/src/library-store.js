@@ -14,7 +14,7 @@
 // Libraries live in this browser's IndexedDB (one record, in list order), so
 // clearing site data removes them (re-import the original files then).
 
-import { detectSpace, detectPrefix, brandCase, normalizeName, EXPORT_TYPE } from "./library-formats.js?v=917f20e";
+import { detectSpace, detectPrefix, brandCase, normalizeName, EXPORT_TYPE } from "./library-formats.js?v=312f5ef";
 
 const DB = "color-picker", STORE = "kv", KEY = "libraries";
 

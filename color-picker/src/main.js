@@ -9,15 +9,15 @@
 // patch that keeps swatches/background/dots/hex in sync, and runs
 // the initial setup.
 
-import { S, P, els } from './state.js?v=917f20e';
-import { updateSwatch, createSwatchDOM, wireSwatch, swatchEl, updateAddButton, updateBackground, setActive } from './swatches.js?v=917f20e';
-import { updateSwatchMatches, updateDots, scheduleMatches } from './pantone.js?v=917f20e';
-import { initLibraries } from './libraries.js?v=917f20e';
-import { syncStateField } from './state-console.js?v=917f20e';
-import { recordSnapshot } from './history.js?v=917f20e';
-import { applyBgLevel } from './interactions.js?v=917f20e';
-import { setCMYKActive, setCMYKProfile, cmyk } from './cmyk.js?v=917f20e';
-import './mode.js?v=917f20e';
+import { S, P, els } from './state.js?v=312f5ef';
+import { updateSwatch, createSwatchDOM, wireSwatch, swatchEl, updateAddButton, updateBackground, setActive } from './swatches.js?v=312f5ef';
+import { updateSwatchMatches, updateDots, scheduleMatches } from './pantone.js?v=312f5ef';
+import { initLibraries } from './libraries.js?v=312f5ef';
+import { syncStateField } from './state-console.js?v=312f5ef';
+import { recordSnapshot } from './history.js?v=312f5ef';
+import { applyBgLevel } from './interactions.js?v=312f5ef';
+import { setCMYKActive, setCMYKProfile, cmyk } from './cmyk.js?v=312f5ef';
+import './mode.js?v=312f5ef';
 
 
 // Render patch

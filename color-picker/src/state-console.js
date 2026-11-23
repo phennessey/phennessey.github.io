@@ -39,15 +39,15 @@
 // can't be reached, nothing is applied: the box keeps your text, selects the
 // line, and the status line under the swatches says why.
 
-import { MAX_COLORS } from './constants.js?v=917f20e';
-import { S, P, els, pantoneSelections } from './state.js?v=917f20e';
-import { srgbToOKHSL, p3ToOKHSL, oklchToOKHSL, computeP3AndSRGB, isSRGBMode, getGamutMode, convert, DisplayP3, sRGB } from './color.js?v=917f20e';
-import { swatchEl, setPalette, reindex, updateAddButton, exitMultiSelect, setActive } from './swatches.js?v=917f20e';
+import { MAX_COLORS } from './constants.js?v=312f5ef';
+import { S, P, els, pantoneSelections } from './state.js?v=312f5ef';
+import { srgbToOKHSL, p3ToOKHSL, oklchToOKHSL, computeP3AndSRGB, isSRGBMode, getGamutMode, convert, DisplayP3, sRGB } from './color.js?v=312f5ef';
+import { swatchEl, setPalette, reindex, updateAddButton, exitMultiSelect, setActive } from './swatches.js?v=312f5ef';
 import {
   isPromotionShown, updateDots, findEnabledEntryByName, isChipCandidate, entryColor, promotionsOnView,
-} from './pantone.js?v=917f20e';
-import { cmyk, cmykSliderPositionFor, cmykReachableRange, setSwatchCMYKBias } from './cmyk.js?v=917f20e';
-import { flushPendingWheelSnapshot, recordSnapshot } from './history.js?v=917f20e';
+} from './pantone.js?v=312f5ef';
+import { cmyk, cmykSliderPositionFor, cmykReachableRange, setSwatchCMYKBias } from './cmyk.js?v=312f5ef';
+import { flushPendingWheelSnapshot, recordSnapshot } from './history.js?v=312f5ef';
 
 const stateField = document.querySelector('.hex-input');
 const statusRegion = document.getElementById('status-region');

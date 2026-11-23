@@ -6,7 +6,7 @@
 // in the header is the only way to import: it opens the file chooser, several
 // files at once (the export feature was removed 2026-10-21, though an old export
 // file still imports). Each row holds a switch, the name, the +CMYK badge (when
-// the library has a CMYK add-on) and a gear that opens the row's menu: Rename,
+// the library has a CMYK add-on) and a circle button that opens the row's menu: Rename,
 // Edit prefix (typed right in the menu; the promoted color's badge shows it, or
 // "Library"), Remove, and "Set input space ›" (a submenu). Rows stay in import order.
 // Its switch (only the switch) turns the library on or off: an off
@@ -26,9 +26,9 @@
 // promoted color with an alternate gets a "BOOK" checkbox in its swatch's CMYK
 // region (see cmyk.js).
 
-import { parseLibraryFile, detectSpace, detectPrefix, brandCase, swatchToOKLab, SPACES, spacesForFamily, normalizeName, isMetallicLibraryName, ACCEPT } from "./library-formats.js?v=917f20e";
-import { loadLibraries, saveLibraries, libraryFromParsed, attachCMYK, librariesFromExport } from "./library-store.js?v=917f20e";
-import { setLibraryEntries, setActiveLibraries } from "./pantone.js?v=917f20e";
+import { parseLibraryFile, detectSpace, detectPrefix, brandCase, swatchToOKLab, SPACES, spacesForFamily, normalizeName, isMetallicLibraryName, ACCEPT } from "./library-formats.js?v=312f5ef";
+import { loadLibraries, saveLibraries, libraryFromParsed, attachCMYK, librariesFromExport } from "./library-store.js?v=312f5ef";
+import { setLibraryEntries, setActiveLibraries } from "./pantone.js?v=312f5ef";
 
 let libraries = [];
 
@@ -122,8 +122,10 @@ function el(tag, cls, attrs = {}) {
   return n;
 }
 
-// The row's options button: a gear (user's SVG, 2026-11-22; replaced a ▾).
-const GEAR_SVG = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M9.93 4.76Q10.34 4.58 10.37 4.13L10.51 2.05Q10.53 1.60 10.98 1.60L13.02 1.60Q13.47 1.60 13.49 2.05L13.63 4.13Q13.66 4.58 14.07 4.76L15.66 5.41Q16.07 5.58 16.41 5.29L17.98 3.91Q18.32 3.61 18.63 3.93L20.07 5.37Q20.39 5.68 20.09 6.02L18.71 7.59Q18.42 7.93 18.59 8.34L19.24 9.93Q19.42 10.34 19.87 10.37L21.95 10.51Q22.40 10.53 22.40 10.98L22.40 13.02Q22.40 13.47 21.95 13.49L19.87 13.63Q19.42 13.66 19.24 14.07L18.59 15.66Q18.42 16.07 18.71 16.41L20.09 17.98Q20.39 18.32 20.07 18.63L18.63 20.07Q18.32 20.39 17.98 20.09L16.41 18.71Q16.07 18.42 15.66 18.59L14.07 19.24Q13.66 19.42 13.63 19.87L13.49 21.95Q13.47 22.40 13.02 22.40L10.98 22.40Q10.53 22.40 10.51 21.95L10.37 19.87Q10.34 19.42 9.93 19.24L8.34 18.59Q7.93 18.42 7.59 18.71L6.02 20.09Q5.68 20.39 5.37 20.07L3.93 18.63Q3.61 18.32 3.91 17.98L5.29 16.41Q5.58 16.07 5.41 15.66L4.76 14.07Q4.58 13.66 4.13 13.63L2.05 13.49Q1.60 13.47 1.60 13.02L1.60 10.98Q1.60 10.53 2.05 10.51L4.13 10.37Q4.58 10.34 4.76 9.93L5.41 8.34Q5.58 7.93 5.29 7.59L3.91 6.02Q3.61 5.68 3.93 5.37L5.37 3.93Q5.68 3.61 6.02 3.91L7.59 5.29Q7.93 5.58 8.34 5.41ZM15.60 12.00A3.60 3.60 0 1 0 8.40 12.00A3.60 3.60 0 1 0 15.60 12.00Z"/></svg>`;
+// The row's options button: a 16px circle (the switches' height and outline)
+// holding a small right-angled downward chevron, stroked 1.5px like ADD
+// LIBRARY's + (user decision 2026-11-23; it was a gear, before that a ▾).
+const MENU_BTN_SVG = `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 L6 7.5 L9 4.5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>`;
 
 function rowFor(lib) {
   // Only the switch turns the library on or off; the name isn't clickable and
@@ -146,14 +148,14 @@ function rowFor(lib) {
   name.value = lib.name;
   name.readOnly = true;
   // The name and its +CMYK badge share one cell, so the badge sits right
-  // after the name; the gears line up after the widest of these.
+  // after the name; the menu buttons line up after the widest of these.
   const label = el("span", "lib-label");
   label.appendChild(name);
   if (lib.cmyk) label.appendChild(el("span", "lib-cmyk", { text: "+CMYK", title: `CMYK add-on: ${lib.cmyk.name}` }));
   row.appendChild(label);
 
   row.appendChild(el("button", "lib-menu-btn", {
-    type: "button", html: GEAR_SVG, title: "Library options",
+    type: "button", html: MENU_BTN_SVG, title: "Library options",
     "aria-label": `Options for ${lib.name}`, "aria-haspopup": "menu", "aria-expanded": "false",
   }));
   return row;
@@ -256,7 +258,7 @@ list.addEventListener("click", ev => {
 
 // ── Row menu ─────────────────────────────────────────────────────────
 // One menu at a time, floating at the page level (the section clips its
-// contents), placed under the row's gear and kept on screen. "Set input space ›"
+// contents), placed under the row's menu button and kept on screen. "Set input space ›"
 // opens a submenu beside it on hover, click or →. Closes on a choice, a click
 // elsewhere, Escape, scrolling or resizing.
 

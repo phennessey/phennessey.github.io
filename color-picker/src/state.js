@@ -3,11 +3,11 @@
 // per-swatch promoted Pantone selections. Every feature module imports
 // from here, which is what lets the app be split without circular data.
 
-import { createPicker } from './picker.js?v=917f20e';
+import { createPicker } from './picker.js?v=312f5ef';
 import {
   DISC_SIZE, DISC_LB_GAP, LB_WIDTH, LB_HEIGHT, HANDLE_R, HANDLE_SW,
   MIDDLE_GRAY,
-} from './constants.js?v=917f20e';
+} from './constants.js?v=312f5ef';
 
 export const S = {
   colors:          [{ h: 0, s: 0, L: MIDDLE_GRAY }],

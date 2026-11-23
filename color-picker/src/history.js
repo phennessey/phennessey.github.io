@@ -1,16 +1,16 @@
 // Undo/redo: snapshotting swatch state and restoring it.
 
-import { HISTORY_LIMIT, WHEEL_DEBOUNCE_MS } from './constants.js?v=917f20e';
-import { S, els, pantoneSelections } from './state.js?v=917f20e';
+import { HISTORY_LIMIT, WHEEL_DEBOUNCE_MS } from './constants.js?v=312f5ef';
+import { S, els, pantoneSelections } from './state.js?v=312f5ef';
 import {
   setPalette, reindex, updateSwatch, updateAddButton, swatchEl,
   exitMultiSelect, deactivateSwatch, setActive, setHandles, applyMultiVisuals,
-} from './swatches.js?v=917f20e';
-import { findPantoneByKey, updateMatchesVisibility } from './pantone.js?v=917f20e';
-import { activateLibraries } from './libraries.js?v=917f20e';
-import { requestRender } from './util.js?v=917f20e';
-import { stateField } from './state-console.js?v=917f20e';
-import { getGamutMode, resaturate } from './color.js?v=917f20e';
+} from './swatches.js?v=312f5ef';
+import { findPantoneByKey, updateMatchesVisibility } from './pantone.js?v=312f5ef';
+import { activateLibraries } from './libraries.js?v=312f5ef';
+import { requestRender } from './util.js?v=312f5ef';
+import { stateField } from './state-console.js?v=312f5ef';
+import { getGamutMode, resaturate } from './color.js?v=312f5ef';
 
 // History
 
