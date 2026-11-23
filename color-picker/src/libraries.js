@@ -26,9 +26,9 @@
 // promoted color with an alternate gets a "BOOK" checkbox in its swatch's CMYK
 // region (see cmyk.js).
 
-import { parseLibraryFile, detectSpace, detectPrefix, brandCase, swatchToOKLab, SPACES, spacesForFamily, normalizeName, isMetallicLibraryName, ACCEPT } from "./library-formats.js";
-import { loadLibraries, saveLibraries, libraryFromParsed, attachCMYK, librariesFromExport } from "./library-store.js";
-import { setLibraryEntries, setActiveLibraries } from "./pantone.js";
+import { parseLibraryFile, detectSpace, detectPrefix, brandCase, swatchToOKLab, SPACES, spacesForFamily, normalizeName, isMetallicLibraryName, ACCEPT } from "./library-formats.js?v=e65dba6";
+import { loadLibraries, saveLibraries, libraryFromParsed, attachCMYK, librariesFromExport } from "./library-store.js?v=e65dba6";
+import { setLibraryEntries, setActiveLibraries } from "./pantone.js?v=e65dba6";
 
 let libraries = [];
 

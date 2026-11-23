@@ -3,7 +3,7 @@
 // `corner-shape: superellipse(…)` — so the old clip-path/SVG-outline pipeline
 // is gone.)
 
-import { P, els, DISC_R, S } from './state.js';
+import { P, els, DISC_R, S } from './state.js?v=e65dba6';
 
 
 // Utility helpers

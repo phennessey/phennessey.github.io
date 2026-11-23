@@ -8,8 +8,8 @@ import {
   convert, OKLab, DisplayP3, sRGB,
   toe, toeInv, toOKLab, to255, clamp01, sForChroma, chromaOf, inSRGB, inP3, cuspL, isSRGBMode, onRim, getGamutMode,
   okhslHueTable, cssColor, isP3AMode, OKLab_to_LMS_M, LMS_to_linear_sRGB_M, LMS_to_linear_DisplayP3_M,
-} from './color.js';
-import { DOT_RADIUS } from './constants.js';
+} from './color.js?v=e65dba6';
+import { DOT_RADIUS } from './constants.js?v=e65dba6';
 
 // ── Constants ────────────────────────────────────────────────────────
 

@@ -3,14 +3,14 @@
 // state — selection visuals, the mesh that connects multi-selected handles,
 // and the picker-background tint.
 
-import { MIDDLE_GRAY, MAX_COLORS, GAMUT_ICON_SVG, CLOSE_ICON_SVG } from './constants.js';
-import { S, P, els, pantoneSelections, handlePos } from './state.js';
-import { idxOf, meshEdgesFor } from './picker.js';
-import { computeP3AndSRGB, neutralP3, cielabL, cielabLOfSrgb, cielabLOfP3 } from './color.js';
-import { updateSwatchCMYK, isOutOfCMYK } from './cmyk.js';
-import { buildMatchCells, matchRowObserver, updateSwatchMatches } from './pantone.js';
-import { syncModKeys, requestRender } from './util.js';
-import { flushPendingWheelSnapshot, recordSnapshot } from './history.js';
+import { MIDDLE_GRAY, MAX_COLORS, GAMUT_ICON_SVG, CLOSE_ICON_SVG } from './constants.js?v=e65dba6';
+import { S, P, els, pantoneSelections, handlePos } from './state.js?v=e65dba6';
+import { idxOf, meshEdgesFor } from './picker.js?v=e65dba6';
+import { computeP3AndSRGB, neutralP3, cielabL, cielabLOfSrgb, cielabLOfP3 } from './color.js?v=e65dba6';
+import { updateSwatchCMYK, isOutOfCMYK } from './cmyk.js?v=e65dba6';
+import { buildMatchCells, matchRowObserver, updateSwatchMatches } from './pantone.js?v=e65dba6';
+import { syncModKeys, requestRender } from './util.js?v=e65dba6';
+import { flushPendingWheelSnapshot, recordSnapshot } from './history.js?v=e65dba6';
 
 // Swatch DOM helpers
 

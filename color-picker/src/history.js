@@ -1,16 +1,16 @@
 // Undo/redo: snapshotting swatch state and restoring it.
 
-import { HISTORY_LIMIT, WHEEL_DEBOUNCE_MS } from './constants.js';
-import { S, els, pantoneSelections } from './state.js';
+import { HISTORY_LIMIT, WHEEL_DEBOUNCE_MS } from './constants.js?v=e65dba6';
+import { S, els, pantoneSelections } from './state.js?v=e65dba6';
 import {
   setPalette, reindex, updateSwatch, updateAddButton, swatchEl,
   exitMultiSelect, deactivateSwatch, setActive, setHandles, applyMultiVisuals, computeFrozenEdges,
-} from './swatches.js';
-import { findPantoneByKey, updateMatchesVisibility } from './pantone.js';
-import { activateLibraries } from './libraries.js';
-import { requestRender } from './util.js';
-import { stateField } from './state-console.js';
-import { getGamutMode, resaturate } from './color.js';
+} from './swatches.js?v=e65dba6';
+import { findPantoneByKey, updateMatchesVisibility } from './pantone.js?v=e65dba6';
+import { activateLibraries } from './libraries.js?v=e65dba6';
+import { requestRender } from './util.js?v=e65dba6';
+import { stateField } from './state-console.js?v=e65dba6';
+import { getGamutMode, resaturate } from './color.js?v=e65dba6';
 
 // History
 

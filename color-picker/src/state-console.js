@@ -39,15 +39,15 @@
 // can't be reached, nothing is applied: the box keeps your text, selects the
 // line, and the status line under the swatches says why.
 
-import { MAX_COLORS } from './constants.js';
-import { S, P, els, pantoneSelections } from './state.js';
-import { srgbToOKHSL, p3ToOKHSL, oklchToOKHSL, computeP3AndSRGB, isSRGBMode, getGamutMode, convert, DisplayP3, sRGB } from './color.js';
-import { swatchEl, setPalette, reindex, updateAddButton, exitMultiSelect, setActive } from './swatches.js';
+import { MAX_COLORS } from './constants.js?v=e65dba6';
+import { S, P, els, pantoneSelections } from './state.js?v=e65dba6';
+import { srgbToOKHSL, p3ToOKHSL, oklchToOKHSL, computeP3AndSRGB, isSRGBMode, getGamutMode, convert, DisplayP3, sRGB } from './color.js?v=e65dba6';
+import { swatchEl, setPalette, reindex, updateAddButton, exitMultiSelect, setActive } from './swatches.js?v=e65dba6';
 import {
   isPromotionShown, updateDots, findEnabledEntryByName, isChipCandidate, entryColor, promotionsOnView,
-} from './pantone.js';
-import { cmyk, cmykSliderPositionFor, cmykReachableRange, setSwatchCMYKBias } from './cmyk.js';
-import { flushPendingWheelSnapshot, recordSnapshot } from './history.js';
+} from './pantone.js?v=e65dba6';
+import { cmyk, cmykSliderPositionFor, cmykReachableRange, setSwatchCMYKBias } from './cmyk.js?v=e65dba6';
+import { flushPendingWheelSnapshot, recordSnapshot } from './history.js?v=e65dba6';
 
 const stateField = document.querySelector('.hex-input');
 const statusRegion = document.getElementById('status-region');
