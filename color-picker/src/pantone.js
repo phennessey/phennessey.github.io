@@ -12,8 +12,8 @@ import {
 import { S, P, els, pantoneSelections } from './state.js';
 import { TAU, idxOf } from './picker.js';
 import {
-  toe, toOKLab, computeP3AndSRGB, isSRGBMode,
-  oklabToOKHSL, okhslToOKLab, convert, OKLab, DisplayP3, sRGB,
+  toe, toOKLab, computeP3AndSRGB, isSRGBMode, isP3AMode, getGamutMode, cssColor, edgeChromas,
+  oklabToOKHSL, okhslToOKLab, convert, OKLab, DisplayP3, sRGB, P3A,
 } from './color.js';
 import { swatchEl, updateSwatch } from './swatches.js';
 import { flushPendingWheelSnapshot, recordSnapshot } from './history.js';
@@ -48,8 +48,8 @@ let activeLibIds = new Set();
 // every lightness change. It sits between the disc and its SVG overlay — the
 // same stacking the dots had as the overlay's first visible layer, under the
 // gamut boundaries, guides and handles — and reaches DOT_MARGIN past the disc
-// on every side for out-of-gamut dots (compressed to ≤ 1.2× the radius, see
-// dotRadiusS). Drawn at the display's pixel ratio; never takes the pointer.
+// on every side for out-of-gamut dots (at most DOT_BAND_MAX past the rim, see
+// dotRadius). Drawn at the display's pixel ratio; never takes the pointer.
 const DOT_MARGIN = 40;
 const dotCanvas = document.createElement('canvas');
 dotCanvas.id = 'pantone-dots';
@@ -88,6 +88,7 @@ function setLibraryEntries(entries, activeIds) {
     _chk[0] = e.L; _chk[1] = e.a; _chk[2] = e.b;
     e.outOfP3 = outside(convert(_chk, OKLab, DisplayP3, [0, 0, 0]));
     e.outOfSRGB = outside(convert(_chk, OKLab, sRGB, [0, 0, 0]));
+    e.outOfP3A = outside(convert(_chk, OKLab, P3A, [0, 0, 0]));
     placeEntry(e);
     pantoneData.push(e);
     byKey.set(e.key, e);
@@ -116,16 +117,27 @@ function setActiveLibraries(activeIds) {
 // A Pantone's wheel coordinates in the current gamut. `s` can exceed 1: a
 // Pantone outside the gamut sits beyond the disc edge at its true saturation.
 // `outOfGamut` drives the chip/promoted warning icon — outside Display P3 in P3
-// mode, outside sRGB in sRGB mode (everything shown is limited to that gamut).
+// mode, outside sRGB in sRGB mode, outside P3A in P3A mode (everything shown is
+// limited to that gamut).
 const _placeHsl = [0, 0, 0];
 function placeEntry(entry) {
   oklabToOKHSL([entry.L, entry.a, entry.b], _placeHsl);
   entry.h = _placeHsl[0] / 360;
   entry.s = _placeHsl[1];
-  entry.outOfGamut = isSRGBMode() ? entry.outOfSRGB : entry.outOfP3;
-  // Its dot's disc position. Out-of-gamut colors sit beyond the rim,
-  // compressed (see dotRadiusS).
-  const R = DISC_SIZE / 2, ang = entry.h * TAU, r = dotRadiusS(entry.s) * R;
+  entry.outOfGamut = isSRGBMode() ? entry.outOfSRGB : isP3AMode() ? entry.outOfP3A : entry.outOfP3;
+  // Past the rim: how far toward Rec.2020's edge it sits (see dotRadius).
+  entry.t = 0;
+  if (entry.s > 1) {
+    const [Ce, Cr] = edgeChromas([entry.L, entry.a, entry.b]);
+    const C = Math.hypot(entry.a, entry.b);
+    entry.t = Math.max(0, Math.min(1, (C - Ce) / Math.max(Cr - Ce, MIN_REF_GAP)));
+  }
+  positionEntry(entry);
+}
+/** Its dot's disc position: on the wheel at s, or past the rim (dotRadius). */
+function positionEntry(entry) {
+  const R = DISC_SIZE / 2, ang = entry.h * TAU;
+  const r = (entry.s > 1 ? dotRadius(entry.t) : entry.s) * R;
   entry.x = R + Math.cos(ang) * r;
   entry.y = R - Math.sin(ang) * r;
 }
@@ -140,34 +152,25 @@ function remapPantoneToGamut() {
   updateAllSwatchMatches();
 }
 
-// How far beyond the rim an out-of-gamut library dot may be drawn, as a
-// fraction of the wheel's radius. True positions can reach far outside the
-// interface (out-of-sRGB colors ~1.56× the radius in sRGB mode, neons well past
-// the P3 rim), so the excess x beyond the rim is compressed exponentially:
+// Library dots past the rim — one rule for every gamut mode (user decision
+// 2026-11-22; it was a band and falloff tuned by hand per mode). A dot past the
+// rim is placed by how far it sits from the current gamut's edge toward a fixed
+// outer reference, Rec.2020's edge, at its own hue and lightness, linearly:
 //
-//     x → m · (1 − e^(−k·x/m))      m = band, k = falloff
+//     t = (C − C_edge) / (C_Rec2020 − C_edge)          0 at the rim, 1 at Rec.2020
+//     r = 1 + DOT_BAND_MAX · t
 //
-// The farther a color sits the harder it's squeezed; dots approach m but never
-// reach it, and order is preserved. k is the curve's intensity — its slope at
-// the rim: 1 leaves dots just outside the rim at their true spot; below 1
-// pulls every dot in harder (they bunch near the rim); above 1 pushes them out
-// toward the band's edge sooner. Each gamut mode has its own pair (user
-// decision 2026-10-20), since sRGB mode has far more, and farther, out-of-gamut
-// colors: P3 0.2 / 8 (a dot just past the rim → 1.11×, the farthest neon,
-// truly 1.26× → 1.20×); sRGB 0.6 / 0.5 (just past → 1.01×, the farthest,
-// truly 1.55× → 1.22×). Display only — the color's real saturation (entry.s)
-// is untouched for matching and promotion.
-const DOT_COMPRESSION = {
-  p3:   { band: 0.2, falloff: 8 },
-  srgb: { band: 0.6, falloff: 0.5 },
-};
-function dotRadiusS(s) {
-  if (s <= 1) return s;
-  const { band, falloff } = DOT_COMPRESSION[isSRGBMode() ? 'srgb' : 'p3'];
-  if (band <= 0) return 1;   // no band: every out-of-gamut dot sits on the rim
-  return 1 + band * (1 - Math.exp(-falloff * (s - 1) / band));
-}
-
+// DOT_BAND_MAX is the farthest a dot may sit past the rim, as a share of the
+// wheel's radius: 0.16, tuned by eye in all three modes; linear spreads the
+// dots most evenly (an easing curve was tried and dropped the same day). As the
+// gamut grows (sRGB → P3 → P3A) the band always spans what's left between the
+// rim and Rec.2020, so nothing needs re-tuning. P3's red pokes a hair past
+// Rec.2020, so the gap is floored (MIN_REF_GAP) and t capped at 1. Display only
+// — entry.s is untouched for matching and promotion. Keep it under the dot
+// canvas's 40px margin (0.30 of the radius).
+const DOT_BAND_MAX = 0.16;
+const MIN_REF_GAP = 0.02;
+const dotRadius = t => 1 + DOT_BAND_MAX * t;
 
 let lastDotsActiveL   = NaN;
 let lastDotsFilterSig = '';
@@ -340,7 +343,7 @@ function renderPromoted(cell, p) {
   if (p) {
     cell.dataset.pantoneKey = p.key;
     const badge = cell.querySelector('.region-badge');
-    if (badge && badge.textContent !== p.libName) badge.textContent = p.libName;
+    if (badge && badge.textContent !== p.badge) badge.textContent = p.badge;   // the library's prefix, or "Library"
     renderPantoneLabel(cell.querySelector('.match-label'), p.name);
     cell.classList.toggle('out-of-gamut', !!p.outOfGamut);
     if (warn) warn.style.display = p.outOfGamut ? '' : 'none';
@@ -490,16 +493,12 @@ function updateSwatchMatches(index) {
 
   const matchCellsEl = container.querySelector('.match-cells');
 
-  // Chip ink (labels, gamut icons, hue marker) follows the chips, not the
-  // swatch: the average of the lineup's lightest and darkest chip decides dark
-  // or light ink (user decision 2026-10-22 — a mid-gray swatch put white labels
-  // on pale pastel chips). With no chips, the swatch decides, as before.
-  if (matchCellsEl) {
-    let lo = Infinity, hi = -Infinity;
-    for (const e of kept) { if (e.L < lo) lo = e.L; if (e.L > hi) hi = e.L; }
-    const chipsLight = kept.length ? (lo + hi) / 2 > MIDDLE_GRAY : c.L > MIDDLE_GRAY;
-    matchCellsEl.classList.toggle('chips-light', chipsLight);
-  }
+  // Chip ink (labels, gamut icons, hue marker, dividers) follows the swatch's
+  // own color, one choice for its whole strip: dark ink when the swatch is
+  // lighter than middle gray (user decision 2026-11-22; from 2026-10-22 the
+  // chips' lightest-and-darkest average decided, which mixed inks across a row
+  // of swatches). The class keeps its old name.
+  if (matchCellsEl) matchCellsEl.classList.toggle('chips-light', c.L > MIDDLE_GRAY);
 
   renderPromoted(promotedCell, selected);
 
@@ -512,8 +511,8 @@ function updateSwatchMatches(index) {
     if (selected) {
       bg = pantoneP3Css(selected);
     } else {
-      const { p3Css, srgbCss, outOfSRGB } = computeP3AndSRGB(c);
-      bg = outOfSRGB ? p3Css : srgbCss;
+      const { oklchCss, srgbCss, outOfSRGB } = computeP3AndSRGB(c);
+      bg = outOfSRGB ? oklchCss : srgbCss;
     }
     // Remember the resting background; while a chip is being hovered the
     // strip shows that chip's color instead (see chip hover preview below),
@@ -576,8 +575,7 @@ function findPantoneByKey(key) {
 
 function oklabToP3Css(L, a, b) {
   oklabBuf[0] = L; oklabBuf[1] = a; oklabBuf[2] = b;
-  convert(oklabBuf, OKLab, DisplayP3, p3Buf);
-  return `color(display-p3 ${Math.max(0, p3Buf[0]).toFixed(3)} ${Math.max(0, p3Buf[1]).toFixed(3)} ${Math.max(0, p3Buf[2]).toFixed(3)})`;
+  return cssColor(oklabBuf);
 }
 
 // A pantone's pickable color: hold hue and lightness, pull the OKHSL
@@ -807,9 +805,9 @@ function wireMatchRowClick(matchRow, container) {
 // an out-of-gamut caution (a chip's, or the promoted cell's) shows the note;
 // leaving the swatch area clears it. Other features can call setStatus() too.
 const statusRegion = document.getElementById('status-region');
-const gamutStatus = () => isSRGBMode()
-  ? "This library color is outside the sRGB color gamut of this browser's current display mode."
-  : "This library color is outside the Display P3 color gamut of this browser's current display mode.";
+const GAMUT_NAMES = { srgb: 'sRGB', p3: 'Display P3', p3a: 'P3A' };
+const gamutStatus = () =>
+  `This library color is outside the ${GAMUT_NAMES[getGamutMode()]} color gamut of this browser's current display mode.`;
 function setStatus(text) { if (statusRegion) statusRegion.textContent = text || ''; }
 
 els.swatches.addEventListener('pointerover', ev => {
@@ -823,7 +821,8 @@ els.swatches.addEventListener('pointerover', ev => {
   // the P3 bar's snaps to sRGB; the CMYK region's names the current mode's gamut.
   const swatchWarn = ev.target.closest('.gamut-warning');
   if (swatchWarn) {
-    const space = swatchWarn.classList.contains('cmyk-gamut') && !isSRGBMode() ? 'P3' : 'sRGB';
+    const space = swatchWarn.classList.contains('oklch-gamut') ? 'P3'
+      : swatchWarn.classList.contains('cmyk-gamut') && !isSRGBMode() ? 'P3' : 'sRGB';
     setStatus(`Snap swatch to closest in-gamut ${space} color`);
     return;
   }
@@ -887,21 +886,9 @@ if (hideOnPromoteCb) {
   });
 }
 
-// The Libraries checkbox (#toggle-libraries, in the section head)
-// switches the whole feature on or off — matches, dots, promotions on view.
-const sectionToggle = document.getElementById('toggle-libraries');
-if (sectionToggle) {
-  S.libraryFilters.base = sectionToggle.checked;
-  sectionToggle.addEventListener('change', () => {
-    S.libraryFilters.base = sectionToggle.checked;
-    updateDots();
-    updateMatchesVisibility();
-    updateAllSwatchMatches();
-    // CMYK swatch layout depends on match visibility (bottom vs side mode),
-    // so trigger a render whenever library state changes.
-    P.render();
-  });
-}
+// Libraries has no section switch any more (user decision 2026-11-22): matches
+// are on whenever at least one library's own switch is (S.libraryFilters.base
+// stays true).
 
 function updateMatchesVisibility() {
   els.swatches.classList.toggle('show-matches', anyLibraryEnabled());

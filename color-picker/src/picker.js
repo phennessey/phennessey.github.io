@@ -6,8 +6,8 @@
 
 import {
   convert, OKLab, DisplayP3, sRGB,
-  toe, toeInv, toOKLab, to255, clamp01, sForChroma, chromaOf, inSRGB, cuspL, isSRGBMode, onRim,
-  okhslHueTable, OKLab_to_LMS_M, LMS_to_linear_sRGB_M, LMS_to_linear_DisplayP3_M,
+  toe, toeInv, toOKLab, to255, clamp01, sForChroma, chromaOf, inSRGB, inP3, cuspL, isSRGBMode, onRim, getGamutMode,
+  okhslHueTable, cssColor, isP3AMode, OKLab_to_LMS_M, LMS_to_linear_sRGB_M, LMS_to_linear_DisplayP3_M,
 } from './color.js';
 import { DOT_RADIUS } from './constants.js';
 
@@ -91,11 +91,20 @@ function encode(v) {
 
 // `space` is the canvas's own color space (DisplayP3 or sRGB): pixels are
 // written as 8-bit codes in that space, so they must be computed in it too.
+// P3A mode passes 'p3a': a float16 display-p3 image holding extended P3 values
+// (outside 0–1, sRGB-encoded with the sign kept), which reach the panel's edge
+// in Chrome (measured), undithered (float16 has no 8-bit banding).
 // Pixels outside the disc's clip are left untouched.
+const encodeExt = v => {
+  const a = Math.abs(v), e = a <= 1 ? encode(a) : 1.055 * Math.pow(a, 1 / 2.4) - 0.055;
+  return v < 0 ? -e : e;
+};
 export function renderDiscPixels(imageData, discSize, lr, space = DisplayP3) {
   const d = imageData.data, G = discGeometry(discSize), L = toeInv(lr);
+  const ext = space === 'p3a';
   if (!(L > 0 && L < 1)) {   // pure black or white: no chroma (as in hslToLab)
-    const v = L >= 1 ? 255 : 0;
+    const v = L >= 1 ? (ext ? 1 : 255) : 0;
+    if (ext) { for (let k = 0; k < G.count; k++) { const o = G.pix[k]; d[o] = d[o + 1] = d[o + 2] = v; d[o + 3] = 1; } return; }
     for (let k = 0; k < G.count; k++) { const o = G.pix[k]; d[o] = d[o + 1] = d[o + 2] = v; d[o + 3] = 255; }
     return;
   }
@@ -117,6 +126,14 @@ export function renderDiscPixels(imageData, discSize, lr, space = DisplayP3) {
     const A = C * ca[k], B = C * sa[k];
     let l = L + ka1 * A + kb1 * B, m = L + ka2 * A + kb2 * B, q = L + ka3 * A + kb3 * B;
     l = l * l * l; m = m * m * m; q = q * q * q;
+    if (ext) {
+      const o = pix[k];
+      d[o]     = encodeExt(m11 * l + m12 * m + m13 * q);
+      d[o + 1] = encodeExt(m21 * l + m22 * m + m23 * q);
+      d[o + 2] = encodeExt(m31 * l + m32 * m + m33 * q);
+      d[o + 3] = 1;
+      continue;
+    }
     // Bayer 4×4 ordered dither (±0.5 LSB) breaks 8-bit banding.
     const n = dith[k], o = pix[k];
     d[o]     = Math.round(clamp01(encode(m11 * l + m12 * m + m13 * q) + n) * 255);
@@ -152,11 +169,7 @@ export function lightbarGradientCss(h, s, stops = 64) {
   for (let i = 0; i < stops; i++) {
     const t = i / (stops - 1);    // 0 at top → 1 at bottom
     const lr = 1 - t;             // top of bar = lr 1, bottom = lr 0
-    convert(toOKLab(h, s, lr), OKLab, DisplayP3, _p3);
-    const r = Math.max(0, _p3[0]).toFixed(4);
-    const g = Math.max(0, _p3[1]).toFixed(4);
-    const b = Math.max(0, _p3[2]).toFixed(4);
-    parts.push(`color(display-p3 ${r} ${g} ${b}) ${(t * 100).toFixed(2)}%`);
+    parts.push(`${cssColor(toOKLab(h, s, lr), 4)} ${(t * 100).toFixed(2)}%`);
   }
   return `linear-gradient(to bottom, ${parts.join(', ')})`;
 }
@@ -181,12 +194,12 @@ const GAMUT_BOUNDARY_STEPS = 11;
 // The sRGB boundary eases (CSS transition) only within this much lightness of
 // either end, where it morphs into the edge circle.
 const GAMUT_EASE_BAND = 0.01;
-export function gamutBoundaryPath(lr, discR) {
+export function gamutBoundaryPath(lr, discR, inside = inSRGB) {
   return polarPath(359, h => {
     let lo = 0, hi = 1;
     for (let it = 0; it < GAMUT_BOUNDARY_STEPS; it++) {
       const m = (lo + hi) * 0.5;
-      if (inSRGB(h, m, lr)) lo = m; else hi = m;
+      if (inside(h, m, lr)) lo = m; else hi = m;
     }
     return hi * discR;
   }, discR);
@@ -344,6 +357,16 @@ export function createPicker(S, cfg) {
   wheelCanvas.after(wheelCanvasSRGB);
   const wheelCtxSRGB = wheelCanvasSRGB.getContext('2d', { colorSpace: 'srgb' });
 
+  // P3A mode draws on a third canvas: float16 display-p3, the one 2D canvas
+  // that holds colors past P3 (an 8-bit canvas clips to P3; measured).
+  const wheelCanvasP3A = wheelCanvasSRGB.cloneNode();
+  wheelCanvasP3A.id = 'wheel-p3a';
+  initCanvas(wheelCanvasP3A, DISC_SIZE, DISC_SIZE);
+  wheelCanvasSRGB.after(wheelCanvasP3A);
+  const wheelCtxP3A = wheelCanvasP3A.getContext('2d', { colorSpace: 'display-p3', colorType: 'float16' });
+  const canvases = { p3: wheelCanvas, srgb: wheelCanvasSRGB, p3a: wheelCanvasP3A };
+  const contexts = { p3: wheelCtx, srgb: wheelCtxSRGB, p3a: wheelCtxP3A };
+
   // The lightbar is a div with a CSS gradient — sized to match overlay.
   lightbarEl.style.cssText += `width:${LB_WIDTH}px;height:${LB_HEIGHT}px;display:block;`;
 
@@ -364,6 +387,11 @@ export function createPicker(S, cfg) {
     id: 'gamut-boundary', fill: 'none', stroke: '#000', 'stroke-width': '0.5', 'stroke-linejoin': 'round',
   });
   discOverlay.appendChild(gamutBoundary);
+  // P3A mode draws P3's boundary too, in the same style.
+  const p3Boundary = svgEl('path', {
+    id: 'p3-boundary', fill: 'none', stroke: '#000', 'stroke-width': '0.5', 'stroke-linejoin': 'round',
+  });
+  discOverlay.appendChild(p3Boundary);
 
   // sRGB mode's edge circle: just a circle at the disc edge (not a gamut
   // boundary — in sRGB mode there is none), faded in near lightness 0 and 100.
@@ -443,20 +471,22 @@ export function createPicker(S, cfg) {
   // holds, so an unchanged disc isn't repainted at all.
   const discCache = new Map();   // `${mode}|${L}` → { L, img, gamutD }
   const DISC_CACHE_MAX = 24;     // ~280 KB each
-  const shownDisc = { p3: null, srgb: null };
+  const shownDisc = { p3: null, srgb: null, p3a: null };
   // A canvas the browser discards and restores (e.g. after a GPU reset) comes
   // back blank: forget what it showed so the next render repaints it.
   wheelCanvas.addEventListener('contextrestored', () => { shownDisc.p3 = null; });
   wheelCanvasSRGB.addEventListener('contextrestored', () => { shownDisc.srgb = null; });
+  wheelCanvasP3A.addEventListener('contextrestored', () => { shownDisc.p3a = null; });
   let gamutShownD = null;        // the sRGB boundary path currently drawn
+  let p3ShownD = null;           // the P3 boundary path currently drawn (P3A mode)
   let lightbarKey = null;
   // CMYK boundary: injected radius function, visibility, and an lr-keyed path cache.
   let cmykBoundaryFn = null, cmykShow = false, cmykLr = -1, cmykD = '';
 
   function invalidateCache() {
     discCache.clear();
-    shownDisc.p3 = shownDisc.srgb = null;
-    gamutShownD = null;
+    shownDisc.p3 = shownDisc.srgb = shownDisc.p3a = null;
+    gamutShownD = p3ShownD = null;
     lightbarKey = null;
     cmykLr = -1;
   }
@@ -498,11 +528,9 @@ export function createPicker(S, cfg) {
   // ── Disc drawing ─────────────────────────────────────────────────
   function drawDisc() {
     // Draw on the canvas whose color space matches the mode; show only that one.
-    const srgbMode = isSRGBMode();
-    const mode = srgbMode ? 'srgb' : 'p3';
-    const ctx  = srgbMode ? wheelCtxSRGB : wheelCtx;
-    wheelCanvasSRGB.style.visibility = srgbMode ? 'visible' : 'hidden';
-    wheelCanvas.style.visibility     = srgbMode ? 'hidden' : 'visible';
+    const mode = getGamutMode();
+    const ctx  = contexts[mode];
+    for (const m in canvases) canvases[m].style.visibility = m === mode ? 'visible' : 'hidden';
     if (S.activeIndex !== -1) S.lastActiveIndex = S.activeIndex;
     const refL = S.colors[S.lastActiveIndex]?.L ?? 0.5;
     const lr   = toe(refL);
@@ -515,9 +543,11 @@ export function createPicker(S, cfg) {
       // Keep the ImageData we build rather than reading it back with
       // getImageData — the pixels are identical, and this avoids a GPU→CPU
       // readback (the source of Chrome's willReadFrequently hint).
-      const img = ctx.createImageData(DISC_SIZE, DISC_SIZE);
-      renderDiscPixels(img, DISC_SIZE, lr, srgbMode ? sRGB : DisplayP3);
-      entry = { L: refL, img, gamutD: null };
+      const img = mode === 'p3a'
+        ? new ImageData(DISC_SIZE, DISC_SIZE, { colorSpace: 'display-p3', pixelFormat: 'rgba-float16' })
+        : ctx.createImageData(DISC_SIZE, DISC_SIZE);
+      renderDiscPixels(img, DISC_SIZE, lr, mode === 'p3a' ? 'p3a' : mode === 'srgb' ? sRGB : DisplayP3);
+      entry = { L: refL, img, gamutD: null, p3D: null };
       discCache.set(key, entry);
     }
     pruneDiscCache(key);
@@ -547,12 +577,22 @@ export function createPicker(S, cfg) {
       // new values so the change on entering the band eases too.
       gamutBoundary.classList.toggle('eased', lr < GAMUT_EASE_BAND || lr > 1 - GAMUT_EASE_BAND);
       gamutBoundary.setAttribute('stroke', stroke);
-      gamutBoundary.setAttribute('stroke-opacity', opacity);
+      // In P3A mode the sRGB ring is the inner of two rings: half as strong, so
+      // the P3 ring reads as the main boundary (user decision 2026-11-22).
+      gamutBoundary.setAttribute('stroke-opacity', getGamutMode() === 'p3a' ? String(parseFloat(opacity) / 2) : opacity);
       // The boundary path depends only on lr: traced once per cached disc image,
       // and the 359-point SVG path re-parsed only when it actually changes.
       if (entry.gamutD == null) entry.gamutD = gamutBoundaryPath(lr, DISC_R);
       if (gamutShownD !== entry.gamutD) { gamutBoundary.setAttribute('d', entry.gamutD); gamutShownD = entry.gamutD; }
     }
+    // P3's boundary: P3A mode only, styled and eased like the sRGB one.
+    if (getGamutMode() === 'p3a') {
+      p3Boundary.classList.toggle('eased', lr < GAMUT_EASE_BAND || lr > 1 - GAMUT_EASE_BAND);
+      p3Boundary.setAttribute('stroke', stroke);
+      p3Boundary.setAttribute('stroke-opacity', opacity);
+      if (entry.p3D == null) entry.p3D = gamutBoundaryPath(lr, DISC_R, inP3);
+      if (p3ShownD !== entry.p3D) { p3Boundary.setAttribute('d', entry.p3D); p3ShownD = entry.p3D; }
+    } else if (p3ShownD !== '') { p3Boundary.setAttribute('d', ''); p3ShownD = ''; }
     updateCMYKBoundary(stroke, opacity, lr, L);
   }
 
@@ -683,7 +723,7 @@ export function createPicker(S, cfg) {
 
     if (S.activeIndex === -1) return null;
 
-    const guidesVisible = S.pointerInPickerWrap || S.dragging;
+    const guidesVisible = S.modGuidesLive();
     if (!guidesVisible) return null;
 
     // While the cursor is over the lightbar, Shift drives fine-adjustment

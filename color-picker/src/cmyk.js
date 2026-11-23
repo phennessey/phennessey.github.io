@@ -43,7 +43,7 @@
 
 import {
   convert, OKLab, XYZ, DisplayP3, oklabToOKHSL,
-  toOKLab, toe, toeInv, isSRGBMode, clampOKLabToSRGB, sForChroma,
+  toOKLab, toe, toeInv, isSRGBMode, isP3AMode, cssColor, clampOKLabToSRGB, sForChroma,
 } from "./color.js";
 import {
   makeInkSolver, xyzD65ToLabD50, labD50ToXYZd65, parseGamutTable, tableChroma, PROFILE_TAC, USE_BPC,
@@ -313,6 +313,8 @@ export function updateSwatchCMYK(container, color, index) {
       convert(proofXyz, XYZ, DisplayP3, _p3);
     }
     cmykBg = `color(display-p3 ${cl3(_p3[0])} ${cl3(_p3[1])} ${cl3(_p3[2])})`;
+    // P3A mode: printable colors past P3 (a few greens and cyans) keep them.
+    if (isP3AMode()) cmykBg = cssColor(convert(proofXyz, XYZ, OKLab, _proofOk));
     cmykL = proof.L;   // CIELAB L* (D50) directly — matches Photoshop's Lab L for a P3 doc
     proofLh = proofLightnessOf(proofXyz);
   };

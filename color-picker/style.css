@@ -166,6 +166,8 @@ body.light-bg .top-ui {
    frame's 16px section gap: 25.6px (user decisions 2026-10-21/22). */
 .ui-column { margin-left: calc(var(--section-gap) * 0.6); }
 .ui-column > .ui-section + .ui-section { margin-top: 0; }
+/* 10px more room between CMYK and Libraries below it (user decision 2026-11-22). */
+.ui-column > .ui-section + .section-libraries { margin-top: 10px; }
 .section-check {
   display: flex;
   align-items: center;
@@ -174,17 +176,22 @@ body.light-bg .top-ui {
   cursor: pointer;
 }
 .section-check .section-label { cursor: pointer; color: inherit; }
-/* Switched off, the label dims slightly: 0.7 × the active label alpha (0.78 →
-   ~0.55; user decision 2026-10-22). */
-.checkable:not(.open) .section-check .section-label { opacity: 0.7; }
-.section-check {
+/* The CMYK label never dims: same color as LIBRARIES whether the section is on
+   or off (user decision 2026-11-22; it dimmed to 0.7 when off). */
+.section-check, .section-libraries {
   --sw-ink: rgba(255,255,255,0.4);
   --sw-ink-on: rgba(255,255,255,0.85);
 }
-body.light-bg .section-check {
+body.light-bg .section-check, body.light-bg .section-libraries {
   --sw-ink: rgba(0,0,0,0.4);
   --sw-ink-on: rgba(0,0,0,0.8);
 }
+/* Libraries' label has no switch beside it (always on), shown at the same
+   active alpha as CMYK's. Section switches and the + pill follow the label
+   (user decision 2026-11-22; the switch was before it). */
+.section-libraries .section-label,
+.section-check .section-label { color: var(--label-color-active); opacity: 1; }
+.section-head .section-check { gap: 8px; }
 .section-check input[type="checkbox"] {
   -webkit-appearance: none;
   appearance: none;
@@ -209,13 +216,17 @@ body.light-bg .section-check {
   border-radius: 50%;
   background: var(--sw-ink);
 }
-.section-check input[type="checkbox"]:checked { border-color: var(--sw-ink-on); }
-.section-check input[type="checkbox"]:checked::before { background: var(--sw-ink-on); transform: translateX(10px); }
+/* On or off, the switch rests dim and lights to the hover color when you point
+   at it or its label, like Libraries' + pill (user decision 2026-11-22; it was
+   brighter when on). Its position shows the state. */
+.section-check input[type="checkbox"]:checked::before { transform: translateX(10px); }
+.section-check:hover input[type="checkbox"] { border-color: var(--ui-label-hover); }
+.section-check:hover input[type="checkbox"]::before { background: var(--ui-label-hover); }
 .section-check input[type="checkbox"]:focus { outline: none; }
 .section-check input[type="checkbox"]:focus-visible { outline: 1px solid var(--sw-ink-on); outline-offset: 2px; }
 /* Section labels (Libraries, CMYK — and the header switches) show at the
    active label alpha (user decision 2026-10-21); dimmed slightly when off. */
-.checkable .section-body { display: flex; margin-left: 30px; }   /* under the label: 24px switch + 6px gap */
+.checkable .section-body { display: flex; }   /* flush with the label (2026-11-22; was indented past the switch) */
 /* Switched off: the body stays in view but fades to show it's inactive — and
    is unusable (main.js makes it inert; pointer-events here as a backstop). */
 .checkable:not(.open) .section-body { opacity: 0.2; pointer-events: none; }
@@ -234,70 +245,49 @@ body.light-bg .section-check {
 .top-ui > :last-child { margin-right: var(--tools-vpad); }
 
 
-/* P3 gamut switch, in the color map panel's top-left corner: a monochrome
-   switch, then its "P3" label. The switch is a transparent pill drawn as a 1px
-   line, with a filled dot inside that slides right when on. On (the default) = P3 mode; off = sRGB
-   mode. Tones follow the panel's light/dark tint (.light-bg on .picker-wrap)
-   so it stays legible at any lightness. */
-.gamut-toggle {
+/* Gamut mode switch, in the color map panel's top-left corner: the labels
+   SRGB · P3 · P3A, the active one wrapped in a pill drawn as a 1px line (the
+   old P3 switch's outline). A radio group: click a label, or arrow keys.
+   Switches change state instantly — no transitions (user decision
+   2026-10-20). Tones follow the panel's light/dark tint (.light-bg on
+   .picker-wrap) so it stays legible at any lightness. (User decisions
+   2026-11-21: three states, mockup "C"; the third mode is P3A.) */
+.gamut-switch {
   --gt-text: rgba(255,255,255,0.4);
   --gt-text-on: rgba(255,255,255,0.85);
-  --gt-ink: rgba(255,255,255,0.4);       /* pill line + dot, off */
-  --gt-ink-on: rgba(255,255,255,0.85);   /* pill line + dot, on */
   position: absolute;
-  top: 14px;      /* top-left of the color map panel (back here 2026-10-21, after a spell bottom-left) */
-  left: 16px;
+  top: 14px;
+  left: 14px;
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 2px;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
+  gap: 1px;
 }
-.picker-wrap.light-bg .gamut-toggle {
+.picker-wrap.light-bg .gamut-switch {
   --gt-text: rgba(0,0,0,0.4);
   --gt-text-on: rgba(0,0,0,0.8);
-  --gt-ink: rgba(0,0,0,0.4);
-  --gt-ink-on: rgba(0,0,0,0.8);
 }
-.gamut-toggle-label {
+.gamut-switch > button {
+  box-sizing: border-box;
+  height: 14px;
+  padding: 0 5px 0 calc(5px + 0.12em);   /* letter-spacing trails the last letter */
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
   font-family: 'Roboto Mono', monospace;
   font-size: 10px;
   letter-spacing: 0.12em;
   line-height: 1;
   color: var(--gt-text);
+  cursor: pointer;
 }
-/* The pill: an outline only, never filled. */
-.gamut-toggle-track {
-  position: relative;
-  box-sizing: border-box;
-  width: 24px;
-  height: 14px;
-  border: 1px solid var(--gt-ink);
-  border-radius: 7px;
-  background: transparent;
+.gamut-switch > button[aria-checked="true"] {
+  color: var(--gt-text-on);
+  border-color: var(--gt-text-on);
+  cursor: default;
 }
-/* The dot: filled, 2px inside the line; jumps 10px right when on. Switches
-   change state instantly — no transitions (user decision 2026-10-20). */
-.gamut-toggle-knob {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--gt-ink);
-}
-.gamut-toggle[aria-checked="true"] .gamut-toggle-label { color: var(--gt-text-on); }
-.gamut-toggle[aria-checked="true"] .gamut-toggle-track { border-color: var(--gt-ink-on); }
-.gamut-toggle[aria-checked="true"] .gamut-toggle-knob {
-  background: var(--gt-ink-on);
-  transform: translateX(10px);
-}
-.gamut-toggle:hover .gamut-toggle-label { color: var(--gt-text-on); }
-.gamut-toggle:focus-visible { outline: 1px solid var(--gt-text-on); outline-offset: 2px; border-radius: 4px; }
+.gamut-switch > button:hover { color: var(--gt-text-on); }
+.gamut-switch > button:focus-visible { outline: 1px solid var(--gt-text-on); outline-offset: 2px; }
 
 .panel {
   position: relative;
@@ -323,13 +313,13 @@ canvas {
   cursor: crosshair;
 }
 
-#gamut-boundary {
+#gamut-boundary, #p3-boundary {
   cursor: crosshair;
   transition: none;
 }
 /* Only near the lightness extremes (last 1% at each end), where the boundary
    morphs into the edge circle, does it ease (picker.js adds .eased). */
-#gamut-boundary.eased { transition: all 0.1s; }
+#gamut-boundary.eased, #p3-boundary.eased { transition: all 0.1s; }
 
 body.disc-dragging-single #disc-overlay,
 body.disc-dragging-single #disc-overlay * { cursor: none !important; }
@@ -491,73 +481,78 @@ body.light-bg #add-color-btn {
   color: var(--ui-label);
   --lib-line: rgba(255,255,255,0.38);
   --lib-line-soft: rgba(255,255,255,0.18);
-  --lib-line-off: rgba(255,255,255,0.1);          /* a disabled row's outline */
-  --lib-line-off-hover: rgba(255,255,255,0.3);    /* a disabled row's (quieter) hover outline */
 }
-body.light-bg .library-panel { --lib-line: rgba(0,0,0,0.38); --lib-line-soft: rgba(0,0,0,0.18); --lib-line-off: rgba(0,0,0,0.1); --lib-line-off-hover: rgba(0,0,0,0.3); }
+body.light-bg .library-panel { --lib-line: rgba(0,0,0,0.38); --lib-line-soft: rgba(0,0,0,0.18); }
 .library-panel [hidden] { display: none !important; }
 
-/* One outlined box per library (the dropdowns' 1px line, 6px corners):
-   check box · name · +CMYK badge (only with a CMYK add-on) · ▾ menu. Fixed
-   columns, so the ▾ lines up whether or not a row has a badge. */
+/* One row per library (user decisions 2026-11-22; it was an outlined box):
+   switch · name with its +CMYK badge right after it · gear menu. The list is
+   one grid that shrink-wraps its widest row; each row is a subgrid of it, so
+   the gears line up just past the widest name-and-badge. Only the switch
+   turns a library on or off. Rows 15px (the badge) on a 21px pitch. */
+.lib-list {
+  display: grid;
+  grid-template-columns: 24px max-content 14px;
+  column-gap: 6px;
+  row-gap: 6px;
+  justify-content: start;
+}
 .lib-row {
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) auto 14px;
-  column-gap: 6px;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
-  width: 196px;
-  height: 24px;
-  box-sizing: border-box;
-  padding: 0 3px 0 4px;
-  border: 1px solid var(--lib-line);
-  border-radius: 6px;   /* = the + button below */
-  cursor: pointer;      /* the row toggles the library on and off */
+  min-height: 15px;
 }
-.lib-row:focus { outline: none; }
-.lib-row:focus-visible { border-color: var(--ui-label-hover); }
-.lib-list { display: flex; flex-direction: column; gap: 4px; }
+.lib-label { grid-column: 2; display: flex; align-items: center; gap: 6px; min-width: 0; }
 
-/* The check box before the name: the UI checkbox's look (14px, 4px corners,
-   the check polygon), showing whether the book is on — the whole row is the
-   toggle (user decision 2026-10-22). Inked like the name, so it fades and
-   lights with it. */
-.lib-check {
+/* The switch: the section switches' design (a 24 × 14 outlined pill whose 8px
+   dot jumps 10px right when on, 0.4 → 0.85 alpha, instant). */
+.lib-switch {
   grid-column: 1;
   position: relative;
   box-sizing: border-box;
-  width: 14px;
+  width: 24px;
   height: 14px;
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  color: var(--ui-label);
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--sw-ink);
+  border-radius: 7px;
+  cursor: pointer;
 }
-.lib-row:not(.lib-off) .lib-check::before {
+.lib-switch:focus { outline: none; }
+.lib-switch:focus-visible { outline: 1px solid var(--sw-ink-on); outline-offset: 2px; }
+.lib-switch::before {
   content: "";
   position: absolute;
-  left: 50%;
-  top: 50%;
+  top: 2px;
+  left: 2px;
   width: 8px;
-  height: 7.46px;
-  transform: translate(-50%, -50%);
-  background: currentColor;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16.17 15.09'%3E%3Cpolygon points='13.51 0 5.61 9.8 2.46 6.75 0 9.21 5.88 15.09 16.17 2.2 13.51 0'/%3E%3C/svg%3E") center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16.17 15.09'%3E%3Cpolygon points='13.51 0 5.61 9.8 2.46 6.75 0 9.21 5.88 15.09 16.17 2.2 13.51 0'/%3E%3C/svg%3E") center / contain no-repeat;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sw-ink);
 }
+.lib-row:not(.lib-off) .lib-switch { border-color: var(--sw-ink-on); }
+.lib-row:not(.lib-off) .lib-switch::before { background: var(--sw-ink-on); transform: translateX(10px); }
 
-/* The name reads as plain text; Rename makes it editable (.renaming). */
+/* The name reads as plain text, sized to its text (field-sizing), up to
+   150px; Rename makes it editable (.renaming). */
 .lib-name {
-  grid-column: 2;
+  field-sizing: content;
+  max-width: 150px;
   font: inherit;
   font-size: 10px;
   color: var(--ui-label);
   background: transparent;
   border: none;
   border-radius: 3px;
-  padding: 2px 3px;
+  height: 15px;           /* the badge's height, so rows stay 15px */
+  padding: 0 3px;
   margin: 0 -3px;
+  line-height: 15px;
   min-width: 0;
   text-overflow: ellipsis;
-  pointer-events: none;   /* clicks fall through to the row (the toggle) */
+  pointer-events: none;   /* not clickable; only Rename makes it editable */
 }
 .lib-name:focus { outline: none; }
 .lib-row.renaming .lib-name {
@@ -567,11 +562,11 @@ body.light-bg .library-panel { --lib-line: rgba(0,0,0,0.38); --lib-line-soft: rg
   background: var(--lib-line-soft);
 }
 
-/* CMYK add-on badge — the swatches' .region-badge look, filled with the row
-   outline's own color (--lib-line, which flips for a light background), text
-   knocked out to the page color behind it. Not removable. */
+/* CMYK add-on badge — the swatches' .region-badge look, filled with
+   --lib-line (which flips for a light background), text knocked out to the
+   page color behind it. Not removable. */
 .lib-cmyk {
-  grid-column: 3;
+  flex: 0 0 auto;
   /* "+CMYK", bold 9px, in a 15px-tall box padded 4px each side (user
      decisions 2026-10-21). */
   display: inline-flex;
@@ -589,9 +584,9 @@ body.light-bg .library-panel { --lib-line: rgba(0,0,0,0.38); --lib-line-soft: rg
   color: var(--body-bg, #666);
 }
 
-/* ▾ — opens the row's menu. */
+/* Gear — opens the row's menu. */
 .lib-menu-btn {
-  grid-column: 4;
+  grid-column: 3;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -603,29 +598,20 @@ body.light-bg .library-panel { --lib-line: rgba(0,0,0,0.38); --lib-line-soft: rg
   border: none;
   cursor: pointer;
 }
-.lib-menu-btn svg { width: 8px; height: 5px; display: block; }
+.lib-menu-btn svg { width: 14px; height: 14px; display: block; }
 .lib-menu-btn:hover, .lib-row.menu-open .lib-menu-btn { color: var(--ui-label-hover); }
 .lib-menu-btn:focus { outline: none; }
 .lib-menu-btn:focus-visible { color: var(--ui-label-hover); }
 
-/* A disabled library: faded well below an active one (user decisions
-   2026-10-21) — name, badge and ▾ at 20% of normal, outline 10%. Hovered, it
-   lifts quietly: outline to 30%, name to 45%, and the ▾ to 45% when pointed at
-   or while its menu is open. */
-.lib-row.lib-off { border-color: var(--lib-line-off); }
-.lib-row.lib-off .lib-check,
+/* A switched-off library: its switch shows it, and its name and badge dim to
+   45% (2026-11-22; 20% read as unusable without the old outline). */
 .lib-row.lib-off .lib-name,
-.lib-row.lib-off .lib-cmyk,
-.lib-row.lib-off .lib-menu-btn { opacity: 0.2; }
-.lib-row.lib-off .lib-menu-btn:hover,
-.lib-row.lib-off.menu-open .lib-menu-btn { opacity: 0.45; }
+.lib-row.lib-off .lib-cmyk { opacity: 0.45; }
 
-/* Hover (the row is the on/off toggle) lights the border and, on an active
-   book, the name (user decisions 2026-10-21; at first border only). After the
-   rules above; a disabled book's quieter hover is set at the end of the file. */
-.lib-row:hover { border-color: var(--ui-label-hover); }
-.lib-row:not(.lib-off):hover .lib-check,
-.lib-row:not(.lib-off):hover .lib-name { color: var(--ui-label-hover); }
+/* Hovering the switch lights it; the name never lights (user decision
+   2026-11-22). */
+.lib-switch:hover { border-color: var(--ui-label-hover); }
+.lib-switch:hover::before { background: var(--ui-label-hover); }
 
 /* The row menu and its "Set input space" submenu, floating at the page level. */
 .lib-menu {
@@ -663,7 +649,13 @@ body.light-bg .lib-menu {
   background: none;
   border: none;
   border-radius: 4px;
-  padding: 4px 8px;
+  /* A fixed 22px row (not padding around the text), the same as the prefix
+     field's, so swapping an item for the field moves nothing, whatever the
+     font's line metrics (user decision 2026-11-22). */
+  box-sizing: border-box;
+  height: 22px;
+  padding: 0 8px;
+  line-height: 1;
   cursor: pointer;
 }
 .lib-menu-item:hover:not(:disabled),
@@ -672,6 +664,31 @@ body.light-bg .lib-menu {
 .lib-menu-item:focus { outline: none; }
 .lib-menu-item:disabled { opacity: 0.45; cursor: default; }
 .lib-menu-label { flex: 1 1 auto; }
+/* "Edit prefix" as a text field, in the menu itself (user decision 2026-11-22):
+   lined up with the items' labels, in the menu's own type. */
+.lib-menu-field { display: flex; }
+/* Exactly the item's box: 22px tall like every item, and 1px border + 7px
+   padding = the item's 8px, so its text starts where the label did. Width 0 +
+   flex: it fills the menu's width, never widens it. */
+.lib-menu-input {
+  flex: 1 1 0;
+  min-width: 0;
+  width: 0;
+  font: inherit;
+  line-height: 1;
+  color: inherit;
+  background: var(--lib-menu-hover);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  box-sizing: border-box;
+  height: 22px;
+  padding: 0 7px;
+  margin: 0;
+}
+/* In a menu with a check column, the labels start past it (8px mark + 6px gap). */
+.lib-menu-field.indented .lib-menu-input { padding-left: 21px; }
+.lib-menu-input::placeholder { color: inherit; opacity: 0.45; }
+.lib-menu-input:focus { outline: none; border-color: currentColor; }
 .lib-menu-more { margin-left: 14px; opacity: 0.7; }
 /* Submenu check mark: the UI check polygon, shown on the current space. */
 .lib-menu-mark { flex: 0 0 auto; width: 8px; height: 7.46px; }
@@ -681,29 +698,46 @@ body.light-bg .lib-menu {
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16.17 15.09'%3E%3Cpolygon points='13.51 0 5.61 9.8 2.46 6.75 0 9.21 5.88 15.09 16.17 2.2 13.51 0'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
-/* "Compatible files: …" — always shown, beside the ADD button. */
-.lib-files { font-size: 10px; line-height: 12px; opacity: 0.7; white-space: nowrap; }
-
-/* ADD (was IMPORT) — a library row's outline and corners, 22px tall, only as wide as its
-   word, with the compatible-files note beside it (user decisions 2026-10-21). */
-.lib-import-row { display: flex; align-items: center; gap: 8px; }
+/* ADD LIBRARY — under the last library (user decisions 2026-11-22): the +
+   pill in the switches' column (24 × 14, the switches' outline, a filled 6px
+   plus), then the label in the names' column, in the section labels' mono
+   caps. The whole row is the button (it opens the file chooser; the
+   compatible formats are in its tooltip). Dim at rest, full on hover. */
 .lib-add {
-  flex: 0 0 auto;
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 6px;               /* = the library rows' column gap */
+  padding: 0;
   font: inherit;
-  font-size: 10px;
-  box-sizing: border-box;
-  height: 22px;    /* 1px less padding all around than before (24px, 0 9px) */
-  padding: 0 8px;
-  color: var(--ui-label);
+  color: var(--sw-ink);
   background: transparent;
-  border: 1px solid var(--lib-line);
-  border-radius: 6px;
+  border: none;
   cursor: pointer;
 }
-.lib-add:hover:not(:disabled) { color: var(--ui-label-hover); border-color: var(--ui-label-hover); }
+.lib-add-pill {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 24px;
+  height: 14px;
+  border: 1px solid currentColor;
+  border-radius: 7px;
+}
+.lib-add-pill svg { width: 6px; height: 6px; display: block; }   /* 1.5px strokes */
+.lib-add-label {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.lib-add:hover:not(:disabled) { color: var(--ui-label-hover); }
 .lib-add:disabled { opacity: 0.35; cursor: default; }   /* the 5-library limit is reached */
 .lib-add:focus { outline: none; }
-.lib-add:focus-visible { border-color: var(--ui-label-hover); }
+.lib-add:focus-visible .lib-add-pill { outline: 1px solid var(--sw-ink-on); outline-offset: 2px; }
 
 
 /* The UI checkbox — every visible checkbox in the tool (the
@@ -834,8 +868,19 @@ body.light-bg .lib-menu {
   min-width: 0;
 }
 
-.color-swatch.p3 { display: none; }
+.color-swatch.p3, .color-swatch.oklch { display: none; }
 .swatch-container.out-of-srgb .color-swatch.p3 { display: block; }
+/* Third tier (P3A mode, outside P3): the P3A region (.oklch, drawn in oklch) fills the stack, and the
+   P3 region becomes a strip under the sRGB strip, as sRGB does for P3. */
+.swatch-container.out-of-p3 .color-swatch.oklch { display: block; }
+.swatch-container.out-of-p3 .color-swatch.p3 {
+  position: absolute;
+  top: calc(var(--swatch-padding) * 2 + var(--badge-h) + var(--srgb-extra));
+  left: 0;
+  right: 0;
+  height: calc(var(--swatch-padding) * 2 + var(--badge-h) + var(--p3-extra));
+  z-index: 1;
+}
 
 /* CMYK proof region — revealed only in CMYK mode. It always lives inside
    .color-row; the side/bottom split below is pure CSS (no JS element moves).
@@ -866,7 +911,7 @@ body.light-bg .lib-menu {
   top: 0;
   left: 0;
   right: 0;
-  height: calc(var(--swatch-padding) * 2 + 13px + var(--srgb-extra));
+  height: calc(var(--swatch-padding) * 2 + var(--badge-h) + var(--srgb-extra));
   z-index: 1;
 }
 
@@ -994,11 +1039,20 @@ body.light-bg .swatch-container::before {
 /* How much taller a wrapped label row is (set per swatch in JS, fitTopBars):
    what sits below it moves down by that much — the out-of-sRGB strip and the
    P3 row under it, and the CMYK region's slider. */
-.swatch-container { --srgb-extra: 0px; --cmyk-extra: 0px; }
+/* --badge-h: a region badge's height (10px text × 1.3 + 1px padding top and
+   bottom). A strip is that plus the swatch padding above and below, so each
+   divider sits as far below its badge as the badge sits below the strip's top. */
+.swatch-container { --badge-h: 15px; --srgb-extra: 0px; --p3-extra: 0px; --cmyk-extra: 0px; }
 
 /* When out-of-srgb, the p3 top bar needs to clear the srgb strip above. */
 .swatch-container.out-of-srgb .color-swatch.p3 .swatch-top-bar {
-  top: calc(var(--swatch-padding) * 3 + 13px + var(--srgb-extra));
+  top: calc(var(--swatch-padding) * 3 + var(--badge-h) + var(--srgb-extra));
+}
+/* Out of P3, the P3 region is a strip of its own (its bar at its top), and
+   the P3A bar clears both strips. */
+.swatch-container.out-of-p3 .color-swatch.p3 .swatch-top-bar { top: var(--swatch-padding); }
+.swatch-container.out-of-p3 .color-swatch.oklch .swatch-top-bar {
+  top: calc(var(--swatch-padding) * 5 + var(--badge-h) * 2 + var(--srgb-extra) + var(--p3-extra));
 }
 
 /* Swatch icons */
@@ -1035,6 +1089,7 @@ body.light-bg .swatch-container::before {
   align-self: center;
 }
 .swatch-container.out-of-srgb .color-swatch.p3 .gamut-warning { display: block; }
+.swatch-container.out-of-p3 .color-swatch.oklch .gamut-warning { display: block; }
 /* The CMYK gamut icon is driven by CMYK gamut, not sRGB. */
 .swatch-container.out-of-cmyk .cmyk-gamut { display: block; }
 
@@ -1257,7 +1312,7 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
   transition: background-color 0.2s ease;
 }
 
-.match-cells.chips-light .chip-fill {   /* the dividers between chips follow the chips' ink */
+.match-cells.chips-light .chip-fill {   /* the dividers between chips follow the chip ink */
   border-right-color: rgba(0,0,0,0.2);
 }
 
@@ -1293,9 +1348,9 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
   color: rgba(255,255,255,0.3);
   transition: opacity 0.1s ease;
 }
-/* Chip ink — labels, gamut icons, hue marker — is dark when .chips-light: the
-   lineup's lightest and darkest chip average above middle gray (set in
-   pantone.js), not when the swatch is light (user decision 2026-10-22). */
+/* Chip ink — labels, gamut icons, hue marker, dividers — is dark when
+   .chips-light: the swatch's own color is lighter than middle gray (set in
+   pantone.js; user decision 2026-11-22, replacing the chips' average). */
 .match-cells.chips-light .chip-gamut-warning { color: rgba(0,0,0,0.3); }
 /* The gamut icon brightens when hovering the chip body (the bar or the icon —
    not the empty strip above the bar); the promoted caution brightens with the
@@ -1319,7 +1374,7 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
   background-repeat: repeat;
   image-rendering: pixelated;
   mix-blend-mode: overlay;
-  opacity: 0.8;
+  opacity: 0.6;   /* was 0.8 (user decision 2026-11-22) */
   /* Hidden entirely (not just transparent) on non-metallic chips. mix-blend-mode
      forces a backdrop-blending composite layer and the texture is rasterized per
      chip even at opacity:0 — so a transparent overlay on every chip was painting
@@ -1400,7 +1455,6 @@ body.swatch-dragging .promoted-close { opacity: 0 !important; }
 }
 
 
-.swatch-container.light .match-label { color: rgba(0,0,0,0.5); }
 .match-cells.chips-light .match-cell .match-label { color: rgba(0,0,0,0.3); }
 .match-cells.chips-light .match-cell:has(.chip-fill:hover, .chip-gamut-warning:hover) .match-label {
   color: rgba(0,0,0,1);
@@ -1764,22 +1818,7 @@ body.light-bg .cmyk-profile-select { border-color: rgba(0,0,0,0.38); }
   background: var(--bias-fg);
 }
 
-/* A disabled row's quieter hover (see above): outline 30%, name 45%. */
-.lib-row.lib-off:hover { border-color: var(--lib-line-off-hover); }
-.lib-row.lib-off:hover .lib-check,
-.lib-row.lib-off:hover .lib-name { opacity: 0.45; }
-
 /* ── No hover states in a switched-off section (user decision 2026-10-21) ──
-   With the Libraries or CMYK switch off, everything in that section looks the
-   same hovered as at rest. Kept last so these win over the hover rules above. */
-.section-libraries:not(.open) .lib-row.lib-off:hover { border-color: var(--lib-line-off); }
-.section-libraries:not(.open) .lib-row:not(.lib-off):hover { border-color: var(--lib-line); }
-.section-libraries:not(.open) .lib-row.lib-off:hover .lib-check,
-.section-libraries:not(.open) .lib-row.lib-off:hover .lib-name,
-.section-libraries:not(.open) .lib-row.lib-off .lib-menu-btn:hover { opacity: 0.2; }
-.section-libraries:not(.open) .lib-menu-btn:hover,
-.section-libraries:not(.open) .lib-row:hover .lib-check,
-.section-libraries:not(.open) .lib-row:hover .lib-name { color: var(--ui-label); }
-.section-libraries:not(.open) .lib-add:hover:not(:disabled) { color: var(--ui-label); border-color: var(--lib-line); }
-.section-libraries:not(.open) .pantone-options label:hover,
+   With the CMYK switch off, everything in that section looks the same hovered
+   as at rest. Kept last so these win over the hover rules above. */
 .section-cmyk:not(.open) .cmyk-check:hover { color: var(--ui-label); }

@@ -6,7 +6,7 @@
 import { MIDDLE_GRAY, MAX_COLORS, GAMUT_ICON_SVG, CLOSE_ICON_SVG } from './constants.js';
 import { S, P, els, pantoneSelections, handlePos } from './state.js';
 import { idxOf, meshEdgesFor } from './picker.js';
-import { computeP3AndSRGB, neutralP3, cielabL, cielabLOfSrgb } from './color.js';
+import { computeP3AndSRGB, neutralP3, cielabL, cielabLOfSrgb, cielabLOfP3 } from './color.js';
 import { updateSwatchCMYK, isOutOfCMYK } from './cmyk.js';
 import { buildMatchCells, matchRowObserver, updateSwatchMatches } from './pantone.js';
 import { syncModKeys, requestRender } from './util.js';
@@ -19,7 +19,13 @@ function swatchEl(i) { return els.swatches.querySelector(`[data-index="${i}"]`);
 function updateSwatch(index) {
   const container = swatchEl(index);
   if (!container) return;
-  const { p3Css, p3Str, srgbCss, hex, outOfSRGB } = computeP3AndSRGB(S.colors[index]);
+  // Tiers, each shown only when the color needs it (user decision 2026-11-22):
+  // sRGB (hex) always; P3 outside sRGB; P3A outside P3 (P3A mode only), the
+  // true color. The badge names the gamut; the values are written in the CSS
+  // space that draws the region: display-p3 for P3, oklch for P3A (no CSS
+  // space is P3A). Each region's readout and fill share one rounded string; the
+  // P3 region holds the color pulled in to P3's edge when it's past it.
+  const { srgbCss, hex, outOfSRGB, outOfP3, p3Css, p3Str, oklchCss, oklchStr } = computeP3AndSRGB(S.colors[index]);
 
   const srgbSwatchEl = container.querySelector('.color-swatch.srgb');
   srgbSwatchEl.style.background = srgbCss;
@@ -27,19 +33,25 @@ function updateSwatch(index) {
   const p3SwatchEl = container.querySelector('.color-swatch.p3');
   p3SwatchEl.style.background = p3Css;
   p3SwatchEl.style.setProperty('--region-bg', p3Css);
+  const okSwatchEl = container.querySelector('.color-swatch.oklch');
+  if (outOfP3) {
+    okSwatchEl.style.background = oklchCss;
+    okSwatchEl.style.setProperty('--region-bg', oklchCss);
+  }
   // The chip strip's backdrop (swatch color, or promoted Pantone color) is
   // owned by updateSwatchMatches, which knows the promotion state.
 
   const srgbEl = container.querySelector('.swatch-readout.srgb');
   if (srgbEl.textContent !== hex) srgbEl.textContent = hex;
 
-  // P3 components live in separate spans so CSS can lay them out as one
-  // line or stack them as four (P3 / r / g / b) when the swatch is narrow.
-  const vEls = container.querySelectorAll('.p3-readout .p3-v');
-  const parts = p3Str.split(' ');
-  for (let k = 0; k < 3; k++) {
-    if (vEls[k] && vEls[k].textContent !== parts[k]) vEls[k].textContent = parts[k];
-  }
+  // P3 and P3A components live in separate spans so CSS can lay them out as
+  // one line or wrap them below the badge when the swatch is narrow.
+  const setVals = (sel, str) => {
+    const vEls = container.querySelectorAll(sel), parts = str.split(' ');
+    for (let k = 0; k < 3; k++) if (vEls[k] && vEls[k].textContent !== parts[k]) vEls[k].textContent = parts[k];
+  };
+  setVals('.color-swatch.p3 .p3-v', p3Str);
+  if (outOfP3) setVals('.color-swatch.oklch .p3-v', oklchStr);
 
   // CIELAB L* (D50, 0–100) readout — the "Lab lightness" a P3 doc reports in
   // Photoshop. sRGB shows the clamped hex's L*, P3 the true color's (they differ
@@ -49,11 +61,17 @@ function updateSwatch(index) {
   const srgbLtxt = `[${cielabLOfSrgb(((nH >> 16) & 255)/255, ((nH >> 8) & 255)/255, (nH & 255)/255).toFixed(3)}]`;
   const srgbLEl = container.querySelector('.color-swatch.srgb .lightness-readout');
   if (srgbLEl && srgbLEl.textContent !== srgbLtxt) srgbLEl.textContent = srgbLtxt;
-  const p3Ltxt = `[${cielabL(S.colors[index]).toFixed(3)}]`;
+  // P3's L* is its readout's color (the true color's unless it's past P3);
+  // P3A's is the true color's.
+  const trueLtxt = `[${cielabL(S.colors[index]).toFixed(3)}]`;
+  const p3Ltxt = outOfP3 ? `[${cielabLOfP3(...p3Str.split(' ').map(Number)).toFixed(3)}]` : trueLtxt;
   const p3LEl = container.querySelector('.color-swatch.p3 .lightness-readout');
   if (p3LEl && p3LEl.textContent !== p3Ltxt) p3LEl.textContent = p3Ltxt;
+  const okLEl = container.querySelector('.color-swatch.oklch .lightness-readout');
+  if (outOfP3 && okLEl && okLEl.textContent !== trueLtxt) okLEl.textContent = trueLtxt;
 
   container.classList.toggle('out-of-srgb', outOfSRGB);
+  container.classList.toggle('out-of-p3', outOfP3);
   container.classList.toggle('light', S.colors[index].L > MIDDLE_GRAY);
 
   updateSwatchCMYK(container, S.colors[index], index);
@@ -66,7 +84,8 @@ function updateSwatch(index) {
 // doesn't change — against the room it has (region width less its inset and
 // the delete button's 20px), so it can't flip-flop. Then measure how much
 // taller each row came out, so what's positioned below it moves down by that
-// much: --srgb-extra (the out-of-sRGB strip and the P3 row under it) and
+// much: --srgb-extra (the out-of-sRGB strip and the rows under it), --p3-extra
+// (the out-of-P3 strip and the P3A row under it) and
 // --cmyk-extra (the CMYK slider). Runs on every
 // swatch update and when the swatch resizes.
 const ROW_GAP = 4, DELETE_ROOM = 20;
@@ -101,18 +120,20 @@ function fitPromoted(cell) {
 }
 function fitTopBars(container) {
   setExtra(container, '--srgb-extra', fitBar(container.querySelector('.color-swatch.srgb .swatch-top-bar')));
-  fitBar(container.querySelector('.color-swatch.p3 .swatch-top-bar'));
+  setExtra(container, '--p3-extra', fitBar(container.querySelector('.color-swatch.p3 .swatch-top-bar')));
+  fitBar(container.querySelector('.color-swatch.oklch .swatch-top-bar'));
   setExtra(container, '--cmyk-extra', fitBar(container.querySelector('.color-swatch.cmyk .swatch-top-bar')));
   fitPromoted(container.querySelector('.promoted-cell'));
 }
 const topBarObserver = new ResizeObserver(entries => { for (const e of entries) fitTopBars(e.target); });
 
 function createSwatchDOM(index) {
-  const { p3Css, p3Str, srgbCss, hex, outOfSRGB } = computeP3AndSRGB(S.colors[index]);
+  const { srgbCss, hex, outOfSRGB, outOfP3, p3Css, oklchCss } = computeP3AndSRGB(S.colors[index]);
   const container = document.createElement('div');
   container.className     = 'swatch-container';
   container.dataset.index = index;
   if (outOfSRGB)                         container.classList.add('out-of-srgb');
+  if (outOfP3)                           container.classList.add('out-of-p3');
   if (S.colors[index].L > MIDDLE_GRAY)   container.classList.add('light');
   if (index === S.activeIndex)           container.classList.add('selected');
 
@@ -130,7 +151,12 @@ function createSwatchDOM(index) {
           </div>
           <div class="color-swatch p3" style="background:${p3Css};--region-bg:${p3Css}">
             <div class="swatch-top-bar">
-              <span class="p3-readout"><span class="p3-tag region-badge">P3</span><span class="p3-v"></span><span class="p3-v"></span><span class="p3-v"></span><span class="icon gamut-warning">${GAMUT_ICON_SVG}</span><span class="lightness-readout"></span></span>
+              <span class="p3-readout"><span class="p3-tag region-badge">P3</span><span class="css-space">display-p3</span><span class="p3-v"></span><span class="p3-v"></span><span class="p3-v"></span><span class="icon gamut-warning">${GAMUT_ICON_SVG}</span><span class="lightness-readout"></span></span>
+            </div>
+          </div>
+          <div class="color-swatch oklch" style="background:${oklchCss ?? p3Css};--region-bg:${oklchCss ?? p3Css}">
+            <div class="swatch-top-bar">
+              <span class="p3-readout"><span class="p3-tag region-badge">P3A</span><span class="css-space">oklch</span><span class="p3-v"></span><span class="p3-v"></span><span class="p3-v"></span><span class="icon gamut-warning oklch-gamut">${GAMUT_ICON_SVG}</span><span class="lightness-readout"></span></span>
             </div>
           </div>
         </div>
@@ -243,6 +269,12 @@ function wireSwatch(container) {
   container.querySelector('.gamut-warning')?.addEventListener('click', e => {
     e.stopPropagation();
     pullIntoGamut(container, c => computeP3AndSRGB(c).outOfSRGB, 1);
+  });
+  // P3 gamut icon, on the P3A tier (P3A mode): the same, into P3. The tiers
+  // collapse one at a time: P3A → P3 → sRGB.
+  container.querySelector('.oklch-gamut')?.addEventListener('click', e => {
+    e.stopPropagation();
+    pullIntoGamut(container, c => computeP3AndSRGB(c).outOfP3, 1);
   });
 
   // CMYK gamut icon: same gesture against the CMYK gamut.
@@ -365,9 +397,13 @@ function computeFrozenEdges() {
   S.frozenEdges = localEdges.map(([a, b]) => [indices[a], indices[b]]);
 }
 
+// The multi-select triangle mesh is switched off for now, to try selection
+// without it (user request 2026-11-22). true brings it back as it was.
+const SHOW_MESH = false;
+
 function updateMesh() {
-  if (!S.isMultiMode() || !S.frozenEdges) { P.clearMesh(); return; }
-  const guidesActive = (S.pointerInPickerWrap || S.dragging) && (S.modKeys.shift || S.modKeys.meta);
+  if (!SHOW_MESH || !S.isMultiMode() || !S.frozenEdges) { P.clearMesh(); return; }
+  const guidesActive = S.modGuidesLive() && (S.modKeys.shift || S.modKeys.meta);
   if (guidesActive) { P.clearMesh(); return; }
   const refIdx = S.multiSelect.has(S.activeIndex) ? S.activeIndex : [...S.multiSelect][0];
   const stroke = S.colors[refIdx]?.L > MIDDLE_GRAY ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)';

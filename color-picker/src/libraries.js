@@ -1,24 +1,23 @@
 // ══════════════════════════════════════════════════════════════════════
 // Libraries panel — imported color libraries
 // ══════════════════════════════════════════════════════════════════════
-// The list of imported libraries and the "Import libraries" button under it
-// (the only way to import: it opens the file chooser, several files at once;
-// the export feature was removed 2026-10-21, though an old export file still
-// imports). Each row is
-// an outlined box holding only a check box, the name, the +CMYK badge (when the library has
-// a CMYK add-on) and a ▾ that opens the row's menu: Rename, Remove, and "Set
-// input space ›" (a submenu). Rows stay in import order (drag-reordering was
-// removed, 2026-10-21). Clicking the row itself (not its ▾) enables /
-// disables the library, as the old tool's
-// library pills did: a disabled row is grayed and its colors drop out of
-// matching, dots and chips. Rename makes
-// the name editable until Return or a click elsewhere (Escape cancels); Remove
-// removes the library at once. A metallic library (by name, see
-// isMetallicLibraryName) also gets "Simulate metallic texture", a check item
-// that turns the texture on for its colors' chips and promoted fields (off by
-// default; it replaced a global checkbox). (User decisions 2026-10-21.) Parsing lives in library-formats.js and storage in
-// library-store.js; this module keeps the list, saves it, and hands the colors
-// to pantone.js (matches, dots, promotion).
+// The list of imported libraries. Libraries has no section switch: it's always
+// on, and each library has its own switch (user decision 2026-11-22). The + pill
+// in the header is the only way to import: it opens the file chooser, several
+// files at once (the export feature was removed 2026-10-21, though an old export
+// file still imports). Each row holds a switch, the name, the +CMYK badge (when
+// the library has a CMYK add-on) and a gear that opens the row's menu: Rename,
+// Edit prefix (typed right in the menu; the promoted color's badge shows it, or
+// "Library"), Remove, and "Set input space ›" (a submenu). Rows stay in import order.
+// Its switch (only the switch) turns the library on or off: an off
+// library's colors drop out of matching, dots and chips, and with none on the
+// match strip doesn't show at all. Rename makes the name editable until Return
+// or a click elsewhere (Escape cancels); Remove removes the library at once. A
+// metallic library (by name, see isMetallicLibraryName) also gets "Simulate
+// metallic texture", a check item that turns the texture on for its colors'
+// chips and promoted fields (off by default). Parsing lives in
+// library-formats.js and storage in library-store.js; this module keeps the
+// list, saves it, and hands the colors to pantone.js (matches, dots, promotion).
 //
 // CMYK-only files (e.g. Pantone Color Bridge) are never libraries of their
 // own: they attach to the library they share names with, which gets a CMYK
@@ -27,7 +26,7 @@
 // promoted color with an alternate gets a "BOOK" checkbox in its swatch's CMYK
 // region (see cmyk.js).
 
-import { parseLibraryFile, detectSpace, swatchToOKLab, SPACES, spacesForFamily, normalizeName, isMetallicLibraryName, ACCEPT } from "./library-formats.js";
+import { parseLibraryFile, detectSpace, detectPrefix, brandCase, swatchToOKLab, SPACES, spacesForFamily, normalizeName, isMetallicLibraryName, ACCEPT } from "./library-formats.js";
 import { loadLibraries, saveLibraries, libraryFromParsed, attachCMYK, librariesFromExport } from "./library-store.js";
 import { setLibraryEntries, setActiveLibraries } from "./pantone.js";
 
@@ -62,7 +61,7 @@ function buildEntries() {
       swatchToOKLab({ model: sw.m, values: sw.v }, lib.space, ok);
       if (!ok.every(Number.isFinite)) return;
       out.push({
-        key: `${lib.id}:${i}`, libId: lib.id, libName: lib.name, name: sw.n,
+        key: `${lib.id}:${i}`, libId: lib.id, libName: lib.name, badge: badgeOf(lib), name: sw.n,
         L: ok[0], a: ok[1], b: ok[2], metallicTexture,
         cbCMYK: (lib.cmyk && lib.cmyk.map[normalizeName(sw.n)]) || null,
       });
@@ -72,6 +71,10 @@ function buildEntries() {
 }
 
 const publish = () => setLibraryEntries(buildEntries(), activeIds());
+
+/** The promoted color's badge: the library's prefix, or "Library" without one
+ *  (user decision 2026-11-22; it showed the library's name). */
+const badgeOf = lib => (lib.prefix || "").trim() || "Library";
 const publishActive = () => setActiveLibraries(activeIds());
 const persist = () => saveLibraries(libraries);
 
@@ -88,6 +91,20 @@ export function activateLibraries(ids) {
 /** Load the saved libraries and show them (called once at startup). */
 export async function initLibraries() {
   libraries = await loadLibraries();
+  // Libraries imported before prefix detection (2026-11-22) get it once: only
+  // those with no prefix that you didn't set yourself.
+  let detected = false;
+  for (const lib of libraries) {
+    if (lib.prefixByUser) continue;
+    // A detected "PANTONE" from before brandCase becomes "Pantone".
+    if (lib.prefix) { const c = brandCase(lib.prefix); if (c !== lib.prefix) { lib.prefix = c; detected = true; } continue; }
+    const found = detectPrefix(lib.swatches.map(sw => sw.n));
+    if (!found) continue;
+    lib.prefix = found.prefix;
+    if (found.names) lib.swatches.forEach((sw, i) => { sw.n = found.names[i]; });
+    detected = true;
+  }
+  if (detected) persist();
   render();
   publish();
 }
@@ -105,18 +122,21 @@ function el(tag, cls, attrs = {}) {
   return n;
 }
 
-const MENU_ARROW_SVG = `<svg viewBox="0 0 8 5" aria-hidden="true"><polygon points="0 0 8 0 4 5" fill="currentColor"/></svg>`;
+// The row's options button: a gear (user's SVG, 2026-11-22; replaced a ▾).
+const GEAR_SVG = `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M9.93 4.76Q10.34 4.58 10.37 4.13L10.51 2.05Q10.53 1.60 10.98 1.60L13.02 1.60Q13.47 1.60 13.49 2.05L13.63 4.13Q13.66 4.58 14.07 4.76L15.66 5.41Q16.07 5.58 16.41 5.29L17.98 3.91Q18.32 3.61 18.63 3.93L20.07 5.37Q20.39 5.68 20.09 6.02L18.71 7.59Q18.42 7.93 18.59 8.34L19.24 9.93Q19.42 10.34 19.87 10.37L21.95 10.51Q22.40 10.53 22.40 10.98L22.40 13.02Q22.40 13.47 21.95 13.49L19.87 13.63Q19.42 13.66 19.24 14.07L18.59 15.66Q18.42 16.07 18.71 16.41L20.09 17.98Q20.39 18.32 20.07 18.63L18.63 20.07Q18.32 20.39 17.98 20.09L16.41 18.71Q16.07 18.42 15.66 18.59L14.07 19.24Q13.66 19.42 13.63 19.87L13.49 21.95Q13.47 22.40 13.02 22.40L10.98 22.40Q10.53 22.40 10.51 21.95L10.37 19.87Q10.34 19.42 9.93 19.24L8.34 18.59Q7.93 18.42 7.59 18.71L6.02 20.09Q5.68 20.39 5.37 20.07L3.93 18.63Q3.61 18.32 3.91 17.98L5.29 16.41Q5.58 16.07 5.41 15.66L4.76 14.07Q4.58 13.66 4.13 13.63L2.05 13.49Q1.60 13.47 1.60 13.02L1.60 10.98Q1.60 10.53 2.05 10.51L4.13 10.37Q4.58 10.34 4.76 9.93L5.41 8.34Q5.58 7.93 5.29 7.59L3.91 6.02Q3.61 5.68 3.93 5.37L5.37 3.93Q5.68 3.61 6.02 3.91L7.59 5.29Q7.93 5.58 8.34 5.41ZM15.60 12.00A3.60 3.60 0 1 0 8.40 12.00A3.60 3.60 0 1 0 15.60 12.00Z"/></svg>`;
 
 function rowFor(lib) {
-  // The row is the enable/disable toggle (click, or Space/Return when focused);
-  // the check box before the name shows its state (user decision 2026-10-22).
+  // Only the switch turns the library on or off; the name isn't clickable and
+  // doesn't light on hover (user decision 2026-11-22; the whole row was the
+  // toggle).
   const row = el("div", "lib-row" + (lib.active ? "" : " lib-off"), {
-    role: "checkbox", tabindex: "0", "aria-checked": String(!!lib.active), "aria-label": lib.name,
     title: `${lib.swatches.length} colors · ${lib.format}${lib.fileName ? " · " + lib.fileName : ""}`,
   });
   row.dataset.id = lib.id;
 
-  row.appendChild(el("span", "lib-check", { "aria-hidden": "true" }));
+  row.appendChild(el("button", "lib-switch", {
+    type: "button", role: "switch", "aria-checked": String(!!lib.active), "aria-label": `Use ${lib.name}`,
+  }));
 
   // The name reads as plain text; Rename (menu) makes it editable for one edit.
   const name = el("input", "lib-name", {
@@ -125,12 +145,15 @@ function rowFor(lib) {
   });
   name.value = lib.name;
   name.readOnly = true;
-  row.appendChild(name);
-
-  if (lib.cmyk) row.appendChild(el("span", "lib-cmyk", { text: "+CMYK", title: `CMYK add-on: ${lib.cmyk.name}` }));
+  // The name and its +CMYK badge share one cell, so the badge sits right
+  // after the name; the gears line up after the widest of these.
+  const label = el("span", "lib-label");
+  label.appendChild(name);
+  if (lib.cmyk) label.appendChild(el("span", "lib-cmyk", { text: "+CMYK", title: `CMYK add-on: ${lib.cmyk.name}` }));
+  row.appendChild(label);
 
   row.appendChild(el("button", "lib-menu-btn", {
-    type: "button", html: MENU_ARROW_SVG, title: "Library options",
+    type: "button", html: GEAR_SVG, title: "Library options",
     "aria-label": `Options for ${lib.name}`, "aria-haspopup": "menu", "aria-expanded": "false",
   }));
   return row;
@@ -141,7 +164,8 @@ function render() {
   list.replaceChildren(...libraries.map(rowFor));
   const full = libraries.length >= MAX_LIBRARIES;
   addBtn.disabled = full;
-  addBtn.title = full ? `${MAX_LIBRARIES} libraries is the limit — remove one to add another` : "Add libraries";
+  addBtn.title = full ? `${MAX_LIBRARIES} libraries is the limit — remove one to add another`
+    : "Add libraries (.ase, .acb, .aco, .gpl, .csv, .json)";
 }
 
 const libOf = node => libraries.find(l => l.id === node.closest(".lib-row")?.dataset.id);
@@ -154,7 +178,7 @@ function setActive(lib, on) {
   persist();
   const row = rowOf(lib);
   row?.classList.toggle("lib-off", !on);
-  row?.setAttribute("aria-checked", String(on));
+  row?.querySelector(".lib-switch")?.setAttribute("aria-checked", String(on));
   publishActive();
 }
 
@@ -165,6 +189,14 @@ function deleteLibrary(lib) {
 
 function setMetallicTexture(lib, on) {
   lib.metallicTexture = on;
+  persist(); publish();
+}
+
+function setPrefix(lib, value) {
+  const v = value.replace(/\s+/g, " ").trim();
+  if (v === (lib.prefix || "")) return;
+  lib.prefix = v;
+  lib.prefixByUser = true;   // detection never overrides it
   persist(); publish();
 }
 
@@ -218,23 +250,13 @@ list.addEventListener("click", ev => {
   if (!lib) return;
   const btn = ev.target.closest(".lib-menu-btn");
   if (btn) { if (menuFor === lib) closeMenu(); else openMenu(lib, btn); return; }
-  // Anywhere else on the row toggles the library — except while its name is
-  // being edited.
-  if (ev.target.closest(".lib-row").classList.contains("renaming")) return;
-  setActive(lib, !lib.active);
-});
-
-list.addEventListener("keydown", ev => {
-  if (!ev.target.classList?.contains("lib-row") || (ev.key !== " " && ev.key !== "Enter")) return;
-  const lib = libOf(ev.target);
-  if (!lib) return;
-  ev.preventDefault();
-  setActive(lib, !lib.active);
+  // The switch (a button, so Space and Return work too) turns it on or off.
+  if (ev.target.closest(".lib-switch")) setActive(lib, !lib.active);
 });
 
 // ── Row menu ─────────────────────────────────────────────────────────
 // One menu at a time, floating at the page level (the section clips its
-// contents), placed under the row's ▾ and kept on screen. "Set input space ›"
+// contents), placed under the row's gear and kept on screen. "Set input space ›"
 // opens a submenu beside it on hover, click or →. Closes on a choice, a click
 // elsewhere, Escape, scrolling or resizing.
 
@@ -294,6 +316,8 @@ function openMenu(lib, btn) {
   menuEl = el("div", "lib-menu", { role: "menu", "aria-label": `${lib.name} options` });
   const indent = isMetallicLibraryName(lib.name);   // it has a check item: line the labels up
   menuEl.appendChild(menuItem("Rename", () => { closeMenu(); startRename(lib); }, { indent }));
+  const prefixItem = menuItem("Edit prefix", () => editPrefixInMenu(lib, prefixItem, indent), { indent });
+  menuEl.appendChild(prefixItem);
   menuEl.appendChild(menuItem("Remove", () => { closeMenu(); deleteLibrary(lib); }, { indent }));
   if (indent) {
     const tex = menuItem("Simulate metallic texture", () => { closeMenu(); setMetallicTexture(lib, !lib.metallicTexture); },
@@ -314,6 +338,31 @@ function openMenu(lib, btn) {
   menuEl.querySelector(".lib-menu-item")?.focus();
 }
 
+/** "Edit prefix": the item turns into a text field right in the menu, holding
+ *  the current prefix (placeholder "Library", the badge without one). Return
+ *  or a click outside the menu saves it; Escape closes without saving (user
+ *  decision 2026-11-22). */
+function editPrefixInMenu(lib, item, indent) {
+  closeSubmenu();
+  // Same size as the item it replaces, text where the item's label was, so
+  // the menu doesn't change size or shift.
+  const row = el("div", "lib-menu-field" + (indent ? " indented" : ""));
+  const input = el("input", "lib-menu-input", {
+    type: "text", spellcheck: "false", autocomplete: "off", maxlength: "24",
+    placeholder: "Library", "aria-label": `Prefix for ${lib.name}`,
+  });
+  input.value = lib.prefix || "";
+  row.appendChild(input);
+  item.replaceWith(row);
+  row.addEventListener("pointerenter", closeSubmenu);
+  input.focus();
+  input.select();
+  menuEl._commit = () => setPrefix(lib, input.value);
+  input.addEventListener("keydown", ev => {
+    if (ev.key === "Enter") { ev.preventDefault(); ev.stopPropagation(); menuEl?._commit?.(); closeMenu(); }
+  });
+}
+
 function closeMenu() {
   closeSubmenu();
   menuEl?.remove(); menuEl = null;
@@ -325,7 +374,9 @@ function closeMenu() {
 // A click anywhere outside the menus (or their ▾) closes them.
 document.addEventListener("pointerdown", ev => {
   if (!menuEl) return;
-  if (menuEl.contains(ev.target) || subEl?.contains(ev.target) || ev.target.closest(".lib-menu-btn") === menuBtn) return;
+  if (menuEl.contains(ev.target) || subEl?.contains(ev.target)) return;
+  menuEl._commit?.();   // a prefix being typed is saved
+  if (ev.target.closest(".lib-menu-btn") === menuBtn) return;
   closeMenu();
 }, true);
 window.addEventListener("resize", () => closeMenu());
@@ -334,6 +385,8 @@ document.addEventListener("scroll", () => closeMenu(), true);
 // Keyboard: ↑/↓ move, → opens the submenu, ← or Escape backs out, Return picks.
 document.addEventListener("keydown", ev => {
   if (!menuEl) return;
+  // Typing in the prefix field: only Escape (close, unsaved) is the menu's.
+  if (document.activeElement?.classList.contains("lib-menu-input") && ev.key !== "Escape") return;
   const inSub = subEl?.contains(document.activeElement);
   const items = [...(inSub ? subEl : menuEl).querySelectorAll(".lib-menu-item:not(:disabled)")];
   const i = items.indexOf(document.activeElement);

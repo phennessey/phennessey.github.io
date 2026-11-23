@@ -20,6 +20,10 @@ export const S = {
   pointerInPicker:     false,
   pointerInPickerWrap: false,
   pointerInLightbar:   false,
+  // Shift / Meta redraw the wheel (guides in place of the mesh) only while the
+  // pointer is over the wheel or the lightbar, or hovers a handle, or a drag
+  // is under way (user decision 2026-11-22; was anywhere over the color map panel).
+  modGuidesLive() { return this.pointerInPicker || this.pointerInLightbar || this.hoveredHandle !== -1 || this.dragging; },
   dragging:          false,
   mouseHueAngle:     0,
   hoveredHandle:     -1,
@@ -28,7 +32,7 @@ export const S = {
   frozenEdges:      null,
   hueConvergeDrag:  null,
 
-  libraryFilters: { base: false },   // base = the Libraries checkbox is on (matches on)
+  libraryFilters: { base: true },    // base: matches on. Always, since Libraries has no section switch (2026-11-22); each library has its own
 };
 
 // Renderer + derived geometry

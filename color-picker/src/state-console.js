@@ -2,22 +2,29 @@
 // swatch, one line each, that can also be edited — but only into a state the
 // picker itself could reach (user decision 2026-10-21). A line reads
 //
-//   #RRGGBB | p3 R G B | library color name | C-M-Y-K [CB]
+//   #RRGGBB | wide color | library color name | C-M-Y-K [CB]
 //
-// P3 always, with [!] when outside sRGB (user decisions 2026-10-21); CMYK with [!]
-// when outside the press's gamut; the name only when a library color is
-// promoted (and Libraries is switched on); CMYK only while CMYK is switched on,
-// with "CB" when the swatch uses its promoted color's CMYK alternate
-// (the BOOK checkbox). Fields are recognized by their form, so the order and
-// separators are forgiving; a bare list of hex codes still works for pasting.
+// The hex ALWAYS comes first (user rule 2026-11-22: never drop it). After it,
+// only when the color needs one, the widest space it needs, as CSS you can
+// paste into code: display-p3 R G B outside sRGB (the inside of color(); user
+// decision 2026-11-22), or oklch(L C H) outside P3 (P3A mode only) — the same
+// space and digits as the swatch's top label (lines always held "p3 R G B"
+// before). The name shows only when a library color is promoted;
+// CMYK only while CMYK is switched on, with "CB" when the swatch uses its
+// promoted color's CMYK alternate (the BOOK checkbox). [!] after the name or
+// the CMYK build marks a gamut flag. Fields are recognized by their form, so
+// the order and separators are forgiving; a bare list of hex codes still works
+// for pasting.
 //
 // Return applies the whole box (Shift+Return adds a line); Escape or clicking
 // away goes back to the live readout. Each line is compared with its swatch, and
 // only the fields you changed count as edits:
 //   • hex — sets the color (any sRGB hex is on the wheel).
-//   • p3 — sets the color; each value 0–1, and in sRGB mode it must be inside
-//     sRGB (sRGB mode shows nothing outside it). A changed p3 wins over the hex,
-//     which is only its sRGB clamp.
+//   • wide color — display-p3 R G B or oklch(…) (also "p3 R G B",
+//     color(display-p3 …) and "oklch L C H" without the parentheses). P3 values run
+//     0–1; either must sit on the current wheel (sRGB mode shows only sRGB, P3
+//     mode only P3, P3A mode only the panel's gamut). A changed wide color wins
+//     over the hex, which is only its sRGB clamp.
 //   Either one also removes the swatch's library match (and with it a CB
 //   build), whatever the line's name says.
 //   • name — promotes that color from a switched-on library: in place when it's
@@ -34,7 +41,7 @@
 
 import { MAX_COLORS } from './constants.js';
 import { S, P, els, pantoneSelections } from './state.js';
-import { srgbToOKHSL, p3ToOKHSL, computeP3AndSRGB, isSRGBMode, convert, DisplayP3, sRGB } from './color.js';
+import { srgbToOKHSL, p3ToOKHSL, oklchToOKHSL, computeP3AndSRGB, isSRGBMode, getGamutMode, convert, DisplayP3, sRGB } from './color.js';
 import { swatchEl, setPalette, reindex, updateAddButton, exitMultiSelect, setActive } from './swatches.js';
 import {
   isPromotionShown, updateDots, findEnabledEntryByName, isChipCandidate, entryColor, promotionsOnView,
@@ -51,8 +58,10 @@ const cmykOnView = () => cmyk.active && cmyk.ready;
 
 /** Swatch i's fields, as the console shows them. */
 function fieldsOf(i) {
-  const { hex, p3Str, outOfSRGB } = computeP3AndSRGB(S.colors[i]);
-  const f = { hex, p3: p3Str, outOfSRGB, name: null, entry: null, cmyk: null, cb: false };
+  const { hex, p3Str, oklchStr, outOfSRGB, outOfP3 } = computeP3AndSRGB(S.colors[i]);
+  // After the hex, only when needed: the widest space the color needs (CSS-ready).
+  const wide = outOfP3 ? `oklch(${oklchStr})` : outOfSRGB ? `display-p3 ${p3Str}` : null;
+  const f = { hex, wide, p3: p3Str, oklch: oklchStr, name: null, entry: null, cmyk: null, cb: false };
   const p = pantoneSelections.get(i);
   if (p && isPromotionShown(p) && promotionsOnView()) { f.name = p.name; f.entry = p; }
   if (cmykOnView()) {
@@ -65,14 +74,13 @@ function fieldsOf(i) {
 }
 
 // [!] carries the swatch's gamut flags into the console (user decisions
-// 2026-10-21; plain ASCII, not ⚠) — the same states as its warning icons: after the p3 value, the
-// color is outside sRGB (its hex is only the nearest sRGB color); after the
-// name, the promoted library color is outside the current gamut (P3, or sRGB in
-// sRGB mode); after the CMYK build, the color is outside the press's gamut.
-// Display only — the parser ignores it.
+// 2026-10-21; plain ASCII, not ⚠) — the same states as its warning icons: after
+// the name, the promoted library color is outside the current gamut; after the
+// CMYK build, the color is outside the press's gamut. (The color itself needs
+// none: its form says which gamut it's in.) Display only — the parser ignores it.
 const WARN = '[!]';
 const flag = on => (on ? ' ' + WARN : '');
-const lineOf = f => [f.hex, `p3 ${f.p3}${flag(f.outOfSRGB)}`, f.name && f.name + flag(f.entry.outOfGamut),
+const lineOf = f => [f.hex, f.wide, f.name && f.name + flag(f.entry.outOfGamut),
   f.cmyk && f.cmyk + (f.cb ? ' CB' : '') + flag(f.cmykOOG)].filter(Boolean).join(' | ');
 
 /** Write the live state into the box — unless you're editing it. Cheap, and
@@ -109,7 +117,8 @@ new MutationObserver(() => {
 // ── Parsing ──────────────────────────────────────────────────────────
 
 const HEX6 = /^#?([0-9a-f]{6})$/i, HEX3 = /^#([0-9a-f]{3})$/i;
-const P3 = /^(?:p3\s+|color\(\s*display-p3\s+)(-?[\d.]+)[\s,]+(-?[\d.]+)[\s,]+(-?[\d.]+)\s*\)?$/i;
+const P3 = /^(?:p3\s+|display-p3\s+|color\(\s*display-p3\s+)(-?[\d.]+)[\s,]+(-?[\d.]+)[\s,]+(-?[\d.]+)\s*\)?$/i;
+const OKLCH = /^oklch\(?\s*(-?[\d.]+)[\s,]+(-?[\d.]+)[\s,]+(-?[\d.]+)(?:deg)?\s*\)?$/i;
 // The gamut flag, stripped before parsing: [!] (also ⚠, its first form).
 const WARN_MARK = /\s*(?:\[!\]|\u26A0\uFE0F?)/g;
 const CMYK = /^(\d{1,3})\s*-\s*(\d{1,3})\s*-\s*(\d{1,3})\s*-\s*(\d{1,3})(\s+CB)?$/i;
@@ -138,7 +147,8 @@ function linesOf(text) {
 }
 
 function parseLine(line) {
-  const f = { hex: null, p3: null, name: null, cmyk: null, cb: false };
+  const f = { hex: null, p3: null, oklch: null, name: null, cmyk: null, cb: false };
+  const oneWide = () => (f.p3 || f.oklch ? { error: 'it has two wide colors (display-p3 or oklch)' } : null);
   for (const raw of line.split('|')) {
     const seg = raw.replace(WARN_MARK, '').trim();
     if (!seg) continue;
@@ -148,9 +158,13 @@ function parseLine(line) {
       if (f.hex) return { error: 'it has two hex codes' };
       f.hex = hex;
     } else if ((m = seg.match(P3))) {
-      if (f.p3) return { error: 'it has two P3 colors' };
+      if (oneWide()) return oneWide();
       f.p3 = [m[1], m[2], m[3]].map(Number);
       if (f.p3.some(v => !Number.isFinite(v))) return { error: `“${seg}” isn't a P3 color` };
+    } else if ((m = seg.match(OKLCH))) {
+      if (oneWide()) return oneWide();
+      f.oklch = [m[1], m[2], m[3]].map(Number);
+      if (f.oklch.some(v => !Number.isFinite(v))) return { error: `“${seg}” isn't an OKLCH color` };
     } else if ((m = seg.match(CMYK))) {
       if (f.cmyk) return { error: 'it has two CMYK builds' };
       f.cmyk = `${+m[1]}-${+m[2]}-${+m[3]}-${+m[4]}`;
@@ -164,6 +178,8 @@ function parseLine(line) {
 }
 
 const sameP3 = (a, b) => b && a.every((v, k) => Math.abs(v - Number(b.split(' ')[k])) < 0.0005);
+const sameOKLCH = (a, b) => b && a.every((v, k) => Math.abs(v - Number(b.split(' ')[k])) < (k === 2 ? 0.05 : 0.0005));
+const WHEEL_NAMES = { srgb: 'sRGB', p3: 'P3', p3a: 'P3A' };
 const sameName = (a, b) => b != null && a.trim().replace(/\s+/g, ' ').toLowerCase() === b.trim().replace(/\s+/g, ' ').toLowerCase();
 const cbLabel = e => e.cbCMYK.map(v => Math.round(v)).join('-');
 
@@ -174,7 +190,15 @@ const cbLabel = e => e.cbCMYK.map(v => Math.round(v)).join('-');
 function planLine(i, f, cur) {
   // Color.
   let color = cur ? S.colors[i] : null, colorChanged = false;
-  if (f.p3 && !(cur && sameP3(f.p3, cur.p3))) {
+  if (f.oklch && !(cur && sameOKLCH(f.oklch, cur.oklch))) {
+    const [L, C, H] = f.oklch;
+    if (L < 0 || L > 1 || C < 0) return { error: 'OKLCH lightness runs from 0 to 1, and chroma from 0 up' };
+    color = oklchToOKHSL(L, C, H);
+    // On the wheel (a hair of slack for the readout's own rounding).
+    if (color.s > 1.002) return { error: `that color is outside the ${WHEEL_NAMES[getGamutMode()]} wheel` };
+    color.s = Math.min(1, color.s);
+    colorChanged = true;
+  } else if (f.p3 && !(cur && sameP3(f.p3, cur.p3))) {
     if (f.p3.some(v => v < 0 || v > 1)) return { error: 'P3 values run from 0 to 1' };
     // (Tested on the values themselves: in sRGB mode the swatch readouts already
     // report every color limited to sRGB.)
@@ -208,7 +232,7 @@ function planLine(i, f, cur) {
       if (!color || !isChipCandidate(i, color, entry)) { color = entryColor(entry); colorChanged = true; }
     }
   }
-  if (!color) return { error: 'a new swatch needs a hex code, a P3 color or a library color name' };
+  if (!color) return { error: 'a new swatch needs a color (hex, display-p3 or oklch) or a library color name' };
   // A promotion that isn't on view (its library switched off, or Libraries
   // switched off) isn't in the text: keep it while the color stays put.
   const hidden = cur && !cur.entry ? pantoneSelections.get(i) : null;

@@ -14,11 +14,12 @@
     <button id="add-color-btn" type="button" aria-label="Add color" title="Add swatch"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1v10M1 6h10"/></svg></button>
 
     <div class="picker-wrap color-map-panel">
-      <!-- P3 gamut switch: on = P3 mode, off = sRGB mode (see src/mode.js). -->
-      <button type="button" class="gamut-toggle" id="gamut-toggle" role="switch" aria-checked="true">
-        <span class="gamut-toggle-track" aria-hidden="true"><span class="gamut-toggle-knob"></span></span>
-        <span class="gamut-toggle-label">P3</span>
-      </button>
+      <!-- Gamut mode switch: sRGB, P3 (default) or P3A (see src/mode.js). -->
+      <div class="gamut-switch" id="gamut-switch" role="radiogroup" aria-label="Gamut">
+        <button type="button" role="radio" data-mode="srgb" aria-checked="false" tabindex="-1">SRGB</button>
+        <button type="button" role="radio" data-mode="p3" aria-checked="true" tabindex="0">P3</button>
+        <button type="button" role="radio" data-mode="p3a" aria-checked="false" tabindex="-1">P3A</button>
+      </div>
       <div class="colormap-body">
         <div class="panel">
           <canvas id="wheel"></canvas>
@@ -37,7 +38,7 @@
     <div class="ui-column">
       <div class="ui-section section-cmyk checkable">
         <div class="section-head">
-          <label class="section-check"><input type="checkbox" class="section-toggle" id="toggle-cmyk"><span class="section-label">CMYK</span></label>
+          <label class="section-check"><span class="section-label">CMYK</span><input type="checkbox" class="section-toggle" id="toggle-cmyk"></label>
         </div>
         <div class="section-body cmyk-body">
           <div class="cmyk-controls">
@@ -63,17 +64,18 @@
         </div>
       </div>
 
-      <div class="ui-section section-libraries checkable">
+      <!-- Libraries: always on; each library has its own switch (user decision
+           2026-11-22). The + pill (the switches' outline) adds libraries. -->
+      <div class="ui-section section-libraries">
         <div class="section-head">
-          <label class="section-check"><input type="checkbox" class="section-toggle" id="toggle-libraries"><span class="section-label">Libraries</span></label>
+          <span class="section-label">Libraries</span>
         </div>
         <div class="section-body library-panel" id="library-panel">
           <div class="lib-list" id="lib-list"></div>
-          <div class="lib-import-row">
-            <button type="button" class="lib-add" id="lib-add" title="Add libraries">ADD</button>
-            <input type="file" id="lib-file" multiple hidden>
-            <div class="lib-files">Compatible files: .ase, .acb, .aco,<br>.gpl, .csv, .json</div>
-          </div>
+          <!-- Under the last library: the + pill, then "ADD LIBRARY" (user
+               decision 2026-11-22; the pill sat beside the section label). -->
+          <button type="button" class="lib-add" id="lib-add"><span class="lib-add-pill" aria-hidden="true"><svg viewBox="0 0 6 6"><path d="M2.25 0h1.5v2.25H6v1.5H3.75V6h-1.5V3.75H0v-1.5h2.25z" fill="currentColor"/></svg></span><span class="lib-add-label">Add library</span></button>
+          <input type="file" id="lib-file" multiple hidden>
           <div class="pantone-options">
             <label><input type="checkbox" id="toggle-hide-on-promote" checked> Hide matches after promotion</label>
           </div>

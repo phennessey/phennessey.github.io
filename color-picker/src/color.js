@@ -12,8 +12,11 @@ import {
   XYZ,
   DisplayP3,
   sRGB,
+  Rec2020,
   DisplayP3Gamut,
   sRGBGamut,
+  Rec2020Gamut,
+  LMS_to_linear_Rec2020_M,
   findGamutIntersectionOKLCH,
   OKLabToOKHSL as texelOKLabToOKHSL,
   OKLab_to_LMS_M,
@@ -28,6 +31,50 @@ export { convert, OKLab, XYZ, DisplayP3, sRGB };
 // @texel/color's own OKLab → LMS and LMS → linear RGB matrices, for the wheel
 // renderer's inlined conversion (picker.js) — the same numbers convert() uses.
 export { OKLab_to_LMS_M, LMS_to_linear_sRGB_M, LMS_to_linear_DisplayP3_M };
+
+// ── P3A: the PROLED XDR "P3 + Adobe RGB" panel ───────────────────────
+//
+// The third gamut mode targets Apple's PROLED XDR display preset "Apple XDR
+// Display (P3 + Adobe RGB)". Its primaries, read from the preset's ICC profile:
+// red and blue are Display P3's; green sits past both P3's and Adobe RGB's,
+// inside Rec.2020. White D65, the sRGB tone curve (as Display P3). Defined here
+// as a @texel/color space (linear RGB ⇄ XYZ / LMS matrices, P3's transfer
+// curve), so convert(), the exact cusp and the gamut intersection treat it like
+// sRGB and P3. Browsers have no CSS space for it: P3A colors are written as
+// oklab() (cssColor) and drawn on float16 display-p3 canvases with extended
+// (outside 0–1) P3 values, which reach the panel's edge in Chrome (measured).
+const D65_XY = [0.3127, 0.3290];
+const P3_XY  = [[0.68, 0.32], [0.265, 0.69], [0.15, 0.06]];
+const P3A_XY = [[0.68, 0.32], [0.2124, 0.7369], [0.15, 0.06]];
+const mul3 = (A, B) => A.map(r => [0, 1, 2].map(j => r[0] * B[0][j] + r[1] * B[1][j] + r[2] * B[2][j]));
+function inv3([[a, b, c], [d, e, f], [g, h, i]]) {
+  const A = e * i - f * h, B = f * g - d * i, C = d * h - e * g, det = a * A + b * B + c * C;
+  return [[A / det, (c * h - b * i) / det, (b * f - c * e) / det],
+          [B / det, (a * i - c * g) / det, (c * d - a * f) / det],
+          [C / det, (b * g - a * h) / det, (a * e - b * d) / det]];
+}
+/** Linear RGB → XYZ for chromaticities `xy` and white D65 (Y = 1). */
+function rgbToXYZ(xy) {
+  const P = [0, 1, 2].map(r => [0, 1, 2].map(c => [xy[c][0] / xy[c][1], 1, (1 - xy[c][0] - xy[c][1]) / xy[c][1]][r]));
+  const W = [D65_XY[0] / D65_XY[1], 1, (1 - D65_XY[0] - D65_XY[1]) / D65_XY[1]];
+  const k = inv3(P).map(r => r[0] * W[0] + r[1] * W[1] + r[2] * W[2]);
+  return P.map(r => r.map((v, c) => v * k[c]));
+}
+// Linear P3A → linear P3 from the two sets of primaries, then texel's own P3
+// matrices for the rest, so P3A agrees with texel's P3 wherever they meet.
+const P3A_TO_P3 = mul3(inv3(rgbToXYZ(P3_XY)), rgbToXYZ(P3A_XY));
+const P3_TO_P3A = inv3(P3A_TO_P3);
+const P3ALinear = {
+  id: 'p3a-linear',
+  toXYZ_M:   mul3(DisplayP3.base.toXYZ_M, P3A_TO_P3),
+  fromXYZ_M: mul3(P3_TO_P3A, DisplayP3.base.fromXYZ_M),
+  toLMS_M:   mul3(DisplayP3.base.toLMS_M, P3A_TO_P3),
+  fromLMS_M: mul3(P3_TO_P3A, DisplayP3.base.fromLMS_M),
+};
+export const P3A = { id: 'p3a', base: P3ALinear, toBase: DisplayP3.toBase, fromBase: DisplayP3.fromBase };
+// texel's per-gamut `coefficients` serve only its own cusp finder and OKHSL,
+// which the wheel never uses (the exact cusp below replaces them).
+const P3AGamut = { space: P3A, coefficients: DisplayP3Gamut.coefficients };
 
 // ── OKHSL, owned here (Ottosson's method; P3 gets its own fit) ───────
 //
@@ -61,6 +108,21 @@ export { OKLab_to_LMS_M, LMS_to_linear_sRGB_M, LMS_to_linear_DisplayP3_M };
 // ~0.79 of the edge chroma (his sRGB 0.852).
 const P3_SPACING_BLEND = 0.536;
 
+// P3A spacing: the P3 treatment again, one gamut out. At blend 1, P3's mid
+// curve is scaled hue by hue by the ratio of P3A's cusp to P3's (S = C/L and
+// T = C/(1−L)), and C_0 by the ratio of their average cusp S / T (1.05967 /
+// 1.05985); at 0 P3's curves run unscaled on P3A's edge. The blend puts the P3
+// ring at the measured size difference, since the wheel's radius represents
+// chroma (user decision 2026-11-21: distort the space as P3 over sRGB). P3 and
+// P3A share red and blue, so over ~64% of hue × lightness their edges coincide;
+// where they differ, the P3 edge reaches a median 0.807 of P3A's edge chroma,
+// and blend 1.19 puts the P3 ring at a median 0.807 of the radius (1 gives
+// 0.834; 0 gives 0.951, P3A-only colors crammed into the rim). Spacing at 1.19:
+// s = 0.2 / 0.5 / 0.8 reach a median 20 / 50 / 80% of the edge chroma, and
+// C_mid stays at least 13% inside C_max.
+const P3A_SPACING_BLEND = 1.19;
+const P3A_CUSP_RATIO_S = 1.0596669, P3A_CUSP_RATIO_T = 1.0598475;   // average cusp S, T: P3A ÷ P3
+
 const OKHSL_FIT = new Map([
   [sRGBGamut, {
     S: [0.11516993, 7.44778970, 4.15901240, -2.19557347, 1.75198401, -2.13704948, -10.02301043, -4.24894561, 5.38770819, 4.69891013],
@@ -73,15 +135,25 @@ const OKHSL_FIT = new Map([
     c0S: 0.46013066, c0T: 0.91806165,
     blend: P3_SPACING_BLEND,   // mixed toward the sRGB entry's values (see above)
   }],
+  // P3A: P3's (blended) fit, distorted hue by hue toward P3A's cusp — the same
+  // transfer P3 got from sRGB (see "P3A spacing" below).
+  [P3AGamut, { over: DisplayP3Gamut, blend: P3A_SPACING_BLEND, ratioS: P3A_CUSP_RATIO_S, ratioT: P3A_CUSP_RATIO_T }],
 ]);
 // Apply each fit's blend: C_0's constants mix directly; the mid curve mixes by
 // value in getCs (its coefficients aren't linear in the curve).
 for (const [g, p] of OKHSL_FIT) {
-  if (p.blend === undefined) continue;
+  if (p.blend === undefined || p.over) continue;
   const base = OKHSL_FIT.get(sRGBGamut);
   p.base = base;
   p.c0S = (1 - p.blend) * base.c0S + p.blend * p.c0S;
   p.c0T = (1 - p.blend) * base.c0T + p.blend * p.c0T;
+}
+// P3A's C_0: P3's (blended) constants scaled by the average-cusp ratio, blended.
+for (const [g, p] of OKHSL_FIT) {
+  if (!p.over) continue;
+  const q = OKHSL_FIT.get(p.over);
+  p.c0S = q.c0S * (1 + p.blend * (p.ratioS - 1));
+  p.c0T = q.c0T * (1 + p.blend * (p.ratioT - 1));
 }
 
 // ── The cusp, computed exactly ───────────────────────────────────────
@@ -117,6 +189,9 @@ const CUSP_RAMP_SLOPE = 0.1;   // max fall-off of the cusp's S per degree (sRGB 
 const CUSP_GAMUT = new Map([
   [sRGBGamut, { M: LMS_to_linear_sRGB_M, ramp: CUSP_RAMP_SLOPE, space: sRGB }],
   [DisplayP3Gamut, { M: LMS_to_linear_DisplayP3_M, ramp: 0, space: DisplayP3 }],
+  [P3AGamut, { M: P3ALinear.fromLMS_M, ramp: 0, space: P3A }],
+  // Rec.2020: never a wheel; the outer reference for library dots past the rim.
+  [Rec2020Gamut, { M: LMS_to_linear_Rec2020_M, ramp: 0, space: Rec2020 }],
 ]);
 const CUSP_CORNERS = [[1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 1, 1], [0, 0, 1], [1, 0, 1]];
 
@@ -225,16 +300,33 @@ function findCusp(a_, b_, g) {
 const stMid = (c, a, b) => c[0] + 1 / (c[1] + c[2]*b + a*(c[3] + c[4]*b + a*(c[5] + c[6]*b + a*(c[7] + c[8]*b + c[9]*a))));
 
 /** His get_Cs: [C_0, C_mid, C_max] at OKLab lightness L along unit hue (a_, b_). */
-function getCs(L, a_, b_, g, out) {
-  const p = OKHSL_FIT.get(g);
-  const cusp = findCusp(a_, b_, g);
-  const Cmax = findGamutIntersectionOKLCH(a_, b_, L, 1, L, cusp, g);
-  const k = Cmax / Math.min(L * (cusp[1] / cusp[0]), (1 - L) * (cusp[1] / (1 - cusp[0])));
+const _mid = [0, 0];
+/** The fit's mid curve [S_mid, T_mid] along unit hue (a_, b_). */
+function midST(p, a_, b_, out) {
+  if (p.over) {   // P3A: P3's curve scaled by P3A's cusp ÷ P3's at this hue
+    midST(OKHSL_FIT.get(p.over), a_, b_, out);
+    const cP = findCusp(a_, b_, p.over), PL = cP[0], PC = cP[1];
+    const cA = findCusp(a_, b_, P3AGamut);
+    const rS = (cA[1] / cA[0]) / (PC / PL), rT = (cA[1] / (1 - cA[0])) / (PC / (1 - PL));
+    out[0] *= 1 + p.blend * (rS - 1);
+    out[1] *= 1 + p.blend * (rT - 1);
+    return out;
+  }
   let Sm = stMid(p.S, a_, b_), Tm = stMid(p.T, a_, b_);
   if (p.base) {
     Sm = (1 - p.blend) * stMid(p.base.S, a_, b_) + p.blend * Sm;
     Tm = (1 - p.blend) * stMid(p.base.T, a_, b_) + p.blend * Tm;
   }
+  out[0] = Sm; out[1] = Tm;
+  return out;
+}
+
+function getCs(L, a_, b_, g, out) {
+  const p = OKHSL_FIT.get(g);
+  const [Sm, Tm] = midST(p, a_, b_, _mid);   // before findCusp(g): it shares _cusp
+  const cusp = findCusp(a_, b_, g);
+  const Cmax = findGamutIntersectionOKLCH(a_, b_, L, 1, L, cusp, g);
+  const k = Cmax / Math.min(L * (cusp[1] / cusp[0]), (1 - L) * (cusp[1] / (1 - cusp[0])));
   const Ca = L * Sm, Cb = (1 - L) * Tm;
   out[1] = 0.9 * k * Math.sqrt(Math.sqrt(1 / (1 / Ca**4 + 1 / Cb**4)));
   const C0a = L * p.c0S, C0b = (1 - L) * p.c0T;
@@ -293,15 +385,30 @@ function labToHsl(lab, g, out) {
 // Every OKHSL ⇄ OKLab conversion in the app goes through this module so it
 // picks up the current gamut.
 
+export const GAMUT_MODES = ['srgb', 'p3', 'p3a'];   // narrowest first
 let gamutMode = 'p3';
 let gamut = DisplayP3Gamut;
-const gamutFor = mode => (mode === 'srgb' ? sRGBGamut : DisplayP3Gamut);
+const gamutFor = mode => (mode === 'srgb' ? sRGBGamut : mode === 'p3a' ? P3AGamut : DisplayP3Gamut);
 
 export function getGamutMode() { return gamutMode; }
 export function isSRGBMode()   { return gamutMode === 'srgb'; }
+export function isP3AMode()    { return gamutMode === 'p3a'; }
 export function setGamutMode(mode) {
-  gamutMode = mode === 'srgb' ? 'srgb' : 'p3';
+  gamutMode = GAMUT_MODES.includes(mode) ? mode : 'p3';
   gamut = gamutFor(gamutMode);
+}
+
+/** For library dots past the rim (pantone.js): at an OKLab color's own hue and
+ *  OKLab lightness, the most chroma [the current mode's gamut, Rec.2020]
+ *  reaches — the wheel's rim and the fixed outer reference. */
+const _edgeOut = [0, 0];
+export function edgeChromas(lab, out = _edgeOut) {
+  const L = lab[0], C = Math.hypot(lab[1], lab[2]);
+  if (!(L > 0 && L < 1) || C === 0) { out[0] = out[1] = 0; return out; }
+  const a_ = lab[1] / C, b_ = lab[2] / C;
+  out[0] = findGamutIntersectionOKLCH(a_, b_, L, 1, L, findCusp(a_, b_, gamut), gamut);
+  out[1] = findGamutIntersectionOKLCH(a_, b_, L, 1, L, findCusp(a_, b_, Rec2020Gamut), Rec2020Gamut);
+  return out;
 }
 
 /** OKHSL [H 0–360, s, l] → OKLab in the current gamut. */
@@ -317,22 +424,24 @@ export function okhslToOKLab(hsl, out) { return hslToLab(hsl, gamut, out); }
 //    continuous at the rim, and its extrapolation is well behaved (≤ 1.27 across
 //    the Pantone library) — the out-of-gamut Pantone map is unchanged from before
 //    P3 got its own fit.
-//  • sRGB: past sRGB's edge, a color is placed by its position in the P3 wheel,
-//    scaled so the sRGB ring becomes the disc edge: s = s_P3(color) / s_P3(sRGB
-//    edge at the same hue and lightness). It sits relative to the sRGB circle
-//    exactly as it sits relative to the sRGB ring in P3 mode.
-const _xsEdge = [0, 0, 0], _xsP3 = [0, 0, 0], _xsP3Edge = [0, 0, 0];
+//  • sRGB and P3A: past the gamut's edge, a color is placed by its position in
+//    the P3 wheel (P3's rule above past P3's edge), scaled so this gamut's edge
+//    becomes the disc edge: s = s_P3(color) / s_P3(edge at the same hue and
+//    lightness). In sRGB mode a color sits relative to the sRGB circle exactly
+//    as it sits relative to the sRGB ring in P3 mode.
+const _xsP3 = [0, 0, 0], _xsP3Edge = [0, 0, 0];
+const _xsEdge = new Map([[sRGBGamut, [0, 0, 0]], [DisplayP3Gamut, _xsP3Edge], [P3AGamut, [0, 0, 0]]]);
 function oklabToOKHSLExtended(lab, g, out) {
   labToHsl(lab, g, out);
-  const edge = g === sRGBGamut ? _xsEdge : _xsP3Edge;
+  const edge = _xsEdge.get(g);
   hslToLab([out[0], 1, out[2]], g, edge);
   if (Math.hypot(lab[1], lab[2]) <= Math.hypot(edge[1], edge[2])) return out;
-  if (g !== sRGBGamut) {
+  if (g === DisplayP3Gamut) {
     out[1] = texelOKLabToOKHSL(lab, DisplayP3Gamut, _xsP3)[1];
     return out;
   }
   const sColor = oklabToOKHSLExtended(lab, DisplayP3Gamut, _xsP3)[1];
-  const sEdge   = labToHsl(_xsEdge, DisplayP3Gamut, _xsP3)[1];
+  const sEdge  = oklabToOKHSLExtended(edge, DisplayP3Gamut, _xsP3)[1];
   if (sEdge > 0) out[1] = Math.max(1, sColor / sEdge);
   return out;
 }
@@ -387,11 +496,30 @@ export function resaturate(col, fromMode, toMode) {
 /** Pull an OKLab color radially (same hue and lightness) to the sRGB edge if
  *  it lies outside sRGB — the same treatment the wheel gives every color in
  *  sRGB mode. In-gamut colors are copied through unchanged. */
-export function clampOKLabToSRGB(lab, out) {
-  oklabToOKHSLExtended(lab, sRGBGamut, _rsHsl);
+export function clampOKLabToSRGB(lab, out) { return clampOKLabTo(sRGBGamut, lab, out); }
+/** The same pull, to Display P3's edge. */
+export function clampOKLabToP3(lab, out) { return clampOKLabTo(DisplayP3Gamut, lab, out); }
+/** The same pull, to the current mode's edge (the wheel's rim). */
+export function clampOKLabToMode(lab, out) { return clampOKLabTo(gamut, lab, out); }
+function clampOKLabTo(g, lab, out) {
+  oklabToOKHSLExtended(lab, g, _rsHsl);
   if (_rsHsl[1] <= 1) { out[0] = lab[0]; out[1] = lab[1]; out[2] = lab[2]; return out; }
   _rsHsl[1] = 1;
-  return hslToLab(_rsHsl, sRGBGamut, out);
+  return hslToLab(_rsHsl, g, out);
+}
+
+const _cssP3 = [0, 0, 0], _cssLab = [0, 0, 0];
+/** CSS for an OKLab color, as the current mode can show it. sRGB and P3 modes:
+ *  color(display-p3 …), channels floored at 0 (the strings they always wrote).
+ *  P3A mode: oklab(…), pulled in to P3A's rim first — no CSS space is P3A, and
+ *  oklab() reaches the panel's edge in Chrome (measured). */
+export function cssColor(lab, digits = 3) {
+  if (gamutMode === 'p3a') {
+    clampOKLabTo(P3AGamut, lab, _cssLab);
+    return `oklab(${_cssLab[0].toFixed(5)} ${_cssLab[1].toFixed(5)} ${_cssLab[2].toFixed(5)})`;
+  }
+  convert(lab, OKLab, DisplayP3, _cssP3);
+  return `color(display-p3 ${Math.max(0, _cssP3[0]).toFixed(digits)} ${Math.max(0, _cssP3[1]).toFixed(digits)} ${Math.max(0, _cssP3[2]).toFixed(digits)})`;
 }
 
 // ── Numeric helpers ──────────────────────────────────────────────────
@@ -463,6 +591,15 @@ export function p3ToOKHSL(r, g, b) {
   return { h: _hsl[0] / 360, s: _hsl[1], L: toeInv(_hsl[2]) };
 }
 
+/** OKLCH [L, C, H°] → picker's {h, s, L} descriptor, like p3ToOKHSL (exact;
+ *  s > 1 past the current wheel's rim). */
+export function oklchToOKHSL(L, C, H) {
+  const a = H * Math.PI / 180;
+  _lab[0] = L; _lab[1] = C * Math.cos(a); _lab[2] = C * Math.sin(a);
+  swatchHslFromLab(_lab, gamut, _hsl);
+  return { h: _hsl[0] / 360, s: _hsl[1], L: toeInv(_hsl[2]) };
+}
+
 /** The OKHSL saturation that yields a given OKLCH chroma (closed form). */
 export function sForChroma(h, targetC, lr) {
   // OKHSL's own inverse (labToHsl's chroma → s step) at this hue and
@@ -508,13 +645,44 @@ export function inSRGB(h, s, lr) {
   convert(toOKLab(h, s, lr), OKLab, sRGB, _rgb);
   return _rgb.every(v => v >= -1e-5 && v <= 1 + 1e-5);
 }
+/** The same test for Display P3 (only P3A mode has colors outside it). */
+export function inP3(h, s, lr) {
+  convert(toOKLab(h, s, lr), OKLab, DisplayP3, _rgb);
+  return _rgb.every(v => v >= -1e-5 && v <= 1 + 1e-5);
+}
 
 // ── Gamut-mapped output computation ──────────────────────────────────
 
-const _mapLab = [0, 0, 0];
+const _mapLab = [0, 0, 0], _p3a = [0, 0, 0], _p3aLab = [0, 0, 0];
+const beyond = v => v.some(x => x < -1e-4 || x > 1 + 1e-4);
 export function computeP3AndSRGB(color) {
   toOKLab(color.h, color.s, toe(color.L));
+  // P3A mode: the true color as panel RGB (p3aStr, for the State console).
+  let p3aStr = null;
+  if (gamutMode === 'p3a') {
+    convert(_lab, OKLab, P3A, _p3a);
+    for (let k = 0; k < 3; k++) _p3a[k] = Math.max(0, _p3a[k]);
+    p3aStr = `${_p3a[0].toFixed(3)} ${_p3a[1].toFixed(3)} ${_p3a[2].toFixed(3)}`;
+  }
+  // A color outside sRGB (P3 or P3A mode) is reported and drawn in one space,
+  // OKLCH, whichever gamut it needs (user decision 2026-11-21: one reporting
+  // mode; it replaced a P3 readout, then OKLAB and REC2020 ones for P3A). The
+  // readout and the fill share one rounded string. Pulled in to the mode's rim
+  // first; L and C to 3 decimals, hue to 0.1°.
+  let oklchStr = null, oklchCss = null;
+  if (gamutMode !== 'srgb') {
+    clampOKLabTo(gamut, _lab, _p3aLab);
+    const C = Math.hypot(_p3aLab[1], _p3aLab[2]);
+    const H = (Math.atan2(_p3aLab[2], _p3aLab[1]) * 180 / Math.PI + 360) % 360;
+    oklchStr = `${_p3aLab[0].toFixed(3)} ${C.toFixed(3)} ${H.toFixed(1)}`;
+    oklchCss = `oklch(${oklchStr})`;
+  }
   convert(_lab, OKLab, DisplayP3, _p3);
+  // Only P3A mode has colors outside P3. They're pulled in to the P3 edge at
+  // the same hue and lightness for the P3 readout, as colors outside sRGB are
+  // for the hex.
+  const outOfP3 = gamutMode === 'p3a' && beyond(_p3);
+  if (outOfP3) convert(clampOKLabToP3(_lab, _mapLab), OKLab, DisplayP3, _p3);
   _p3[0] = Math.max(0, _p3[0]);
   _p3[1] = Math.max(0, _p3[1]);
   _p3[2] = Math.max(0, _p3[2]);
@@ -526,7 +694,7 @@ export function computeP3AndSRGB(color) {
   const beyondSRGB = _rgb.some(v => v < -1e-4 || v > 1 + 1e-4);
   // In sRGB mode s ≤ 1 keeps every color inside sRGB by construction, so any
   // overshoot here is float noise at the edge — never a real P3-only color.
-  const outOfSRGB = gamutMode === 'p3' && beyondSRGB;
+  const outOfSRGB = gamutMode !== 'srgb' && beyondSRGB;
   // Inside sRGB (within float noise), round the channels as they are. Only a
   // color truly outside is pulled in to the sRGB edge at the same hue and
   // lightness (clampOKLabToSRGB — the sRGB wheel's own edge, exact cusp). Never
@@ -545,7 +713,7 @@ export function computeP3AndSRGB(color) {
   // only finer / wider-than-sRGB fill is the P3 swatch (p3Css), shown solely
   // when the color falls outside sRGB.
   const srgbCss = hex;
-  return { p3Str, p3Css, srgbCss, hex, outOfSRGB };
+  return { p3Str, p3Css, srgbCss, hex, outOfSRGB, outOfP3, p3aStr, oklchStr, oklchCss };
 }
 
 // ── CIELAB L* (the "Lab lightness" Photoshop reports) ────────────────
@@ -569,6 +737,11 @@ export function cielabL(color) {
 /** CIELAB L* (D50, 0–100) of an sRGB [0–1] color — e.g. the displayed sRGB hex. */
 export function cielabLOfSrgb(r, g, b) {
   convert([r, g, b], sRGB, XYZ, _xyzc);
+  return cielabLFromXYZ(_xyzc);
+}
+/** CIELAB L* (D50, 0–100) of a Display P3 [0–1] color — e.g. the P3 readout. */
+export function cielabLOfP3(r, g, b) {
+  convert([r, g, b], DisplayP3, XYZ, _xyzc);
   return cielabLFromXYZ(_xyzc);
 }
 

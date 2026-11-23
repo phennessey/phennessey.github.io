@@ -115,13 +115,16 @@ function parseACB(buf, fileName) {
     const raw = str().trim(), code = r.ascii(6).trim();
     const b = []; for (let k = 0; k < channels; k++) b.push(r.u8());
     if (!raw && !code) continue;   // page fillers
-    const name = (prefix + (raw || code) + suffix).replace(/\s+/g, " ").trim();
+    // The book's prefix (e.g. "PANTONE ") isn't repeated on every name: it's
+    // kept once, as the library's prefix, which the promoted badge shows.
+    const name = ((raw || code) + suffix).replace(/\s+/g, " ").trim();
     if (space === 7) swatches.push({ name, model: "lab", values: [b[0] / 2.55, b[1] - 128, b[2] - 128] });
     else if (space === 2) swatches.push({ name, model: "cmyk", values: b.map(v => (255 - v) / 2.55) });
     else if (space === 0) swatches.push({ name, model: "rgb", values: b.map(v => v / 255) });
     else if (space === 8) swatches.push({ name, model: "rgb", values: [b[0] / 255, b[0] / 255, b[0] / 255] });
   }
-  return { name: title.replace(/\s+/g, " ").trim() || baseName(fileName), format: "ACB", swatches, labSpace: "lab-d50" };
+  return { name: title.replace(/\s+/g, " ").trim() || baseName(fileName), prefix: prefix.replace(/\s+/g, " ").trim(),
+           format: "ACB", swatches, labSpace: "lab-d50" };
 }
 
 // ── ACO: Photoshop swatches ──────────────────────────────────────────
@@ -380,6 +383,55 @@ export function swatchToOKLab(sw, space, out = [0, 0, 0]) {
 // 2026-10-20): a library is metallic when its NAME says "metallic" or
 // "metallics" — so renaming a library is how you change it.
 export const isMetallicLibraryName = name => /metallics?/i.test(String(name));
+
+// ── Brand prefix detection ───────────────────────────────────────────
+// The promoted color's badge shows a library's prefix (its brand). Most color
+// files carry the brand at the start of every color's name ("RAL 1000 Green
+// beige", "HKS 43 K", "PANTONE 186 C"); Adobe's ACB also has a prefix field
+// (read by parseACB). Pantone's current books carry no brand at all — "2208 C"
+// — so their naming pattern is the one brand-specific rule. (User decision
+// 2026-11-22: detect, fall back to "Library", and keep Edit prefix.)
+const PREFIX_SHARE = 0.9;    // share of names that must start with the same word
+const PANTONE_SHARE = 0.8;   // share of names that must end in a Pantone suffix
+// A code-like name ending in a Pantone paper or ink suffix: "2208 C",
+// "6001 CP", "100 XGC", "1R00 SP", "Yellow 0131 C", "Cool Gray 11 U".
+const PANTONE_NAME = /\d.*\s(C|U|CP|UP|XGC|SP|M)$/;
+// Words that start auto-numbered names ("Color 1", "Swatch 12"), not brands.
+const NOT_A_BRAND = new Set(["COLOR", "COLOUR", "COLORS", "SWATCH", "SWATCHES", "UNTITLED", "CUSTOM", "NEW", "SPOT", "PROCESS"]);
+
+/** How a detected prefix is written on the badge: Pantone in title case, not
+ *  the files' all caps (user decision 2026-11-22); anything else as found. */
+export const brandCase = p => (/^pantone$/i.test(String(p).trim()) ? "Pantone" : p);
+
+/** A library's prefix from its color names: { prefix, names }, where `names`
+ *  is the list with the prefix stripped from each name (null when nothing was
+ *  stripped), or null when no prefix can be detected. In order: (1) a word that
+ *  nearly every name starts with (not a number, and never the whole name);
+ *  (2) Pantone's naming pattern. */
+export function detectPrefix(names) {
+  const list = names.map(n => String(n).trim()).filter(Boolean);
+  if (!list.length) return null;
+  const counts = new Map();
+  for (const n of list) {
+    const w = n.split(/\s+/)[0];
+    if (w === n || !/[A-Za-z]/.test(w) || /^\d/.test(w)) continue;
+    const k = w.toUpperCase();
+    if (NOT_A_BRAND.has(k)) continue;
+    const c = counts.get(k) || { n: 0, word: w };
+    c.n++; counts.set(k, c);
+  }
+  let best = null;
+  for (const c of counts.values()) if (!best || c.n > best.n) best = c;
+  if (best && best.n >= PREFIX_SHARE * list.length) {
+    const word = best.word;
+    const escaped = word.replace(/[.*+?^$|()[\]{}\\]/g, "\\$&");
+    const re = new RegExp("^" + escaped + "\\s+", "i");
+    return { prefix: brandCase(word.replace(/[®™]/g, "")), names: names.map(n => String(n).replace(re, "")) };
+  }
+  const pantone = list.filter(n => PANTONE_NAME.test(n)).length;
+  if (pantone >= PANTONE_SHARE * list.length) return { prefix: "Pantone", names: null };
+  return null;
+}
 
 // ── Names, for pairing CMYK add-ons ──────────────────────────────────
 // "PANTONE 186 CP" (Color Bridge) pairs with "PANTONE 186 C"; case, spacing,

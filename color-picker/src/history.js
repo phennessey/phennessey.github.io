@@ -112,11 +112,8 @@ function restoreSnapshot(snap) {
     neededLibs.add(entry.libId);
   }
   if (neededLibs.size > 0) {
-    // Show what the restored promotions need: the Libraries checkbox on and
-    // their libraries switched on (view state; no history of its own).
-    S.libraryFilters.base = true;
-    const toggle = document.getElementById('toggle-libraries');
-    if (toggle && !toggle.checked) { toggle.checked = true; toggle.dispatchEvent(new Event('change')); }
+    // Show what the restored promotions need: their libraries switched on
+    // (view state; no history of its own).
     activateLibraries(neededLibs);
     updateMatchesVisibility();
   }

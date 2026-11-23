@@ -14,7 +14,7 @@
 // Libraries live in this browser's IndexedDB (one record, in list order), so
 // clearing site data removes them (re-import the original files then).
 
-import { detectSpace, normalizeName, EXPORT_TYPE } from "./library-formats.js";
+import { detectSpace, detectPrefix, brandCase, normalizeName, EXPORT_TYPE } from "./library-formats.js";
 
 const DB = "color-picker", STORE = "kv", KEY = "libraries";
 
@@ -66,12 +66,26 @@ const newId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()
 export function libraryFromParsed(parsed, fileName) {
   const det = detectSpace(parsed);
   const colors = parsed.swatches.filter(s => s.model !== "cmyk");
+  // The brand prefix: the file's own (ACB), else detected from the names, which
+  // then lose it ("RAL 1000" → badge RAL, name "1000").
+  let prefix = brandCase(parsed.prefix || "");
+  if (!prefix) {
+    const found = detectPrefix(colors.map(s => s.name));
+    if (found) {
+      prefix = found.prefix;
+      if (found.names) colors.forEach((s, i) => { s.name = found.names[i]; });
+    }
+  }
   const importedAt = Date.now();
   const map = {};
   for (const s of colors) if (s.cmyk) map[normalizeName(s.name)] = s.cmyk.map(Number);
   return {
     id: newId(),
     name: parsed.name,
+    // The brand prefix (see detectPrefix; "" when none was found). Shown on
+    // the promoted color's badge ("Library" when empty); Edit prefix in the
+    // row's gear menu changes it (prefixByUser then keeps it from detection).
+    prefix,
     active: true,
     format: parsed.format,
     fileName,
