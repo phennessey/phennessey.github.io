@@ -44,14 +44,14 @@
 import {
   convert, OKLab, XYZ, DisplayP3, oklabToOKHSL,
   toOKLab, toe, toeInv, isSRGBMode, isP3AMode, cssColor, clampOKLabToSRGB, sForChroma,
-} from "./color.js?v=e65dba6";
+} from "./color.js?v=d2f2ca5";
 import {
   makeInkSolver, xyzD65ToLabD50, labD50ToXYZd65, parseGamutTable, tableChroma, PROFILE_TAC, USE_BPC,
-} from "./cmyk-ink.js?v=e65dba6";
-import { els, P, pantoneSelections } from "./state.js?v=e65dba6";
-import { isPromotionShown } from "./pantone.js?v=e65dba6";
-import { requestRender } from "./util.js?v=e65dba6";
-import { MIDDLE_GRAY } from "./constants.js?v=e65dba6";
+} from "./cmyk-ink.js?v=d2f2ca5";
+import { els, P, pantoneSelections } from "./state.js?v=d2f2ca5";
+import { isPromotionShown } from "./pantone.js?v=d2f2ca5";
+import { requestRender } from "./util.js?v=d2f2ca5";
+import { MIDDLE_GRAY } from "./constants.js?v=d2f2ca5";
 
 const CE = window.jsColorEngine;
 const engineOK = !!(CE && CE.Transform && CE.Profile && CE.color);

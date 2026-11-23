@@ -15,8 +15,8 @@
 // `labSpace` is set when the format itself fixes the Lab flavor: Adobe's
 // ASE / ACB / ACO Lab is ICC CIELAB with a D50 white.
 
-import { convert, OKLab, XYZ, sRGB, DisplayP3 } from "./color.js?v=e65dba6";
-import { labD50ToXYZd65 } from "./cmyk-ink.js?v=e65dba6";
+import { convert, OKLab, XYZ, sRGB, DisplayP3 } from "./color.js?v=d2f2ca5";
+import { labD50ToXYZd65 } from "./cmyk-ink.js?v=d2f2ca5";
 
 // ── Spaces ───────────────────────────────────────────────────────────
 // What a library's numbers mean. RGB data can be read as sRGB or Display P3;

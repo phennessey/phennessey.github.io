@@ -8,8 +8,8 @@ import {
   convert, OKLab, DisplayP3, sRGB,
   toe, toeInv, toOKLab, to255, clamp01, sForChroma, chromaOf, inSRGB, inP3, cuspL, isSRGBMode, onRim, getGamutMode,
   okhslHueTable, cssColor, isP3AMode, OKLab_to_LMS_M, LMS_to_linear_sRGB_M, LMS_to_linear_DisplayP3_M,
-} from './color.js?v=e65dba6';
-import { DOT_RADIUS } from './constants.js?v=e65dba6';
+} from './color.js?v=d2f2ca5';
+import { DOT_RADIUS } from './constants.js?v=d2f2ca5';
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -194,15 +194,41 @@ const GAMUT_BOUNDARY_STEPS = 11;
 // The sRGB boundary eases (CSS transition) only within this much lightness of
 // either end, where it morphs into the edge circle.
 const GAMUT_EASE_BAND = 0.01;
-export function gamutBoundaryPath(lr, discR, inside = inSRGB) {
-  return polarPath(359, h => {
+/** Like polarPath, but leaves out the stretches that lie on the rim (radius =
+ *  discR): a segment is drawn unless both its ends are on the rim, so each
+ *  piece still runs up to where it meets the rim. Fully inside → one closed
+ *  loop, as polarPath draws it. */
+function polarPathOffRim(steps, radiusFn, discR) {
+  const n = steps + 1, pts = [], onRim = [];
+  for (let i = 0; i < n; i++) {
+    const h = i / n, a = h * TAU, r = radiusFn(h);
+    pts.push(`${(discR + Math.cos(a) * r).toFixed(2)} ${(discR - Math.sin(a) * r).toFixed(2)}`);
+    onRim.push(r >= discR * (1 - 1e-6));
+  }
+  const drawn = i => !(onRim[i] && onRim[(i + 1) % n]);   // segment i → i+1
+  let start = -1;
+  for (let i = 0; i < n; i++) if (!drawn(i)) { start = i; break; }
+  if (start < 0) return 'M ' + pts.join(' L ') + ' Z';
+  const out = [];
+  for (let k = 1; k <= n; k++) {   // begin after an undrawn segment, so no piece wraps
+    const i = (start + k) % n;
+    if (!drawn(i)) continue;
+    if (!drawn((i + n - 1) % n)) out.push('M ' + pts[i]);
+    out.push('L ' + pts[(i + 1) % n]);
+  }
+  return out.join(' ');
+}
+
+export function gamutBoundaryPath(lr, discR, inside = inSRGB, offRim = false) {
+  const radius = h => {
     let lo = 0, hi = 1;
     for (let it = 0; it < GAMUT_BOUNDARY_STEPS; it++) {
       const m = (lo + hi) * 0.5;
       if (inside(h, m, lr)) lo = m; else hi = m;
     }
     return hi * discR;
-  }, discR);
+  };
+  return offRim ? polarPathOffRim(359, radius, discR) : polarPath(359, radius, discR);
 }
 
 export function gamutBoundaryStyle(L, middleGray) {
@@ -590,7 +616,9 @@ export function createPicker(S, cfg) {
       p3Boundary.classList.toggle('eased', lr < GAMUT_EASE_BAND || lr > 1 - GAMUT_EASE_BAND);
       p3Boundary.setAttribute('stroke', stroke);
       p3Boundary.setAttribute('stroke-opacity', opacity);
-      if (entry.p3D == null) entry.p3D = gamutBoundaryPath(lr, DISC_R, inP3);
+      // Where P3's edge is the P3A rim (around red and blue) the ring isn't
+      // drawn over the rim (user decision 2026-11-22).
+      if (entry.p3D == null) entry.p3D = gamutBoundaryPath(lr, DISC_R, inP3, true);
       if (p3ShownD !== entry.p3D) { p3Boundary.setAttribute('d', entry.p3D); p3ShownD = entry.p3D; }
     } else if (p3ShownD !== '') { p3Boundary.setAttribute('d', ''); p3ShownD = ''; }
     updateCMYKBoundary(stroke, opacity, lr, L);
