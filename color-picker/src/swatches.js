@@ -1,16 +1,16 @@
 // Swatch DOM & selection: building/updating swatch elements, the +/delete
 // buttons, wiring per-swatch click/drag interactions, and active/multi-select
-// state — selection visuals, the mesh that connects multi-selected handles,
-// and the picker-background tint.
+// state — selection visuals and the picker-background tint. (The triangle
+// mesh that connected multi-selected handles was removed 2026-11-22.)
 
-import { MIDDLE_GRAY, MAX_COLORS, GAMUT_ICON_SVG, CLOSE_ICON_SVG } from './constants.js?v=d2f2ca5';
-import { S, P, els, pantoneSelections, handlePos } from './state.js?v=d2f2ca5';
-import { idxOf, meshEdgesFor } from './picker.js?v=d2f2ca5';
-import { computeP3AndSRGB, neutralP3, cielabL, cielabLOfSrgb, cielabLOfP3 } from './color.js?v=d2f2ca5';
-import { updateSwatchCMYK, isOutOfCMYK } from './cmyk.js?v=d2f2ca5';
-import { buildMatchCells, matchRowObserver, updateSwatchMatches } from './pantone.js?v=d2f2ca5';
-import { syncModKeys, requestRender } from './util.js?v=d2f2ca5';
-import { flushPendingWheelSnapshot, recordSnapshot } from './history.js?v=d2f2ca5';
+import { MIDDLE_GRAY, MAX_COLORS, GAMUT_ICON_SVG, CLOSE_ICON_SVG } from './constants.js?v=917f20e';
+import { S, P, els, pantoneSelections, handlePos } from './state.js?v=917f20e';
+import { idxOf } from './picker.js?v=917f20e';
+import { computeP3AndSRGB, neutralP3, cielabL, cielabLOfSrgb, cielabLOfP3 } from './color.js?v=917f20e';
+import { updateSwatchCMYK, isOutOfCMYK } from './cmyk.js?v=917f20e';
+import { buildMatchCells, matchRowObserver, updateSwatchMatches } from './pantone.js?v=917f20e';
+import { syncModKeys, requestRender } from './util.js?v=917f20e';
+import { flushPendingWheelSnapshot, recordSnapshot } from './history.js?v=917f20e';
 
 // Swatch DOM helpers
 
@@ -388,27 +388,6 @@ function applyMultiVisuals() {
 }
 
 
-// Mesh edges
-
-function computeFrozenEdges() {
-  const indices = [...S.multiSelect];
-  const pts = indices.map(i => handlePos(S.colors[i]));
-  const localEdges = meshEdgesFor(pts);
-  S.frozenEdges = localEdges.map(([a, b]) => [indices[a], indices[b]]);
-}
-
-// The multi-select triangle mesh is switched off for now, to try selection
-// without it (user request 2026-11-22). true brings it back as it was.
-const SHOW_MESH = false;
-
-function updateMesh() {
-  if (!SHOW_MESH || !S.isMultiMode() || !S.frozenEdges) { P.clearMesh(); return; }
-  const guidesActive = S.modGuidesLive() && (S.modKeys.shift || S.modKeys.meta);
-  if (guidesActive) { P.clearMesh(); return; }
-  const refIdx = S.multiSelect.has(S.activeIndex) ? S.activeIndex : [...S.multiSelect][0];
-  const stroke = S.colors[refIdx]?.L > MIDDLE_GRAY ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)';
-  P.updateMesh(S.frozenEdges, i => handlePos(S.colors[i]), stroke);
-}
 
 
 // Background
@@ -452,9 +431,7 @@ function clearAllHandleActive() {
 
 function exitMultiSelect() {
   S.multiSelect.clear();
-  S.frozenEdges = null;
   clearMultiVisuals();
-  updateMesh();
 }
 
 function setActive(index, { silent = false } = {}) {
@@ -479,7 +456,6 @@ function toggleMultiSelect(index) {
   applyMultiVisuals();
   if (S.multiSelect.has(index)) S.activeIndex = index;
   els.swatches.classList.remove('none-selected');
-  computeFrozenEdges();
   requestRender();
 }
 
@@ -497,6 +473,6 @@ function deselect() {
 export { swatchEl, updateSwatch, createSwatchDOM, reindex, removeColorAt, setPalette, wireSwatch, updateAddButton };
 export {
   setActive, toggleMultiSelect, deselect, setHandles, deactivateSwatch,
-  activateSwatch, exitMultiSelect, applyMultiVisuals, computeFrozenEdges,
-  updateMesh, updateBackground,
+  activateSwatch, exitMultiSelect, applyMultiVisuals,
+  updateBackground,
 };

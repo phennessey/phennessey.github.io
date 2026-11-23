@@ -6,18 +6,18 @@
 // consider viability of integrating pantone/cmyk visibility options on a per-swatch basis, without relying on checkboxes above (may not be best idea)
 
 // Entry point: wires the feature modules together, installs the render
-// patch that keeps swatches/background/mesh/dots/hex in sync, and runs
+// patch that keeps swatches/background/dots/hex in sync, and runs
 // the initial setup.
 
-import { S, P, els } from './state.js?v=d2f2ca5';
-import { updateSwatch, createSwatchDOM, wireSwatch, swatchEl, updateAddButton, updateBackground, updateMesh, setActive } from './swatches.js?v=d2f2ca5';
-import { updateSwatchMatches, updateDots, scheduleMatches } from './pantone.js?v=d2f2ca5';
-import { initLibraries } from './libraries.js?v=d2f2ca5';
-import { syncStateField } from './state-console.js?v=d2f2ca5';
-import { recordSnapshot } from './history.js?v=d2f2ca5';
-import { applyBgLevel } from './interactions.js?v=d2f2ca5';
-import { setCMYKActive, setCMYKProfile, cmyk } from './cmyk.js?v=d2f2ca5';
-import './mode.js?v=d2f2ca5';
+import { S, P, els } from './state.js?v=917f20e';
+import { updateSwatch, createSwatchDOM, wireSwatch, swatchEl, updateAddButton, updateBackground, setActive } from './swatches.js?v=917f20e';
+import { updateSwatchMatches, updateDots, scheduleMatches } from './pantone.js?v=917f20e';
+import { initLibraries } from './libraries.js?v=917f20e';
+import { syncStateField } from './state-console.js?v=917f20e';
+import { recordSnapshot } from './history.js?v=917f20e';
+import { applyBgLevel } from './interactions.js?v=917f20e';
+import { setCMYKActive, setCMYKProfile, cmyk } from './cmyk.js?v=917f20e';
+import './mode.js?v=917f20e';
 
 
 // Render patch
@@ -42,7 +42,6 @@ P.render = function () {
     S.colors.forEach((_, i) => { updateSwatch(i); updateSwatchMatches(i); });
   }
   updateBackground();
-  updateMesh();
   updateDots();
   syncStateField();
 };

@@ -2,14 +2,14 @@
 // hue-convergence), the lightbar, swatch & chip drag-and-drop, modifier
 // keys, and background-brightness scrolling.
 
-import { BG_LEVELS, MIDDLE_GRAY, LB_HEIGHT, CUSP_SNAP_PX } from './constants.js?v=d2f2ca5';
-import { S, P, els, DISC_R, handlePos, yToToeL, toeLToY, pantoneSelections } from './state.js?v=d2f2ca5';
-import { TAU, idxOf } from './picker.js?v=d2f2ca5';
-import { toe, toeInv, clamp01, lToRaw, rawToL, sForChroma, chromaOf, cuspL, hueDiff, computeP3AndSRGB, onRim } from './color.js?v=d2f2ca5';
-import { discXY, captureDrag, syncModKeys, requestRender } from './util.js?v=d2f2ca5';
-import { updateSwatch, setActive, toggleMultiSelect, deselect, updateMesh } from './swatches.js?v=d2f2ca5';
-import { clearPromotedOnEdit, pantoneP3Css } from './pantone.js?v=d2f2ca5';
-import { flushPendingWheelSnapshot, recordSnapshot, scheduleWheelSnapshot } from './history.js?v=d2f2ca5';
+import { BG_LEVELS, MIDDLE_GRAY, LB_HEIGHT, CUSP_SNAP_PX } from './constants.js?v=917f20e';
+import { S, P, els, DISC_R, handlePos, yToToeL, toeLToY, pantoneSelections } from './state.js?v=917f20e';
+import { TAU, idxOf } from './picker.js?v=917f20e';
+import { toe, toeInv, clamp01, lToRaw, rawToL, sForChroma, chromaOf, cuspL, hueDiff, computeP3AndSRGB, onRim } from './color.js?v=917f20e';
+import { discXY, captureDrag, syncModKeys, requestRender } from './util.js?v=917f20e';
+import { updateSwatch, setActive, toggleMultiSelect, deselect } from './swatches.js?v=917f20e';
+import { clearPromotedOnEdit, pantoneP3Css } from './pantone.js?v=917f20e';
+import { flushPendingWheelSnapshot, recordSnapshot, scheduleWheelSnapshot } from './history.js?v=917f20e';
 
 // Modifier-key tracking
 
@@ -17,7 +17,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Shift') S.modKeys.shift = true;
   else if (e.key === 'Meta') S.modKeys.meta = true;
   else return;
-  P.updateDiscGuides(); updateMesh();
+  P.updateDiscGuides();
 });
 
 document.addEventListener('keyup', e => {
@@ -25,16 +25,16 @@ document.addEventListener('keyup', e => {
   else if (e.key === 'Meta') { S.modKeys.meta = false; S.discChromaLock = null; }
   else return;
   if (S.hueConvergeDrag) S.hueConvergeDrag.needsReanchor = true;
-  P.updateDiscGuides(); updateMesh();
+  P.updateDiscGuides();
 });
 
 els.pickerWrap.addEventListener('pointerenter', () => {
   S.pointerInPickerWrap = true;
-  if (S.modKeys.shift || S.modKeys.meta) { P.updateDiscGuides(); updateMesh(); }
+  if (S.modKeys.shift || S.modKeys.meta) { P.updateDiscGuides(); }
 });
 els.pickerWrap.addEventListener('pointerleave', () => {
   S.pointerInPickerWrap = false;
-  if (S.modKeys.shift || S.modKeys.meta) { P.updateDiscGuides(); updateMesh(); }
+  if (S.modKeys.shift || S.modKeys.meta) { P.updateDiscGuides(); }
 });
 
 
@@ -48,13 +48,13 @@ els.discOverlay.addEventListener('pointermove', ev => {
   S.pointerInPicker   = Math.hypot(dx, dy) <= DISC_R;
   S.mouseHueAngle   = ((Math.atan2(-dy, dx) / TAU) + 1) % 1;
   // Crossing the wheel's edge turns the Shift / Meta guides on or off.
-  if (wasIn !== S.pointerInPicker && (S.modKeys.shift || S.modKeys.meta)) { P.updateDiscGuides(); updateMesh(); }
+  if (wasIn !== S.pointerInPicker && (S.modKeys.shift || S.modKeys.meta)) { P.updateDiscGuides(); }
 
   const hEl      = ev.target.closest('.disc-handle');
   const newHover = hEl ? idxOf(hEl) : -1;
   if (newHover !== S.hoveredHandle) {
     S.hoveredHandle = newHover;
-    if (S.modKeys.shift || S.modKeys.meta) { P.updateDiscGuides(); updateMesh(); }
+    if (S.modKeys.shift || S.modKeys.meta) { P.updateDiscGuides(); }
   }
 
   if (S.isMultiMode() && S.modKeys.shift && S.modKeys.meta && S.pointerInPicker) {
@@ -65,8 +65,8 @@ els.discOverlay.addEventListener('pointermove', ev => {
 els.discOverlay.addEventListener('pointerleave', () => {
   const wasIn = S.pointerInPicker;
   S.pointerInPicker = false;
-  if (S.hoveredHandle !== -1) { S.hoveredHandle = -1; P.updateDiscGuides(); updateMesh(); }
-  else if (wasIn && (S.modKeys.shift || S.modKeys.meta)) { P.updateDiscGuides(); updateMesh(); }
+  if (S.hoveredHandle !== -1) { S.hoveredHandle = -1; P.updateDiscGuides(); }
+  else if (wasIn && (S.modKeys.shift || S.modKeys.meta)) { P.updateDiscGuides(); }
 });
 
 
@@ -493,12 +493,12 @@ els.lightbarOverlay.addEventListener('pointerdown', ev => {
 function enterLightbar() {
   if (S.pointerInLightbar) return;
   S.pointerInLightbar = true;
-  if (S.modKeys.shift || S.modKeys.meta) { P.updateDiscGuides(); updateMesh(); }   // guides on (Shift: fine mode, no disc guide)
+  if (S.modKeys.shift || S.modKeys.meta) { P.updateDiscGuides(); }   // guides on (Shift: fine mode, no disc guide)
 }
 function leaveLightbar() {
   if (!S.pointerInLightbar) return;
   S.pointerInLightbar = false;
-  if (S.modKeys.shift || S.modKeys.meta) { P.updateDiscGuides(); updateMesh(); }   // guides off
+  if (S.modKeys.shift || S.modKeys.meta) { P.updateDiscGuides(); }   // guides off
 }
 els.lightbarOverlay.addEventListener('pointerenter', enterLightbar);
 els.lightbarOverlay.addEventListener('pointermove',  enterLightbar);   // belt-and-suspenders if enter is missed

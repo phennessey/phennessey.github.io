@@ -1,16 +1,16 @@
 // Undo/redo: snapshotting swatch state and restoring it.
 
-import { HISTORY_LIMIT, WHEEL_DEBOUNCE_MS } from './constants.js?v=d2f2ca5';
-import { S, els, pantoneSelections } from './state.js?v=d2f2ca5';
+import { HISTORY_LIMIT, WHEEL_DEBOUNCE_MS } from './constants.js?v=917f20e';
+import { S, els, pantoneSelections } from './state.js?v=917f20e';
 import {
   setPalette, reindex, updateSwatch, updateAddButton, swatchEl,
-  exitMultiSelect, deactivateSwatch, setActive, setHandles, applyMultiVisuals, computeFrozenEdges,
-} from './swatches.js?v=d2f2ca5';
-import { findPantoneByKey, updateMatchesVisibility } from './pantone.js?v=d2f2ca5';
-import { activateLibraries } from './libraries.js?v=d2f2ca5';
-import { requestRender } from './util.js?v=d2f2ca5';
-import { stateField } from './state-console.js?v=d2f2ca5';
-import { getGamutMode, resaturate } from './color.js?v=d2f2ca5';
+  exitMultiSelect, deactivateSwatch, setActive, setHandles, applyMultiVisuals,
+} from './swatches.js?v=917f20e';
+import { findPantoneByKey, updateMatchesVisibility } from './pantone.js?v=917f20e';
+import { activateLibraries } from './libraries.js?v=917f20e';
+import { requestRender } from './util.js?v=917f20e';
+import { stateField } from './state-console.js?v=917f20e';
+import { getGamutMode, resaturate } from './color.js?v=917f20e';
 
 // History
 
@@ -132,7 +132,6 @@ function restoreSnapshot(snap) {
     setHandles(S.activeIndex, true);
     els.swatches.classList.remove('none-selected');
     applyMultiVisuals();
-    computeFrozenEdges();
     requestRender();
   };
 

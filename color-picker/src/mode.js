@@ -6,11 +6,11 @@
 // saturation is re-measured in the new gamut, and a color outside it moves to
 // the rim at the same hue and lightness.
 
-import { S, P, pantoneSelections } from './state.js?v=d2f2ca5';
-import { getGamutMode, setGamutMode, resaturate, GAMUT_MODES } from './color.js?v=d2f2ca5';
-import { remapPantoneToGamut } from './pantone.js?v=d2f2ca5';
-import { refreshCMYKGamut } from './cmyk.js?v=d2f2ca5';
-import { flushPendingWheelSnapshot } from './history.js?v=d2f2ca5';
+import { S, P, pantoneSelections } from './state.js?v=917f20e';
+import { getGamutMode, setGamutMode, resaturate, GAMUT_MODES } from './color.js?v=917f20e';
+import { remapPantoneToGamut } from './pantone.js?v=917f20e';
+import { refreshCMYKGamut } from './cmyk.js?v=917f20e';
+import { flushPendingWheelSnapshot } from './history.js?v=917f20e';
 
 const group = document.getElementById('gamut-switch');
 const radios = group ? [...group.querySelectorAll('[role="radio"]')] : [];
