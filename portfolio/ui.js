@@ -1,372 +1,651 @@
-// Hennessey Design — ui.js
+// Patrick Hennessey — ui.js
 //
-// Data + behavior only. Markup lives in index.html (the two bookend slides and
-// the #content-slide template); visual constants live in styles.css and are
-// read from there, so no value is maintained in two files.
+// Data + behavior only. Markup lives in index.html (the page shell and the
+// #project template); visual constants live in styles.css.
 
 (function () {
 	'use strict';
 
-	// Copy for the 14 generated content slides, in order. Newlines are
-	// intentional line breaks — .cat-b sets `white-space: pre-line`, so they
-	// render as authored without any markup in this file.
-	var SLIDES = [
-		{ agency: 'Cinco Design', client: 'EA Sports',    project: 'FIFA 22',                                             roles: 'digital asset and styleguide production, automation, file management, final packaging' },
-		{ agency: 'Cinco Design', client: 'EA Sports',    project: 'Madden NFL 22',                                       roles: 'digital asset and styleguide production, automation, file management, final packaging' },
-		{ agency: 'Cinco Design', client: 'Under Armour', project: 'FW21 UA Curry Flow 9 Retail',                         roles: 'print and styleguide production, automation, file management, final packaging' },
-		{ agency: 'Cinco Design', client: 'Under Armour', project: 'FW22 UA Curry Flow 10 Retail',                        roles: 'print and styleguide production, automation, file management, final packaging' },
-		{ agency: 'Cinco Design', client: 'Under Armour', project: 'FW22 UA Meridian Retail',                             roles: 'print and styleguide production, automation, file management, final packaging' },
-		{ agency: 'Cinco Design', client: 'adidas',       project: '2024 Running Event',                                  roles: 'graphic production management, automation, file management, final packaging' },
-		{ agency: 'Cinco Design', client: 'adidas',       project: 'COPA 2026',                                           roles: 'file and asset production management, image retouching, automation, file management, final packaging' },
-		{ agency: 'Cinco Design', client: 'adidas',       project: 'MLS’24 Pre-Match jerseys',                            roles: 'file and asset production management, automation, \nfinal packaging' },
-		{ agency: 'Fiction',      client: 'adidas',       project: 'NBA/NCAA \nmulti-media campaign',                     roles: 'layout, print and digital production, automation, file management, final packaging' },
-		{ agency: 'Fiction',      client: 'adidas',       project: 'NBA New Orleans Pelicans\nTeam Shop and stadium signage', roles: 'layout, print and digital production, automation, file management, final packaging' },
-		{ agency: 'Fiction',      client: 'adidas',       project: 'Factory Outlet windows',                              roles: 'production management, layout, print production, automation, file management, final packaging' },
-		{ agency: 'Fiction',      client: 'adidas',       project: 'Factory Outlet graphics',                             roles: 'architectural measurements, production management, styleguide production' },
-		{ agency: 'Fiction',      client: 'Reebok',       project: 'Activ-Chill window displays, fixtures, and print ads', roles: 'layout, print production, \nfile management, final packaging' },
-		{ agency: 'Fiction',      client: 'Apple',        project: 'iPhone, iPad, and iPod product launches for US Retail Marcom', roles: 'layout, file management, print and documentation production' }
+	// Agencies, in page order. Each heads a section of its projects below.
+	var AGENCIES = [
+		{ name: 'Cinco Design', dates: '2019–2026' },
+		{ name: 'Fiction',      dates: '2013–2019' }
 	];
 
-	var root = document.documentElement;
-	var stage = document.getElementById('stage');
-	var frame = document.getElementById('frame');
-	var prevBtn = document.getElementById('prev');
-	var nextBtn = document.getElementById('next');
-	var template = document.getElementById('content-slide');
-	var coverEl = document.getElementById('slide-cover');
-	var outroEl = document.getElementById('slide-outro');
+	// Projects, in page order. image is the file in img/ (WebP, quality 85,
+	// made from the max-quality JPEGs alongside it; 2444px wide, about 2x the
+	// 1200px it displays at; 1816px tall unless height says otherwise, which
+	// the page uses to reserve the right space before the image loads).
+	// agency matches a name above and decides which section it appears in.
+	var PROJECTS = [
+		{ image: 'slide.webp',   agency: 'Cinco Design', client: 'EA SPORTS',    project: 'FIFA 22',                                             roles: 'digital asset and styleguide production, photo retouching, automation, file management & delivery' },
+		{ image: 'slide2.webp',  agency: 'Cinco Design', client: 'EA SPORTS',    project: 'Madden NFL 22',                                       roles: 'digital asset and styleguide production, photo retouching, automation, file management & delivery' },
+		{ image: 'slide3.webp',  agency: 'Cinco Design', client: 'Under Armour', project: 'UA Curry Flow 9',                    roles: 'print and styleguide production, automation, file management & delivery' },
+		{ image: 'slide4.webp',  agency: 'Cinco Design', client: 'Under Armour', project: 'UA Curry Flow 10',                   roles: 'print and styleguide production, automation, file management & delivery' },
+		{ image: 'slide5.webp',  agency: 'Cinco Design', client: 'Under Armour', project: 'UA Meridian Retail',                             roles: 'print and styleguide production, automation, file management & delivery' },
+		{ image: 'slide6.webp',  agency: 'Cinco Design', client: 'adidas',       project: '2024 Running Event',                                  roles: 'graphic production management, automation, file management & delivery' },
+		{ image: 'slide7.webp',  agency: 'Cinco Design', client: 'adidas',       project: 'COPA 2026',                                           roles: 'file and asset production management, image retouching, automation, file management & delivery' },
+		{ image: 'slide8.webp',  agency: 'Cinco Design', client: 'adidas',       project: 'MLS 2024 Pre-Match jerseys',                            roles: 'file and asset production management, automation, delivery' },
+		{ image: 'slide9.webp',  agency: 'Fiction',      client: 'adidas',       project: 'NBA + NCAA campaign',                                 roles: 'layout, print and digital production, automation, file management & delivery' },
+		{ image: 'slide10.webp', agency: 'Fiction',      client: 'adidas',       project: 'NOLA Pelicans Stadium',            roles: 'layout, print and digital production, automation, file management & delivery' },
+		{ image: 'slide11.webp', agency: 'Fiction',      client: 'adidas',       project: 'Factory Outlet windows',                              roles: 'production management, layout, print production, automation, delivery' },
+		{ image: 'slide12.webp', height: 1300, agency: 'Fiction',      client: 'adidas',       project: 'Factory Outlet graphics',                             roles: 'architectural measurements, production management, styleguide production' },
+		{ image: 'slide13.webp', agency: 'Fiction',      client: 'Reebok',       project: 'Activ-Chill retail',                                  roles: 'layout, print production, file management & delivery' },
+		{ image: 'slide14.webp', agency: 'Fiction',      client: 'Apple',        project: 'iPhone, iPad, iPod launches',                          roles: 'layout, file management, print and documentation production' }
+	];
 
-	var VISIBLE = 'is-visible';
+	// --- Build the project list ------------------------------------------
 
-	var slideEls = [];   // every slide, in index order, persistent in the DOM
-	var current = 0;     // index of the slide currently on screen
+	var agencyTemplate = document.getElementById('agency');
+	var projectTemplate = document.getElementById('project');
+	var list = document.getElementById('projects');
 
-
-	// --- Visual constants, read from styles.css ---------------------------
-
-	var cssVars = getComputedStyle(root);
-
-	function cssNumber(name, fallback) {
-		var value = parseFloat(cssVars.getPropertyValue(name));
-		return isNaN(value) ? fallback : value;
-	}
-
-	var FADE_MS = cssNumber('--fade-ms', 100);
-	var FRAME_W = cssNumber('--frame-w', 1152);
-	var FRAME_H = cssNumber('--frame-h', 648);
-	var FIT = cssNumber('--fit', 0.9);
-
-
-	// --- Build the content slides ----------------------------------------
-
-	function buildSlide(data, index) {
-		var slide = template.content.firstElementChild.cloneNode(true);
-
-		var fields = slide.querySelectorAll('[data-field]');
+	function fill(el, data) {
+		var fields = el.querySelectorAll('[data-field]');
 		for (var i = 0; i < fields.length; i++) {
 			fields[i].textContent = data[fields[i].dataset.field] || '';
 		}
-
-		// Content slide 1 -> img/slide.jpg, then img/slide2.jpg .. slide14.jpg.
-		// Held in data-src until the slide is near (see loadNearby).
-		var image = slide.querySelector('.slide-image');
-		image.dataset.src = 'img/slide' + (index === 1 ? '' : index) + '.jpg';
-		image.alt = data.client + ' — ' + data.project.replace(/\n/g, ' ');
-
-		return slide;
 	}
 
-	// The 14 JPGs total ~7.7 MB, so they are fetched as you approach them
-	// rather than all at once on first paint. Neighbours are pulled in too, so
-	// a move never waits on the network.
-	var PRELOAD_RADIUS = 2;
+	AGENCIES.forEach(function (agency) {
+		var section = agencyTemplate.content.firstElementChild.cloneNode(true);
+		fill(section, agency);
+		var holder = section.querySelector('.agency-projects');
 
-	function loadImage(i) {
-		var el = slideEls[i];
-		if (!el) return;
-		var image = el.querySelector('.slide-image');
-		if (image && image.dataset.src) {
-			image.src = image.dataset.src;
-			delete image.dataset.src;
-		}
-	}
+		PROJECTS.forEach(function (data) {
+			if (data.agency !== agency.name) return;
+			var el = projectTemplate.content.firstElementChild.cloneNode(true);
+			fill(el, data);
+			var image = el.querySelector('.project-image');
+			if (data.height) image.height = data.height;
+			image.src = 'img/' + data.image;
+			image.alt = data.client + ': ' + data.project;
+			holder.appendChild(el);
+		});
 
-	function loadNearby() {
-		for (var i = current - PRELOAD_RADIUS; i <= current + PRELOAD_RADIUS; i++) {
-			loadImage(i);
-		}
-	}
+		list.appendChild(section);
+	});
 
 
-	// --- Navigation -------------------------------------------------------
+	// --- Views: Tools (default), Gallery and About -------------------------
 	//
-	// Exactly one slide is visible at rest. A move animates exactly ONE slide,
-	// and always over a fully opaque slide beneath it — fading both at once
-	// would blend their text and wash it out mid-move:
-	//   forward  — the incoming (higher) slide fades in over the outgoing one,
-	//              which holds at full opacity until the fade lands.
-	//   backward — the incoming (lower) slide is revealed instantly beneath,
-	//              then the outgoing (higher) slide fades away above it.
-	// Cleanup after the fade is guarded by navToken, so a newer move simply
-	// supersedes an older one's cleanup.
+	// The URL hash picks the view (#tools, #gallery, #about), so the
+	// back button and shared links work. Anything else, including no hash,
+	// shows Tools (old #case-studies links land here too).
 
-	var navToken = 0;
-	var inFlight = null;   // slide whose fade hasn't landed yet, if any
+	var views = document.querySelectorAll('.view');
+	var navLinks = document.querySelectorAll('.nav-link');
 
-	// Apply a visibility change to a batch of slides with no animation: fades
-	// are suppressed until the change has been committed. One forced reflow for
-	// the whole batch, however many slides it covers.
-	function withoutFade(els, mutate) {
-		if (!els.length) return;             // nothing to do, so no reflow
+	function showView() {
+		// Old names still work: #brand-work, #production and #work (Gallery); #automation
+		// and #case-studies fall through to Tools, the default. Internally Gallery is
+		// still data-view="production"
+		var name = (location.hash === '#gallery' || location.hash === '#brand-work' || location.hash === '#production' || location.hash === '#work') ? 'production'
+			: location.hash === '#about' ? 'about'
+			: 'automation';
 		var i;
-		for (i = 0; i < els.length; i++) els[i].classList.add('no-fade');
-		for (i = 0; i < els.length; i++) mutate(els[i]);
-		void frame.offsetWidth;              // commit before the fades return
-		for (i = 0; i < els.length; i++) els[i].classList.remove('no-fade');
-	}
-
-	function show(el) { el.classList.add(VISIBLE); }
-	function hide(el) { el.classList.remove(VISIBLE); }
-
-	// Slides still painted that aren't in `keep` — i.e. leftovers from a move
-	// that has been superseded, or the outgoing slide once its fade has landed.
-	function stragglers(keep) {
-		var found = [];
-		for (var i = 0; i < slideEls.length; i++) {
-			var el = slideEls[i];
-			if (keep.indexOf(el) === -1 && el.classList.contains(VISIBLE)) found.push(el);
-		}
-		return found;
-	}
-
-	function whenFadeEnds(el, done) {
-		var fired = false;
-		function finish(e) {
-			if (fired || (e && e.target !== el)) return;
-			fired = true;
-			el.removeEventListener('transitionend', finish);
-			done();
-		}
-		el.addEventListener('transitionend', finish);
-		setTimeout(finish, FADE_MS + 80);   // fallback if transitionend is missed
-	}
-
-	// Only the current slide is interactive. `inert` keeps the hidden slides out
-	// of the tab order and the accessibility tree, so nothing on a slide that
-	// isn't showing can be reached.
-	function updateInteractivity() {
-		for (var i = 0; i < slideEls.length; i++) {
-			if (i === current) slideEls[i].removeAttribute('inert');
-			else slideEls[i].setAttribute('inert', '');
+		for (i = 0; i < views.length; i++) views[i].hidden = views[i].dataset.view !== name;
+		for (i = 0; i < navLinks.length; i++) {
+			if (navLinks[i].dataset.view === name) navLinks[i].setAttribute('aria-current', 'page');
+			else navLinks[i].removeAttribute('aria-current');
 		}
 	}
 
-	var wasOnCover = null;
+	// Switching views fades the new page's content in (--fade-ms in
+	// styles.css, 100ms), like the old slides. Only the content fades, never
+	// the header, so the nav keeps its pointer cursor through the switch.
+	// Instant with reduced motion (styles.css).
+	var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-	function updateArrows() {
-		prevBtn.classList.toggle('is-hidden', current === 0);
-		nextBtn.classList.toggle('is-hidden', current === slideEls.length - 1);
-		// On the cover the next arrow moves inside the frame (see styles.css).
-		var onCover = current === 0;
-		if (wasOnCover !== null && onCover !== wasOnCover) quietArrows();
-		wasOnCover = onCover;
-		stage.classList.toggle('on-cover', onCover);
-		updateZone();   // which arrows exist may have changed
-	}
-
-	// An arrow that just changed position (into or out of the frame) would
-	// otherwise keep the :hover it had at its old spot, or fade out in plain
-	// view at its new one. Hide it instantly and keep it hidden until the
-	// pointer next moves; from then on hover reflects where the cursor really is.
-	function quietArrows() {
-		stage.classList.add('nav-quiet');
-		window.addEventListener('pointermove', function () {
-			stage.classList.remove('nav-quiet');
-		}, { once: true });
-	}
-
-	function navigate(target) {
-		if (target < 0 || target >= slideEls.length || target === current) return;
-
-		var fromEl = slideEls[current];
-		var toEl = slideEls[target];
-		var forward = target > current;
-		current = target;
-
-		// Only these two take part in the move; anything else still painted is a
-		// leftover from a superseded move and is cut now, so stale fades can't
-		// stack up underneath.
-		withoutFade(stragglers([fromEl, toEl]), hide);
-
-		var animating;
-		if (forward) {
-			// If the previous move is still running, `fromEl` may only be
-			// part-way faded in. Snap it to full opacity first, so the incoming
-			// slide always has a genuinely opaque base under it.
-			if (inFlight) withoutFade([fromEl], show);
-			show(toEl);                       // fades in over fromEl
-			animating = toEl;
-		} else {
-			withoutFade([toEl], show);        // opaque base, revealed beneath
-			hide(fromEl);                     // fades away above it
-			animating = fromEl;
+	function switchView() {
+		showView();
+		fitCaptions();
+		window.scrollTo(0, 0);
+		var shown = document.querySelector('.view:not([hidden])');
+		if (shown) {
+			shown.classList.remove('view-enter');
+			void shown.offsetWidth;          // restart the fade
+			shown.classList.add('view-enter');
 		}
-
-		updateArrows();
-		updateInteractivity();
-		loadNearby();
-
-		// Once the fade lands, cut the outgoing slide — instantly, so nothing
-		// lingers half-painted behind the slide that's now on screen.
-		var token = ++navToken;
-		inFlight = animating;
-		whenFadeEnds(animating, function () {
-			if (token !== navToken) return;
-			inFlight = null;
-			withoutFade(stragglers([slideEls[current]]), hide);
-		});
 	}
 
-	function go(delta) {
-		navigate(current + delta);
-	}
+	window.addEventListener('hashchange', switchView);
 
 
-	// --- Input ------------------------------------------------------------
-
-	// A mouse click (detail > 0) drops focus from the button, so a later
-	// keypress can't light it up via :focus-visible. Keyboard activation
-	// (detail === 0) keeps focus where the user put it.
-	prevBtn.addEventListener('click', function (e) { if (e.detail) prevBtn.blur(); go(-1); });
-	nextBtn.addEventListener('click', function (e) { if (e.detail) nextBtn.blur(); go(1); });
-
-	document.addEventListener('keydown', function (e) {
-		if (e.key === 'ArrowRight' || e.key === 'ArrowDown') go(1);
-		else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') go(-1);
-		else if (e.key === 'Home') navigate(0);
-		else if (e.key === 'End') navigate(slideEls.length - 1);
-	});
-
-	// Mouse wheel / trackpad: advance one slide the instant a scroll is
-	// detected, then ignore further wheel input for WHEEL_COOLDOWN ms. No
-	// accumulation and no backlog, so a stream of high-resolution / momentum
-	// events can't pile up or keep flipping after you stop. Down (+) advances.
-	var WHEEL_COOLDOWN = 200;
-	var wheelLocked = false;
-	window.addEventListener('wheel', function (e) {
-		if (Math.abs(e.deltaY) < 1) return;   // ignore noise / horizontal scroll
-		if (wheelLocked) return;
-		wheelLocked = true;
-		setTimeout(function () { wheelLocked = false; }, WHEEL_COOLDOWN);
-		go(e.deltaY > 0 ? 1 : -1);
-	}, { passive: true });
-
-	// Touch/pen: a horizontal swipe advances, matching the arrow direction.
-	// Mouse drags are deliberately ignored so click-dragging to select the bar
-	// text still works.
-	var SWIPE_MIN = 40;   // px of travel before it counts as a swipe
-	var swipeFrom = null;
-
-	stage.addEventListener('pointerdown', function (e) {
-		swipeFrom = (e.pointerType === 'mouse') ? null : e.clientX;
-	});
-
-	stage.addEventListener('pointercancel', function () { swipeFrom = null; });
-
-	stage.addEventListener('pointerup', function (e) {
-		if (swipeFrom === null) return;
-		var dx = e.clientX - swipeFrom;
-		swipeFrom = null;
-		if (Math.abs(dx) >= SWIPE_MIN) go(dx < 0 ? 1 : -1);
-	});
-
-	// Click zones: the slide's left and right thirds act like the arrows.
-	// Pointing at one lights that arrow (.zone-prev / .zone-next, styles.css)
-	// and a click there moves. A drag that selects text, or a click on a link,
-	// is left alone, so the bar copy stays selectable and any link still works.
-	var ZONE = 1 / 3;
-	var CLICK_SLOP = 5;       // px a click may wander and still count
-	var lastPointer = null;   // last mouse position, to re-check after a move
-	var downAt = null;
-
-	function zoneAt(x, y) {
-		var r = frame.getBoundingClientRect();
-		if (x < r.left || x > r.right || y < r.top || y > r.bottom) return 0;
-		var f = (x - r.left) / r.width;
-		if (f < ZONE && current > 0) return -1;
-		if (f > 1 - ZONE && current < slideEls.length - 1) return 1;
-		return 0;
-	}
-
-	function updateZone() {
-		var z = lastPointer ? zoneAt(lastPointer.x, lastPointer.y) : 0;
-		stage.classList.toggle('zone-prev', z === -1);
-		stage.classList.toggle('zone-next', z === 1);
-	}
-
-	stage.addEventListener('pointermove', function (e) {
-		if (e.pointerType !== 'mouse') return;
-		lastPointer = { x: e.clientX, y: e.clientY };
-		updateZone();
-	});
-
-	stage.addEventListener('pointerleave', function () {
-		lastPointer = null;
-		updateZone();
-	});
-
-	frame.addEventListener('pointerdown', function (e) {
-		downAt = { x: e.clientX, y: e.clientY };
-	});
-
-	frame.addEventListener('click', function (e) {
-		var start = downAt;
-		downAt = null;
-		if (!start || e.target.closest('a, button')) return;
-		if (Math.abs(e.clientX - start.x) + Math.abs(e.clientY - start.y) > CLICK_SLOP) return;
-		var selection = window.getSelection();
-		if (selection && !selection.isCollapsed) return;   // a drag-select, not a click
-		var z = zoneAt(e.clientX, e.clientY);
-		if (z) go(z);
-	});
-
-
-	// --- Fit the frame to the viewport ------------------------------------
+	// --- Whole-pixel nav ---------------------------------------------------
 	//
-	// --s is the only thing set from here; styles.css derives the frame box and
-	// the nav-arrow margin (--margin-x) from it.
+	// The nav is right-aligned, so each link's left edge depends on the width
+	// of the words, which is a fraction of a pixel. Text on a fractional edge
+	// shimmers in the pinned header while scrolling, so round each link's
+	// width up to a whole pixel. Re-run once the web font arrives and on resize.
 
-	function fit() {
-		root.style.setProperty('--s', Math.min(
-			(window.innerWidth * FIT) / FRAME_W,
-			(window.innerHeight * FIT) / FRAME_H
-		));
+	function snapNav() {
+		for (var i = 0; i < navLinks.length; i++) {
+			navLinks[i].style.width = '';
+			navLinks[i].style.width = Math.ceil(navLinks[i].getBoundingClientRect().width) + 'px';
+		}
 	}
 
-	var fitQueued = false;
-	window.addEventListener('resize', function () {
-		if (fitQueued) return;
-		fitQueued = true;
-		requestAnimationFrame(function () {
-			fitQueued = false;
-			fit();
-		});
+	if (document.fonts && document.fonts.ready) document.fonts.ready.then(snapNav);
+	window.addEventListener('resize', snapNav);
+	snapNav();
+
+
+	// --- Captions: one line, or two when the widest won't fit -------------
+	//
+	// Each caption normally runs on one line: client, project / roles. If
+	// the widest of them is wider than the page, every caption switches to
+	// two lines together (roles on the second, no slash), so they all match.
+
+	var captions = list.querySelectorAll('.caption');
+
+	function fitCaptions() {
+		if (list.offsetParent === null) return;   // Work view hidden; redo on show
+		list.classList.remove('captions-stacked');
+		list.classList.add('captions-measure');
+		var widest = 0;
+		for (var i = 0; i < captions.length; i++) {
+			widest = Math.max(widest, captions[i].getBoundingClientRect().width);
+		}
+		list.classList.remove('captions-measure');
+		list.classList.toggle('captions-stacked', widest > list.clientWidth);
+	}
+
+	if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitCaptions);
+	window.addEventListener('resize', fitCaptions);
+
+
+	// --- Header height for the scroll detents (styles.css) ----------------
+
+	var root = document.documentElement;
+	var header = document.querySelector('.site-header');
+
+	function measureHeader() {
+		root.style.setProperty('--header-h', header.offsetHeight + 'px');
+	}
+
+	if (document.fonts && document.fonts.ready) document.fonts.ready.then(measureHeader);
+	window.addEventListener('resize', measureHeader);
+
+
+	// --- Smooth scrolling with detents (desktop) ---------------------------
+	//
+	// Works like Lenis, the smooth-scroll library cinco.design uses: the
+	// wheel / trackpad moves an invisible target, and the page glides toward
+	// it, closing a fixed share of the gap every frame, so quick flicks stay
+	// fluid instead of stepping tick by tick.
+	// Each project's resting spot (caption just under the header) is a
+	// detent:
+	//  - Catch: as a scroll's momentum dies out (slower than CATCH_SPEED),
+	//    the next project ahead within CATCH_RANGE takes over and a firm
+	//    spring pulls the page into it, instead of drifting past. The rest
+	//    of that momentum is absorbed.
+	//  - Snap back: a small nudge (under SNAPBACK) away from a project
+	//    springs back into it. A bigger move, like one mouse-wheel click,
+	//    leaves freely.
+	//  - Any new scroll gesture, or speeding up past RELEASE_SPEED, breaks
+	//    free of a catch.
+	// Keyboard and scrollbar scrolling stay native, and settle into a nearby
+	// detent once they stop. Off on phones and with reduced motion.
+	//   GLIDE:            how fast the page catches up to the target, per
+	//                     second (Lenis default ~6.3). Lower = smoother/heavier.
+	//   DETENT_STIFFNESS: spring pull; higher is harder and faster.
+	//   DETENT_DAMPING:   below 1 overshoots; lower bounces more. 1 = none.
+
+	var GLIDE = 6.3;
+	var CATCH_SPEED = 1200;      // px/s: momentum slower than this can be caught
+	var CATCH_RANGE = 300;       // px: how far ahead the next project can catch
+	var SNAPBACK = 60;           // px: nudges smaller than this spring back
+	var RELEASE_SPEED = 2400;    // px/s: speeding up past this breaks free
+	var DETENT_STIFFNESS = 130;
+	var DETENT_DAMPING = 0.75;
+	var GESTURE_GAP = 150;       // ms between wheel events that starts a new gesture
+	var INPUT_GAP = 80;          // ms without wheel input = the input let go
+	var NATIVE_IDLE = 110;       // ms after a native scroll stops, then settle
+
+	var desktopMQ = window.matchMedia('(min-width: 875px)');
+	var target = window.scrollY; // where the input says the page should be
+	var x = window.scrollY;      // where the page is drawn (glides to target)
+	var tv = 0;                  // target velocity while springing
+	var inputV = 0;              // current gesture's speed, px per second
+	var gestureEvents = 0;
+	var dir = 0;                 // +1 down, -1 up: the current gesture's direction
+	var lastWheel = -1e9;
+	var springTo = null;         // detent being pulled into, if any
+	var caught = false;          // caught mid-gesture: absorb the momentum
+	var armed = false;           // check for a detent when input lets go
+	var running = null;
+	var lastFrame = null;
+	var lastSet = null;          // last scroll position this code set
+	var nativeTimer = null;
+
+	function physicsOn() {
+		return desktopMQ.matches && !reduceMotion.matches && list.offsetParent !== null;
+	}
+
+	function clamp(v) {
+		return Math.max(0, Math.min(document.documentElement.scrollHeight - window.innerHeight, v));
+	}
+
+	// Resting spots of every project, in page coordinates
+	function detents() {
+		var offset = parseFloat(getComputedStyle(root).scrollPaddingTop) || 0;
+		var projects = list.querySelectorAll('.project'), out = [];
+		for (var i = 0; i < projects.length; i++) {
+			out.push(projects[i].getBoundingClientRect().top + window.scrollY - offset);
+		}
+		return out;
+	}
+
+	// Nearest detent ahead of pos in direction d (within range), or null.
+	// The spot pos is sitting on doesn't count as ahead.
+	function detentAhead(pos, d, range) {
+		var all = detents(), best = null;
+		for (var i = 0; i < all.length; i++) {
+			var dist = (all[i] - pos) * d;
+			if (dist > 1 && dist <= range && (best === null || dist < (best - pos) * d)) best = all[i];
+		}
+		return best;
+	}
+
+	// Nearest detent within range in either direction, or null
+	function detentNear(pos, range) {
+		var all = detents(), best = null;
+		for (var i = 0; i < all.length; i++) {
+			if (Math.abs(all[i] - pos) <= range &&
+			    (best === null || Math.abs(all[i] - pos) < Math.abs(best - pos))) best = all[i];
+		}
+		return best;
+	}
+
+	function catchInto(d, speed) {
+		springTo = d;
+		tv = speed;
+	}
+
+	function stop() {
+		if (running) cancelAnimationFrame(running);
+		running = null;
+		lastFrame = null;
+		springTo = null;
+		caught = false;
+		tv = 0;
+	}
+
+	function frame(now) {
+		var dt = lastFrame === null ? 1 / 60 : Math.min(0.05, (now - lastFrame) / 1000);
+		lastFrame = now;
+		var inputActive = now - lastWheel <= INPUT_GAP;
+
+		// Input let go without a catch: the next project ahead (if close),
+		// else snap back into one we barely left
+		if (!inputActive && armed) {
+			armed = false;
+			if (springTo === null && dir) {
+				var d = detentAhead(target, dir, CATCH_RANGE);
+				if (d === null) d = detentNear(target, SNAPBACK);
+				if (d !== null) catchInto(d, inputV);
+			}
+		}
+
+		if (springTo !== null) {
+			var friction = 2 * Math.sqrt(DETENT_STIFFNESS) * DETENT_DAMPING;
+			tv += (-DETENT_STIFFNESS * (target - springTo) - friction * tv) * dt;
+			target += tv * dt;
+			if (Math.abs(target - springTo) < 0.5 && Math.abs(tv) < 5) {
+				target = springTo;
+				tv = 0;
+				springTo = null;
+			}
+		}
+		target = clamp(target);
+
+		// The page glides toward the target
+		x += (target - x) * (1 - Math.exp(-GLIDE * dt));
+		if (Math.abs(target - x) < 0.5 && !inputActive && springTo === null) x = target;
+		lastSet = Math.round(x);
+		window.scrollTo(0, x);
+
+		if (inputActive || armed || springTo !== null || x !== target) {
+			running = requestAnimationFrame(frame);
+		} else {
+			running = null;
+			lastFrame = null;
+		}
+	}
+
+	function run() {
+		if (!running) running = requestAnimationFrame(frame);
+	}
+
+	window.addEventListener('wheel', function (e) {
+		if (!physicsOn() || e.ctrlKey) return;   // ctrl+wheel = zoom, leave it
+		if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;   // sideways
+		e.preventDefault();
+		var unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
+		var delta = e.deltaY * unit;
+		if (!delta) return;
+		var now = performance.now();
+		var gap = now - lastWheel;
+		lastWheel = now;
+		if (!running) { target = x = window.scrollY; }
+		armed = true;
+
+		// A new gesture: break free of any catch and start measuring afresh
+		if (gap > GESTURE_GAP || (delta > 0 ? 1 : -1) !== dir) {
+			gestureEvents = 0;
+			inputV = 0;
+			caught = false;
+			springTo = null;
+			tv = 0;
+			dir = delta > 0 ? 1 : -1;
+		}
+		gestureEvents++;
+		if (gestureEvents > 1) {
+			var instant = delta / (Math.max(8, gap) / 1000);
+			inputV = gestureEvents === 2 ? instant : inputV * 0.6 + instant * 0.4;
+		}
+
+		if (caught) {
+			// Momentum is being absorbed, unless the user speeds up again
+			if (Math.abs(inputV) > RELEASE_SPEED) { caught = false; springTo = null; tv = 0; }
+			else { run(); return; }
+		}
+
+		target = clamp(target + delta);
+
+		// Momentum dying out: the next project ahead catches it
+		if (gestureEvents >= 3 && Math.abs(inputV) < CATCH_SPEED) {
+			var d = detentAhead(target, dir, CATCH_RANGE);
+			if (d !== null) { caught = true; catchInto(d, inputV); }
+		}
+		run();
+	}, { passive: false });
+
+	// Native scrolling (keys, scrollbar, view switches): keep in step, then
+	// settle into a nearby detent once it stops.
+	window.addEventListener('scroll', function () {
+		if (lastSet !== null && Math.abs(window.scrollY - lastSet) <= 1) return;   // ours
+		stop();
+		target = x = window.scrollY;
+		lastSet = null;
+		clearTimeout(nativeTimer);
+		nativeTimer = setTimeout(function () {
+			if (!physicsOn()) return;
+			var d = detentNear(target, SNAPBACK * 2);
+			if (d !== null) { catchInto(d, 0); run(); }
+		}, NATIVE_IDLE);
 	}, { passive: true });
+
+	// A click or key press stops any motion where it is
+	['mousedown', 'keydown', 'touchstart'].forEach(function (type) {
+		window.addEventListener(type, function () {
+			if (running) { stop(); target = x = window.scrollY; }
+		}, { passive: true });
+	});
+
+
+	// --- Automation: tool lists ---------------------------------------------
+	//
+	// From the Cinco tool inventory (2020-2026). Featured tools first, then
+	// the rest in a compact list. Left out on purpose: the Pantone lookup
+	// sheet (it embeds Pantone data) and tools that went unused or are
+	// unfinished (Crop Keynote Video Assets, Image Selects Tracker, Workplan
+	// Budget Tracker).
+
+	// Featured tools. name fills the big headline slot and resultNum the small line under it (the process each tool
+	// reimagined, in one sentence); story is one paragraph on what changed;
+	// stats sit in the side column. A stat containing XX is a placeholder, shown dashed,
+	// until the real number is in. All copy here is
+	// drafted from the inventory;
+	// visual describes the image or short loop to capture. Set image to a
+	// file in img/ to replace a placeholder.
+	var TOOLS_FEATURED = [
+		{ name: 'Retail Deliverables Spreadsheet', client: 'Under Armour', application: 'Retail graphic management', tools: 'Google Sheets, Apps Script',
+		  resultNum: 'A shared dropdown system to build and maintain retail graphic campaigns',
+		  stats: [ { num: '2000+', label: 'retail graphics produced' }, { num: '100+', label: 'campaigns planned' } ],
+		  story: 'Under Armour briefed retail campaigns in static Excel files. I proposed and built a shared Google Sheets system where UA picked graphics from smart dropdowns and sizes filled in automatically. The system supported UA\'s global retail campaigns for four years.' },
+		{ name: 'Crop Template System', client: 'EA Sports', application: 'Key art crop production', tools: 'AppleScript, Photoshop, InDesign',
+		  resultNum: 'Multi-crop production, simplified',
+		  stats: [ { num: '1000+', label: 'unique crops produced' }, { num: '15', label: 'franchise titles' } ],
+		  story: 'EA Sports key art needed dozens of sized crops, each exported, named and placed on an all-up sheet by hand. A shared crop template sized every crop at once, and one click exported them all while the InDesign sheet updated itself. So when athlete photography changed late, several days of rework became a one-hour re-export.' },
+		{ name: 'Master Campaign Calendar', client: 'Cinco Design', application: 'Campaign scheduling and planning', tools: 'Google Sheets',
+		  resultNum: 'A shared horizontal calendar for planning every milestone',
+		  stats: [ { num: '1000+', label: 'campaign milestones scheduled' }, { num: '4', label: 'years of retail planned' } ],
+		  story: 'Campaign scheduling used to live in a week-by-week grid calendar, which made it hard to see how campaigns overlapped. I proposed a replacement, then built and managed it in Google Sheets: one continuous timeline per year, with a row for every campaign. The team switched and never looked back.' },
+		{ name: 'LED Panel Asset Generator', client: 'adidas', application: 'Video asset slicing for LED panels', tools: 'AppleScript, FFmpeg',
+		  resultNum: 'Production slashed from hours to seconds',
+		  stats: [ { num: '360', label: 'times faster' }, { num: '100', label: 'hours saved' } ],
+		  story: 'Video for adidas LED windows had to go through a supplied After Effects template, which took hours to set up when dozens of assets had to be produced. This tool took the MP4 directly and re-encoded it into the slices each window needed \u2013 no After Effects required.' },
+		{ name: 'Box Link Tools for Slack', client: 'Cinco Design', application: 'Box file link sharing and opening in Slack', tools: 'AppleScript, Bash, Claude Code',
+		  resultNum: 'Finally: One-click Box path sharing in macOS',
+		  stats: [ { num: '140+', label: 'hours saved per year' }, { num: '40', label: 'daily users' } ],
+		  story: 'Sharing cloud-based links across teams has always been difficult. Links only open directly in the user\u2019s browser \u2014 rather than their local cloud storage directory \u2014 requiring manual navigation every time. I created a tool that handled link generation and opening which allowed our entire studio to generate sharable links that open the file or folder path directly in their Finder with one click.' },
+		{ name: 'Campaign Image Upscaling', client: 'Under Armour, adidas', application: 'Cross-campaign image upscaling', tools: 'AppleScript, Photoshop',
+		  resultNum: 'Foolproof upscaling for any campaign',
+		  stats: [ { num: '4000+', label: 'images upscaled' }, { num: '230+', label: 'hours saved' } ],
+		  story: 'Low-res images are the bane of modern print production. Checking and upscaling every placement by hand is slow, tedious, and error-prone. This tool scanned an entire campaign, identified every image below the resolution target, upscaled, processed, and relinked them all automatically, saving days of production work per season.' },
+		{ name: 'RGB-to-Pantone Picker', client: 'Cinco Design', application: 'RGB and hex to Pantone matching', tools: 'JavaScript, CodePen',
+		  resultNum: 'Pantone selection made easy',
+		  stats: [ { num: '1000+', label: 'likes on CodePen' }, { num: '100+', label: 'development hours' } ],
+		  story: 'Matching a screen color to Pantone meant flipping through swatch books, or using clunky, inaccurate online tools. I built a tool for our design and product teams, allowing them to instantly convert an RGB input to an interactive rainbow of closest-matching swatches across multiple books at once. The tool received rave reviews from both design and product teams. Today, I\u2019m working on its successor, and I can\u2019t wait to show it to the world!' }
+	];
+
+	// Groups for the other projects, in grid order: each group is a
+	// labeled region two tiles wide, its tiles in its color. The four
+	// 4-tile groups pair up in rows; the 2-tile group comes last
+	var TOOLS_GROUPS = [
+		{ title: 'Production Setup', color: '#7a5ab5' },
+		{ title: 'Image and Video Processing', color: '#1f7a70' },
+		{ title: 'Asset Tracking and Review', color: '#c03a4d' },
+		{ title: 'File Management and Delivery', color: '#4f7a38' },
+		{ title: 'Project Management', color: '#3d6bbf' }
+	];
+
+	// The other projects, most impressive first within each group. group
+	// names a TOOLS_GROUPS title
+	var TOOLS_MORE = [
+		{ group: 'Project Management', name: 'Budget Estimator', apps: 'Google Sheets', desc: 'Redesigned studio budgeting tool for project managers, integrating client rates, agency roles, and employee list into a beautiful, easy-to-use, adjustable round calculator.' },
+		{ group: 'Project Management', name: 'Project Resourcing Tool', apps: 'Google Sheets', desc: 'Tracks designers\' hours across campaigns to prevent overbooking on large campaigns.' },
+		{ group: 'Production Setup', name: 'Print Slug Setup', apps: 'InDesign', desc: 'Reads from any data source and generates 100s of print templates of any size with your custom print slug filled in perfectly each time.' },
+		{ group: 'Production Setup', name: 'Weave Pattern Separator', apps: 'Illustrator', desc: 'Turns textile-based multicolor artwork into color-separated layers for factory production.' },
+		{ group: 'Asset Tracking and Review', name: 'Extract Assets', apps: 'Finder', desc: 'Converts any collection of image, document, or video assets and processes them with retraceable filenames for use in Figma mood boards and research.' },
+		{ group: 'File Management and Delivery', name: 'Keynote File Size Reducer', apps: 'Keynote', desc: 'Keynote files are notorious for bloat. This tool extracts the assets inside and compresses them far beyond what Keynote itself is capable of.' },
+		{ group: 'Asset Tracking and Review', name: 'Image Stamper', apps: 'Finder', desc: 'Stamps ID codes onto copies of image assets for tracking so that photo selects can be made collaboratively in Figma without losing file provenance.' },
+		{ group: 'Asset Tracking and Review', name: 'List All Links', apps: 'InDesign', desc: 'Lists every image used across open InDesign layouts, providing an exact punch list of campaign assets used in final graphics.' },
+		{ group: 'Production Setup', name: 'Make Crop Template From Clipboard', apps: 'Photoshop', desc: 'Builds a new crop template from a pasted list of names and sizes.' },
+		{ group: 'Asset Tracking and Review', name: 'Make Contact Sheet', apps: 'InDesign', desc: 'Builds labeled, multi-page contact sheets from folders of images almost instantly.' },
+		{ group: 'File Management and Delivery', name: 'Package INDD files', apps: 'Finder', desc: 'Batch packages selected InDesign files with their links and fonts, plus any custom step your workflow requires.' },
+		{ group: 'File Management and Delivery', name: 'Batch Zip', apps: 'Finder', desc: 'Finder can\'t natively zip multiple folders without grouping them together into one. This tool makes one archive per selection with one click.' },
+		{ group: 'Image and Video Processing', name: 'Downres Images', apps: 'InDesign, Photoshop', desc: 'Downscales every image in an InDesign package to shrink it.' },
+		{ group: 'Image and Video Processing', name: 'Video Thumbnail Generator', apps: 'Finder', desc: 'Downscales batches of MP4s by percentage, max size, format\u2026 you name it!' },
+		{ group: 'Production Setup', name: 'Logo sheet prep tool', apps: 'Illustrator', desc: 'Renames and resizes artboards for EA Sports logo delivery.' },
+		{ group: 'Image and Video Processing', name: 'raw2jpg', apps: 'Finder', desc: 'Extracts sized JPGs from RAW files across nested folders at lightning speed.' },
+		{ group: 'Image and Video Processing', name: 'Export INDD files to JPG', apps: 'InDesign', desc: 'Batch-exports layouts as JPGs at a chosen resolution and quality. 20 users.' },
+		{ group: 'File Management and Delivery', name: 'Count all files in directory', apps: 'Finder', desc: 'Counts every file in a folder tree; used by Under Armour\'s own production team.' }
+	];
+
+	function buildTools(listId, templateId, data) {
+		var holder = document.getElementById(listId);
+		var tpl = document.getElementById(templateId);
+		data.forEach(function (item) {
+			var el = tpl.content.firstElementChild.cloneNode(true);
+			fill(el, item);
+			var link = el.querySelector('.tool-link');
+			if (link) {
+				if (item.link) { link.href = item.link; link.textContent = item.linkText + ' \u2192'; }
+				else link.remove();
+			}
+			// Client / Application / Tools used: each column shows only when the
+			// tool has a value for it; the row goes entirely when it has none
+			var meta = el.querySelector('.tool-meta');
+			// Tools used: keep each multi-word app name together on one line
+			var toolsField = el.querySelector('[data-field="tools"]');
+			if (toolsField) toolsField.textContent = toolsField.textContent.split(', ').map(function (t) { return t.replace(/ /g, '\u00a0'); }).join(', ');
+			if (meta) {
+				meta.querySelectorAll('p').forEach(function (p) {
+					if (!p.querySelector('[data-field]').textContent) p.remove();
+				});
+				if (!meta.children.length) meta.remove();
+			}
+
+			// Stats under the paragraph; XX marks a number still to fill in
+			var statList = el.querySelector('.tool-stats');
+			if (statList) {
+				var statTpl = document.getElementById('tool-stat');
+				(item.stats || []).forEach(function (st) {
+					var li = statTpl.content.firstElementChild.cloneNode(true);
+					fill(li, st);
+					if (st.num.indexOf('XX') !== -1) li.classList.add('is-placeholder');
+					statList.appendChild(li);
+				});
+				if (!statList.children.length) statList.remove();
+			}
+
+			holder.appendChild(el);
+		});
+	}
+
+	buildTools('tools-featured', 'tool-featured', TOOLS_FEATURED);
+	// Each group's tiles go in their own region (a two-column block in the
+	// grid) under the group's label
+	var regionTpl = document.getElementById('tool-region');
+	var groupGrid = document.getElementById('tools-more');
+
+	// Every tile takes the height of the tallest one, so the grid reads as
+	// even blocks. Measured, not fixed, so it follows any copy change: clear
+	// the old height, find the tallest tile, apply it to all (--tile-h).
+	// Reruns when the grid's width changes (resize, or the view appearing)
+	// and once the web fonts have loaded.
+	function equalizeTiles() {
+		groupGrid.style.removeProperty('--tile-h');
+		var tallest = 0;
+		groupGrid.querySelectorAll('.tile').forEach(function (tile) {
+			if (tile.offsetParent) tallest = Math.max(tallest, tile.offsetHeight);
+		});
+		if (tallest) groupGrid.style.setProperty('--tile-h', tallest + 'px');
+	}
+
+	var gridWidth = 0;
+	new ResizeObserver(function (entries) {
+		var w = Math.round(entries[0].contentRect.width);
+		if (w && w !== gridWidth) { gridWidth = w; equalizeTiles(); }
+	}).observe(groupGrid);
+	if (document.fonts) document.fonts.ready.then(equalizeTiles);
+
+	TOOLS_GROUPS.forEach(function (group, i) {
+		var tools = TOOLS_MORE.filter(function (tool) { return tool.group === group.title; });
+		var region = regionTpl.content.firstElementChild.cloneNode(true);
+		fill(region, group);
+		region.id = 'tools-region-' + i;
+		region.style.setProperty('--group-color', group.color);
+		region.style.setProperty('--region-rows', Math.ceil(tools.length / 2) + 1);   // + the label row
+		groupGrid.appendChild(region);
+		buildTools(region.id, 'tool-row', tools);
+	});
+
+	// Stat numbers: each "+" goes into its own span so CSS can make it
+	// smaller and raised (.plus), and each "1" into one so CSS can trim the
+	// extra space this font's narrow 1 carries on both sides (.one)
+	function renderNum(num, text) {
+		num.textContent = '';
+		var run = '';
+		text.split('').forEach(function (ch) {
+			if (ch !== '+' && ch !== '1') { run += ch; return; }
+			if (run) { num.appendChild(document.createTextNode(run)); run = ''; }
+			var span = document.createElement('span');
+			span.className = ch === '+' ? 'plus' : 'one';
+			span.textContent = ch;
+			num.appendChild(span);
+		});
+		if (run) num.appendChild(document.createTextNode(run));
+	}
+	document.querySelectorAll('.stat-num, .tstat-num').forEach(function (num) {
+		renderNum(num, num.textContent);
+	});
+
+	// Stat animation: when a stat scrolls into view (or the page opens with
+	// it in view), its orange bar grows from the bottom like a small chart
+	// while every number in it counts up from 0, like a rolling counter;
+	// both use the same timing and easing, so the bar tracks the count. A
+	// "+" stays hidden while the number rolls, then fades in (0.2s).
+	// Stats that come into view together start a beat apart, left to right
+	// and top to bottom. Each stat runs once. Off with reduced motion.
+	var STAT_COUNT_MS = 800;     // number count-up and bar rise, together, the same for every number
+	var STAT_STAGGER_MS = 100;   // delay between story stats that appear together
+	var OPENER_STAGGER_MS = 200; // delay between the four opener stats
+	var statItems = document.querySelectorAll('.tstat, .tools-stats > li');
+
+	function countUp(num) {
+		var finalText = num.textContent;
+		var targets = finalText.match(/\d+/g);
+		if (!targets) return;
+		var start = null;
+		function frame(now) {
+			if (start === null) start = now;
+			var t = Math.min(1, (now - start) / STAT_COUNT_MS);
+			var eased = 1 - Math.pow(1 - t, 3);   // fast start, gentle landing
+			var i = 0;
+			renderNum(num, finalText.replace(/\d+/g, function () {
+				return String(Math.round(targets[i++] * eased));
+			}));
+			if (t < 1) requestAnimationFrame(frame);
+			else requestAnimationFrame(function () { num.classList.remove('is-rolling'); });   // then the + fades in
+		}
+		num.classList.add('is-rolling');
+		renderNum(num, finalText.replace(/\d+/g, '0'));
+		requestAnimationFrame(frame);
+	}
+
+	function playStat(item, delay) {
+		item.style.setProperty('--stat-delay', delay + 'ms');
+		item.classList.add('is-counted');
+		var num = item.querySelector('.stat-num, .tstat-num');
+		if (num) setTimeout(function () { num.classList.add('is-live'); countUp(num); }, delay);   // numbers stay hidden until their count starts
+	}
+
+	// The page head turns the animation on (.stats-anim) before the first
+	// paint. If this script arrived too late, the head's fallback has
+	// already turned it off and shown the stats as they are: leave them.
+	window.statsReady = true;
+	if (document.documentElement.classList.contains('stats-anim')) {
+		document.documentElement.style.setProperty('--stat-bar-ms', STAT_COUNT_MS + 'ms');   // the bar grows with the count
+		// Numbers wait at 0 until their stat is shown
+		statItems.forEach(function (item) {
+			var num = item.querySelector('.stat-num, .tstat-num');
+			if (num && /\d/.test(num.textContent)) {
+				var finalText = num.textContent;
+				renderNum(num, finalText.replace(/\d+/g, '0'));
+				num.classList.add('is-rolling');   // the + stays hidden until the count ends
+				num.dataset.final = finalText;
+			}
+		});
+		// Settle the flat (0 height) bars before anything can grow them, so
+		// the first stats on screen grow too instead of appearing at full height
+		statItems.forEach(function (item) { getComputedStyle(item, '::before').transform; });
+		var statObserver = new IntersectionObserver(function (entries) {
+			var shown = entries.filter(function (e) { return e.isIntersecting; })
+				.map(function (e) { return e.target; })
+				.sort(function (a, b) {
+					var ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+					return (ra.top - rb.top) || (ra.left - rb.left);
+				});
+			var opener = 0, story = 0;
+			shown.forEach(function (item) {
+				statObserver.unobserve(item);
+				var num = item.querySelector('.stat-num, .tstat-num');
+				if (num && num.dataset.final) renderNum(num, num.dataset.final);
+				var isOpener = item.parentNode.classList.contains('tools-stats');
+				playStat(item, isOpener ? opener++ * OPENER_STAGGER_MS : story++ * STAT_STAGGER_MS);
+			});
+		}, { rootMargin: '0px 0px -10% 0px' });   // starts once a stat is a little way into the window
+		statItems.forEach(function (item) { statObserver.observe(item); });
+	}
 
 
 	// --- Init -------------------------------------------------------------
 
-	slideEls.push(coverEl);
-	SLIDES.forEach(function (data, i) {
-		var el = buildSlide(data, i + 1);
-		slideEls.push(el);
-		frame.insertBefore(el, outroEl);
-	});
-	slideEls.push(outroEl);
-
-	withoutFade([coverEl], show);   // cover is up immediately, with no fade-in
-	updateArrows();
-	updateInteractivity();
-	loadNearby();
-	fit();
+	showView();
+	fitCaptions();
+	measureHeader();
 })();

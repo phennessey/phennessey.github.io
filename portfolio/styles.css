@@ -1,322 +1,876 @@
-/* Hennessey Design — styles.css
+/* Patrick Hennessey — styles.css
    -------------------------------------------------------------------------
-   Single source of truth for every visual constant, including the ones ui.js
-   needs (--fade-ms, --frame-w, --frame-h, --fit): ui.js reads those from here
-   with getComputedStyle instead of keeping its own copies. */
+   One scrolling page: a header with the name and nav, then either the Work
+   view (default) or the About view. Every visual constant is a variable here. */
 
 :root {
-	--black: #000;
+	--black: #111;
 	--white: #fff;
-	--accent: #f7931d;
-	--light-gray: #d2d2d2;
-	--gray: #acacac;
-	--dark-gray: #333;
-	--stage-bg: #333;
+	--accent: #ff9b00;             /* rgb(255, 155, 0) */
+	--gray: #8a8a8a;
+	--mid-gray: #666;
+	--rule: #e6e6e6;
+	--rule-w: 2px;                             /* every gray divider (Nov 25; was 1px) */
 
-	/* Authored frame size, unitless so it works in calc() and reads as a plain
-	   number in ui.js. */
-	--frame-w: 1152;
-	--frame-h: 648;
-	--fit: 0.9;              /* fraction of the viewport the frame may fill */
-	--s: 1;                  /* fit scale — recomputed by ui.js on resize */
+	--page-max: 1280px;                        /* white page width, gutters included */
+	--outside: #5f5f5f;                        /* gray beyond the page, rgb(95, 95, 95) (Nov 25; was #b4b4b4) */
+	/* Sizes that scale with the window stop growing at 1280px, the page
+	   width: each maximum below is its value at a 1280px window, so nothing
+	   moves once the window is wider than the page. */
+	--gutter: 40px;                            /* page side margins (30px on phones) */
+	--col-gap: clamp(12px, 2vw, 25.6px);         /* caption column gap */
+	--caption-size: 15px;                      /* caption values (Cinco Design, etc.) */
+	--label-size: 9.3px;                       /* caption labels — the original 13:21 ratio */
+	--nav-room: 300px;                         /* nav width + gap, kept clear of the name (104px on phones) */
+	--fade-ms: 100ms;                          /* cross-fade between About and Work */
+	--header-pad-bottom: 16px;                 /* white space under the subhead */
+	--header-fade: 60px;                       /* fade below the header (img/fade.png) */
+	/* Automation columns, as shares of the content width: story or intro
+	   (53%), a gap (10%), stats (20.5%), a small gap (2.5%), details or the
+	   apps list (14%) */
+	--tool-cols: minmax(0, calc(53% + 34px)) minmax(0, 10fr) minmax(0, calc(20.5% - 34px)) minmax(0, 2.5fr) minmax(0, 14fr);   /* stats track 34px narrower from the left; the story column takes it (Nov 25) */
+	--project-gap: clamp(48px, calc(3.5vw + 20px), 64.8px);    /* space between projects */
+	--app-icon: min(62px, calc((100vw - 2 * var(--gutter)) * 0.0517));   /* Tools built for: 62px at full width, scaling down with the page so the gaps keep their proportion */
+	--app-icon-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);   /* soft shadow under each app icon */
+	--nav-after-name: 40px;                    /* desktop: space between the name and CASE STUDIES */
+	--stats-top: 13px;                         /* space between the headline and the stats row */
+	--app-icon-top: 48px;                      /* space between the stats row and the icons */
 
-	--fade-ms: 100ms;        /* slide cross-fade */
-	--nav-fade-ms: 200ms;    /* nav-arrow reveal */
-	--nav-scoot-ms: 150ms;   /* nav-arrow hover nudge */
-	--nav-scoot: 6px;        /* nav-arrow hover nudge distance */
-
-	/* Viewport left over beside the scaled frame = the nav-arrow hit zones.
-	   Derived from --s, so the frame size is never restated. */
-	--margin-x: max(0px, calc((100vw - var(--frame-w) * 1px * var(--s)) / 2));
-	--margin-y: max(0px, calc((100vh - var(--frame-h) * 1px * var(--s)) / 2));
 }
 
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-html, body { height: 100%; }
+html {
+	-webkit-text-size-adjust: 100%;
+	background: var(--outside);
+}
 
+/* The page itself: a white column, centered, light gray outside it */
 body {
-	background: var(--stage-bg);
+	max-width: var(--page-max);
+	/* no minimum height (Nov 25): a short page ends at its footer, with the gray below, like Patrick's mockup */
+	margin: 0 auto;
+	/* Whole-pixel left edge: centering in an odd-width window lands on a
+	   half pixel, and small pinned text shimmers there while scrolling. */
+	margin-left: max(0px, round(down, calc((100% - var(--page-max)) / 2), 1px));
+	background: var(--white);
+	box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);   /* centered black shadow, 30px blur, onto the dark gray (Nov 25) */
 	color: var(--black);
-	font-family: akzidenz-grotesk-next-pro, sans-serif;
+	font-family: akzidenz-grotesk-next-pro, "Helvetica Neue", Helvetica, Arial, sans-serif;
 	font-weight: 400;
-	overflow: hidden;
-	/* Kill the mobile tap-highlight flash (inherited by descendants) */
+	-webkit-font-smoothing: antialiased;
 	-webkit-tap-highlight-color: transparent;
 }
 
+img { display: block; max-width: 100%; }
 
-/* Stage + scaled frame
-   -------------------------------------------------------------------------
-   The frame is authored at true --frame-w x --frame-h px, then uniformly
-   scaled to fit the viewport with >=5% margin on top and sides. Every
-   dimension inside the frame is therefore "relative to 1152x648" as
-   authored. */
-
-.stage {
-	position: fixed;
-	inset: 0;
-	background: var(--stage-bg);
-	overflow: hidden;
-	/* No text/drag selection overlay when click-dragging across slides */
-	-webkit-user-select: none;
-	-moz-user-select: none;
-	user-select: none;
-}
-
-.frame {
-	position: absolute;
-	top: 50%;
-	left: 50%;
-	width: calc(var(--frame-w) * 1px);
-	height: calc(var(--frame-h) * 1px);
-	transform: translate(-50%, -50%) scale(var(--s));
-	transform-origin: center center;
-}
+a { color: inherit; }
 
 
-/* Slides — stacked, cross-fade
-   -------------------------------------------------------------------------
-   Slides sit in the frame in index order, so a higher index always paints
-   over a lower one. Visibility is a class, not an inline style: ui.js only
-   ever adds/removes .is-visible, and .no-fade suppresses the transition for
-   the one case that must land instantly (see ui.js). */
-
-.slide {
-	position: absolute;
-	inset: 0;
-	display: flex;
-	/* No slide background: the left bar supplies its own solid fill and the
-	   image supplies the right side, so the area behind the image is
-	   transparent — only the JPG shows there. The bookend slides carry no
-	   image and paint themselves via .slide--accent. */
-	opacity: 0;
-	transition: opacity var(--fade-ms) ease;
-	/* ALWAYS a self-contained stacking context, so the bar's z-index never
-	   hoists out of the slide when opacity reaches 1. Without this, a child's
-	   z-index escapes to a global layer at opacity 1 and "pops" instead of
-	   fading with the slide. */
-	isolation: isolate;
-}
-
-.slide.is-visible { opacity: 1; }
-.slide.no-fade { transition: none; }
-
-/* ui.js marks every non-current slide inert, which takes it out of the tab
-   order and the accessibility tree. This is the pointer-events half of that,
-   spelled out so hidden slides can't intercept clicks even where `inert`
-   isn't implemented. */
-.slide[inert] { pointer-events: none; }
-
-
-/* Left bar — always white; the accent is carried by the bookend slides
+/* Header
    ------------------------------------------------------------------------- */
 
-/* Allow selecting the copy in the bars (the stage disables select globally). */
-.slide-bar, .cover-content {
-	-webkit-user-select: text;
-	-moz-user-select: text;
-	user-select: text;
-}
-
-.slide-bar {
-	position: relative;
-	z-index: 0;              /* sits BEHIND the image (see .slide-image) */
-	flex: 0 0 282px;
-	width: 282px;            /* 2px wider than the 280 column: its right edge
-	                            overlaps under the image, hiding any seam */
-	height: 100%;
-	padding: 32px;
+/* Stays pinned to the top as the page scrolls. Content passes behind it and
+   fades out under its bottom edge (the ::after gradient). */
+.site-header {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+	background: var(--white);
+	padding: var(--gutter) var(--gutter) var(--header-pad-bottom);   /* top: 30px on phones */
 	display: flex;
-	flex-direction: column;
-	background: var(--white);   /* solid fill continues behind the image edge */
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 24px;
+	/* Name size, set here so the nav can align to it. 65.8px makes
+	   "Patrick H" as wide as the subhead. The full name is about 8.77 times
+	   its font size wide, so on narrow screens the second value shrinks it
+	   to fit beside the nav instead. */
+	--name-size: min(65.8px, calc((100vw - 2 * var(--gutter) - var(--nav-room)) / 8.8));
 }
 
-/* Bookend slides (cover + outro): full yellow, no sidebar, no image. Content
-   sits directly on the slide via .cover-content. */
-.slide--accent { background: var(--accent); }
+/* The nav always stays on the right: it never shrinks or wraps, and the
+   name gives way to it instead. */
+.site-nav { flex: none; }
+/* Contact icons (mail, LinkedIn, GitHub): in the footer, right side (Nov 25; were top right in the header) */
+.footer-contact { --header-icon: 18px; display: flex; gap: 14px; }
+/* Footer (Nov 25): the copyright line, then the disclaimer under it, on
+   the left; the icons on the right */
+.footer-start { display: flex; flex-direction: column; gap: 4px; }
+.footer-end { flex: none; margin-left: auto; }
+.footer-copy { font-size: 13px; line-height: 1.35; font-weight: 700; color: #999; }   /* ©2026 line on its own (Nov 25) */
+.footer-legal { max-width: calc(44em + 60px); font-size: 13px; line-height: 1.35; color: #999; }   /* the legal line and the statistics note, one paragraph, every page */
+.header-icon { display: block; width: var(--header-icon); height: var(--header-icon); color: #999; transition: color 150ms ease; }
+.header-icon svg { display: block; width: 100%; height: 100%; }
+.header-icon:hover { color: var(--black); }
+/* Desktop (875px and up; was 797px until Nov 25): the nav sits at the far
+   right, on the name's baseline (Nov 25; the contact icons moved to the
+   footer) */
+@media (min-width: 875px) {
+	.site-header {
+		align-items: baseline;
+		justify-content: flex-start;
+		gap: 0;
+		/* room kept beside the name for the nav (kept at 480px so the name
+		   never gets narrower than its subhead above 875px) */
+		--nav-room: 480px;
+	}
+	.site-nav { padding-top: 0; margin-left: auto; }
+}
+.identity { flex: 0 1 auto; min-width: 0; }
 
-.cover-content { padding: 32px; }
+.site-header::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 100%;
+	height: var(--header-fade);
+	/* img/fade.png: 1 x 120px white strip, opaque to clear, drawn at half
+	   size so it stays smooth on Retina screens */
+	background: url(img/fade.png) repeat-x 0 0 / 1px var(--header-fade);
+	pointer-events: none;     /* clicks pass through to the content below */
+}
 
-/* Bookend wordmark — original treatment, original scale */
-.wordmark {
+.identity {
+	display: block;
+	text-decoration: none;
+}
+
+.identity-name {
+	display: block;
+	margin-left: -3px;       /* optical alignment: the P's side bearing */
+	font-size: var(--name-size);     /* set on .site-header */
 	font-weight: 800;
-	line-height: 0.8;
-	letter-spacing: -0.01em;
-	font-size: 2.38rem;      /* midpoint between 2.8rem and 1.96rem */
-	color: var(--white);
+	line-height: 0.9;
+	/* Whole-pixel line height, so the subhead below lands on a whole pixel */
+	line-height: round(calc(var(--name-size) * 0.9), 1px);
+	letter-spacing: -0.02em;
+	color: var(--accent);
+	white-space: nowrap;
 }
-.wordmark span { display: block; }   /* Patrick / Hennessey on two lines */
 
-/* Redundant with .wordmark above, and deliberately so: an earlier version of
-   this file set the wordmark colour on these two classes only. Keeping both the
-   classes (in index.html) and this rule means the name renders white whether a
-   visitor has this stylesheet or a stale cached copy of the old one. */
-.wm-first, .wm-last { color: var(--white); }
-
-.wm-sub {
-	margin-top: 16px;          /* double the previous 8px gap below the name */
-	font-size: 0.714rem;       /* 40% smaller than the previous 1.19rem */
+.identity-sub {
+	display: block;
+	/* Whole pixels: a fractional offset (0.2em was 2.4px) leaves the pinned
+	   subhead between pixel rows, and it shimmers as the page scrolls. */
+	margin-top: 2px;
+	margin-left: -0.5px;     /* optical alignment with the name above */
+	font-size: 12px; /* fixed: same on phones as on a 1440px desktop */
 	line-height: 1.1;
 	font-weight: 700;
 	text-transform: uppercase;
-	color: var(--white);
+	letter-spacing: 0.01em;
+	color: #999;             /* same gray as the caption roles */
 }
 
-.slide-name {
-	font-size: 15px;          /* content slides: 50% of the old 30px */
-	line-height: 1;
-	font-weight: 800;
-	color: var(--light-gray);
-	white-space: nowrap;      /* one line */
+.site-nav {
+	display: flex;
+	gap: clamp(20px, 2.6vw, 33.28px);
+	gap: round(clamp(20px, 2.6vw, 33.28px), 1px);
+	/* Top of the nav capitals level with the x-height of "Patrick", at every
+	   size. From the font's metrics (Akzidenz-Grotesk Next): ascent 1.0em,
+	   descent 0.35em, x-height 0.509em (ExtraBold), cap height 0.706em.
+	   Name: line box 0.9em, so its x-height sits at
+	     line-height / 2 - 0.19 x name size  below the top of the name
+	   (0.184 from the metrics; 0.19 matches the rendered baseline).
+	   Nav (13px, normal line height): caps start 13 - 0.706 x 13 = 3.82px
+	   below the top of the link. The difference is the offset. */
+	padding-top: calc(var(--name-size) * 0.26 - 3.82px);
+	padding-top: round(calc(round(calc(var(--name-size) * 0.9), 1px) / 2 - var(--name-size) * 0.19 - 3.82px), 1px);
 }
 
-.slide-title {
-	margin-top: 20px;         /* gap below the name */
-	font-size: 22.5px;        /* content slides: 50% of the old 45px */
-	line-height: 0.8;
-	font-weight: 800;
-	color: var(--black);
-}
-
-.slide-title span { display: block; }   /* Production / Design on two lines */
-
-.bar-bottom {
-	margin-top: auto;        /* bottom-aligned category block */
-	padding-right: 50px;
-}
-
-.cat { margin-top: 10px; }
-
-.cat-h {
-	font-size: 7px;
+.nav-link {
+	position: relative;
+	font-size: 13px;   /* fixed: same on phones as on a 1440px desktop */
 	font-weight: 700;
 	text-transform: uppercase;
-	letter-spacing: 0.08em;    /* em-based — scales with font-size */
-	color: var(--gray);
+	letter-spacing: 0.02em;
+	text-decoration: none;
+	color: #999;             /* same gray as the subhead and roles */
+	transition: color 150ms ease;
+	cursor: pointer;         /* always, including the current page's link */
 }
 
-.cat-b {
-	margin-top: 3px;
-	font-size: 12px;
-	line-height: 1.15;        /* 115% */
-	font-weight: 400;         /* light weight */
-	color: var(--black);
-	/* Newlines in the SLIDES data are intentional line breaks. Honoring them
-	   here lets ui.js assign textContent instead of assembling markup. */
-	white-space: pre-line;
-}
+.nav-link:hover { color: var(--black); }
 
-
-/* Right column — the pre-made slide image.
-   Locked to full slide height and flush to the right edge (zero gap on top,
-   bottom, right). Width follows from the height by the image's own aspect,
-   so the LEFT edge is free to land wherever those constraints require. */
-
-.slide-image {
+/* Current view: darker, with the accent underline */
+.nav-link[aria-current="page"] { color: var(--mid-gray); }
+/* Hover wins over the current-page color, so a link stays in its hover
+   state after it's clicked until the mouse leaves it */
+.nav-link[aria-current="page"]:hover { color: var(--black); }
+.nav-link[aria-current="page"]::after {
+	content: "";
 	position: absolute;
-	top: 0;
-	right: 0;
-	bottom: 0;
-	left: auto;              /* left edge floats */
-	height: 100%;
-	width: auto;             /* scale by intrinsic aspect from full height */
-	display: block;
-	z-index: 1;              /* on top of the bar, which overlaps 2px behind it */
+	left: 0;
+	right: 1px;              /* trimmed: the link is wider than the letters (trailing letter spacing + width rounded up) */
+	bottom: -1px;            /* whole pixels so it doesn't shimmer */
+	height: 2px;
+	background: var(--accent);
 }
 
 
-/* Navigation arrows — in the stage margin, fade in on hover
+
+/* Views
    ------------------------------------------------------------------------- */
 
-.nav-arrow {
-	position: fixed;
-	top: 0;
-	height: 100%;
+main {
+	padding: 0 var(--gutter);
+	overflow-x: clip;   /* the About monogram bleeds off the page edge, not into the gray (on body it would pass to the window and not clip) */
+}
+
+.view[hidden] { display: none; }
+
+
+/* Work — projects
+   ------------------------------------------------------------------------- */
+
+.projects {
+	padding-top: calc(60px - var(--header-pad-bottom));   /* 60px below the subhead */
 	display: flex;
-	align-items: center;
-	background: none;
-	border: none;
-	cursor: pointer;
-	color: var(--light-gray);
-	opacity: 0;
-	transition: opacity var(--nav-fade-ms) ease;
-	z-index: 10;
+	flex-direction: column;
+	gap: var(--project-gap);   /* same spacing as between projects */
 }
 
-/* Hit zone = only the margin OUTSIDE the frame, so it never covers a slide or
-   blocks selecting the bar text. The arrow floats just past the frame edge. */
-.nav-prev { left: 0;  width: var(--margin-x); justify-content: flex-end;   padding-right: 12px; }
-.nav-next { right: 0; width: var(--margin-x); justify-content: flex-start; padding-left: 12px; }
+.agency-projects {
+	display: flex;
+	flex-direction: column;
+	gap: var(--project-gap);
+}
 
-/* Reveal only while the cursor is inside the edge zone */
-.nav-arrow:hover,
-.nav-arrow:focus-visible { opacity: 0.85; }
+/* Caption: one line above each project, e.g.
+   "EA Sports FIFA 22 Roles: digital asset and styleguide production, …"
+   with the client in bold, which sets it apart from the project. Long
+   lines wrap. */
+.caption {
+	margin-bottom: 8px;      /* caption sits tight to its image */
+	font-size: var(--caption-size);
+	line-height: 1.35;
+	color: #999;             /* whole caption in one 40% gray (a 40% tint of black) */
+}
 
-/* Cover only (ui.js sets .on-cover): the next arrow sits INSIDE the frame, on
-   the yellow against its right edge, inset to match the cover's 32px padding,
-   and fades in only while the cursor is over the slide. */
-.stage.on-cover .nav-next {
-	top: var(--margin-y);
-	bottom: var(--margin-y);
+/* margin-right adds roughly one extra space after the client name and
+   after the project name, before the roles */
+.caption strong { font-weight: 700; margin-right: 0.25em; }
+
+/* Client and project in the subhead's gray; the bar and roles stay lighter */
+.caption strong,
+.caption [data-field="project"] { color: var(--mid-gray); }
+
+/* Bar ( | ) between project and roles: set like the project name, with two
+   spaces each side (pre-wrap keeps the doubled spaces from collapsing) */
+.caption-sep { white-space: pre-wrap; }
+
+
+
+/* ui.js measures every caption on one line. When the widest no longer fits
+   the page, ALL captions switch together: the slash goes, and the roles
+   move to their own second line. */
+.projects.captions-measure .caption { width: max-content; white-space: nowrap; }
+.projects.captions-stacked .caption-sep { display: none; }
+.projects.captions-stacked .caption-roles { display: block; }
+
+.project-image {
+	width: 100%;
 	height: auto;
-	right: var(--margin-x);
-	width: auto;
-	padding-left: 0;
-	padding-right: calc(32px * var(--s));
-	justify-content: flex-end;
-	color: var(--dark-gray);
-}
-
-/* The arrow follows the frame in the markup, so the sibling selector works;
-   .nav-arrow:hover keeps it up while the cursor is on the arrow itself. */
-.stage.on-cover .frame:hover ~ .nav-next { opacity: 0.85; }
-
-/* Hovering an arrow itself nudges it in its direction of travel. */
-.nav-arrow svg { transition: transform var(--nav-scoot-ms) ease; }
-.nav-next:hover svg,
-.nav-next:focus-visible svg { transform: translateX(var(--nav-scoot)); }
-.nav-prev:hover svg,
-.nav-prev:focus-visible svg { transform: translateX(calc(-1 * var(--nav-scoot))); }
-
-/* ui.js sets .zone-prev / .zone-next while the cursor is over the slide's
-   left / right third: that arrow lights and nudges as if hovered, and the
-   third shows a pointer since a click there moves. */
-.stage.zone-prev .nav-prev,
-.stage.zone-next .nav-next { opacity: 0.85; }
-.stage.zone-prev .nav-prev svg { transform: translateX(calc(-1 * var(--nav-scoot))); }
-.stage.zone-next .nav-next svg { transform: translateX(var(--nav-scoot)); }
-.stage.zone-prev .frame,
-.stage.zone-next .frame { cursor: pointer; }
-
-/* Set by ui.js for a moment after an arrow changes position: hidden at once
-   (no fade-out in plain view) until the pointer moves. Mouse devices only —
-   touch has no hover, so its always-on arrows are left alone. */
-@media (hover: hover) {
-	.stage.nav-quiet .nav-arrow { opacity: 0; transition: none; }
-}
-
-/* Touch devices never hover, so the arrows would otherwise stay invisible. */
-@media (hover: none) {
-	.nav-arrow { opacity: 0.85; }
-}
-
-.nav-arrow.is-hidden { display: none; }
-
-/* Remove browser-drawn focus/active overlays (Firefox inner border, iOS
-   callout) while leaving :focus-visible styling above intact. */
-.nav-arrow:focus { outline: none; }
-.nav-arrow::-moz-focus-inner { border: 0; padding: 0; }
-
-.nav-arrow svg {
-	width: 40px;
-	height: 40px;
-	pointer-events: none;   /* svg never becomes the click/drag target */
-	-webkit-user-drag: none;
+	background: #f2f2f2;     /* placeholder tone while the image loads */
 }
 
 
-/* Respect a reduced-motion preference: cut the fades, keep the navigation. */
+/* Automation
+   -------------------------------------------------------------------------
+   A punchy opener (headline + big orange stats), featured tools as mini
+   case studies in the Production caption style, then the rest of the
+   tools as a grid of tiles. */
+
+.tools {
+	padding-top: calc(60px - var(--header-pad-bottom));   /* matches Production */
+	padding-bottom: 0;   /* the footer does the bottom spacing (Nov 25) */
+	font-size: var(--caption-size);
+	line-height: 1.35;
+	color: #999;
+}
+
+/* Opener, stacked (Nov 25): the headline on two lines, the four stats in
+   one row under it, then the app icons */
+.tools-opener {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	align-items: start;
+}
+.tools-lead { grid-column: 1; container-type: inline-size; }   /* the headline sizes to this width */
+/* Headline line breaks: two lines on desktop, three on phones */
+.br-phone { display: none; }
+
+/* Orange rule between the opener and the featured tools, full width,
+   with rounded ends */
+.tools-rule {
+	grid-column: 1 / -1;
+	height: 2px;   /* same weight as the stat bars (Nov 24) */
+	margin: 52px 0 56px;   /* under the brand logos, before the stories (Nov 25) */
+	border: 0;
+	border-radius: 1px;
+	background: var(--accent);
+}
+/* Same style as the tool headlines (.result-num), larger */
+.tools-headline {
+	max-width: 20em;
+	font-size: clamp(39px, 4.76vw, 62px);   /* 40% up from 28 / 3.4vw / 44 */
+	line-height: 1;
+	font-weight: 800;
+	letter-spacing: -0.02em;
+	color: #999;   /* 40% black */
+}
+
+/* The opening line, set at the old headline's size on its own line */
+.tools-intro strong {
+	display: block;
+	margin-bottom: 18px;
+	font-size: calc((100cqi - 8px) / 11.6);   /* the longer line ("small teams do big work.", about 11.6em) fills the column less 8px on the right (Nov 25): ~104px at full width */
+	line-height: 0.95;   /* Nov 25; was 1 */
+	text-wrap: balance;   /* even lines, no single word left on the last */
+	font-weight: 700;   /* Bold (Nov 25; was 800) */
+	letter-spacing: -0.03em;   /* Nov 25; was -0.02em */
+	color: #b3b3b3;   /* 30% black (Nov 25; was 40%) */
+}
+/* About: the same headline, then the follow-up at the same size and
+   weight in orange, then the bio */
+.about-follow {
+	margin-top: 0;
+	font-size: calc((100cqi - 8px) / 11.6);
+	line-height: 0.95;   /* Nov 25; was 1 */
+	text-wrap: balance;
+	font-weight: 700;   /* Bold (Nov 25; was 800) */
+	letter-spacing: -0.03em;   /* Nov 25; was -0.02em */
+	color: var(--accent);
+}
+#view-automation .tools-intro strong, #view-about .tools-intro strong, .about-follow { font-weight: 800; }   /* both pages' headlines and About's orange line in ExtraBold (Nov 25) */
+.about-text {
+	max-width: 30.6em;   /* about 690px at full size: 50px under the longest line it had at 36em (Nov 25) */
+	margin-top: 48px;
+	font-size: clamp(18px, 1.76vw, 22.5px);
+	line-height: 1.4;
+	font-weight: 500;   /* Medium (Nov 25; was 700) */
+	letter-spacing: -0.01em;
+	color: var(--mid-gray);
+}
+/* Monogram (img/sig.webp, from Patrick's sig.png; mockup Nov 25): About
+   only, 20% opacity, always anchored to the bottom right of the white
+   page: 10% of it off the right edge and 106px of it below the bottom,
+   both cut off by .page-clip. Text and the footer sit over it. */
+.page-clip { position: relative; z-index: 0; overflow: clip; }
+.about-mark {
+	position: absolute;
+	z-index: -1;
+	--mark-w: 467px;
+	right: round(calc(var(--mark-w) * -0.1), 1px);
+	bottom: round(calc(var(--mark-w) * -0.227), 1px);   /* 106px at 467px wide */
+	width: var(--mark-w);
+	height: auto;
+	opacity: 0.2;
+	pointer-events: none;
+	user-select: none;
+	display: none;
+}
+body:has(#view-about:not([hidden])) .about-mark { display: block; }
+@media (max-width: 874px) {
+	.about-mark { --mark-w: 280px; }
+}
+.site-footer { position: relative; z-index: 1; }   /* the footer's text and icons sit over the monogram */
+.tools-intro {
+	font-size: clamp(18px, 1.76vw, 22.5px);   /* 1.5x the 15px body text at full width */
+	line-height: 1.4;
+	letter-spacing: -0.01em;
+	color: var(--mid-gray);
+}
+
+.tools-stats {
+	grid-column: 1;
+	list-style: none;
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));   /* one row of four */
+	column-gap: 24px;
+	row-gap: 32px;
+	margin-top: var(--stats-top);
+}
+.tools-stats .stat-label { max-width: none; }   /* one line where the column allows */
+.stat-num {
+	display: block;
+	font-size: var(--num-size, clamp(40px, 5.2vw, 66px));    /* the name's size at full width; set on the li */
+	line-height: 0.95;
+	font-weight: 800;
+	letter-spacing: -0.02em;
+	color: var(--accent);
+}
+.stat-label {
+	display: block;
+	margin-top: 2px;
+	max-width: 15em;
+	text-wrap: balance;   /* even lines, no single word left on the last */
+	font-size: 12px;          /* same size as the story stat labels (.tstat-label) */
+	line-height: 1.25;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.01em;
+	color: #999;
+}
+
+/* Tools built for: one row of app icons across the full page width,
+   under the headline and stats */
+.tools-apps { grid-column: 1 / -1; margin-top: var(--app-icon-top); }   /* 48px under the stats */
+/* "Applications served" and "Brands served": the "Other projects" heading
+   style, with the row 24px under it (Nov 25) */
+.tools-apps .tools-label, .tools-brands .tools-label { margin: 0; }
+/* Brands the tools served (Nov 25): a second labeled row under the app
+   icons, the same space above it. Each logo is a gray mask of Patrick's
+   SVG, sized so the logos look equally big: same area, so a square mark
+   is --brand-size tall and a wide wordmark is shorter (height = size /
+   the square root of its width-to-height ratio), never taller than
+   --brand-size. One row spread edge to edge; 3 x 3 on phones. */
+.tools-brands { grid-column: 1 / -1; margin-top: var(--app-icon-top); --brand-size: calc(var(--app-icon) * 56 / 62); --brand-max: calc(var(--brand-size) * 0.72); }   /* height cap: 40px at full width (Nov 25) */
+.brand-logos {
+	list-style: none;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-top: 24px;
+}
+.brand {
+	height: calc(min(var(--brand-max), calc(var(--brand-size) / sqrt(var(--r)))) * var(--scale, 1));   /* never taller than --brand-max; --scale trims a logo that reads too big */
+	aspect-ratio: var(--r);
+	background: #b3b3b3;   /* 30% black (Nov 25; was #999) */
+	-webkit-mask: var(--logo) center / contain no-repeat;
+	mask: var(--logo) center / contain no-repeat;
+}
+.brand[aria-label="Crocs"] { --scale: 0.85; }   /* 15% smaller (Patrick, Nov 25) */
+/* Optical centering (Nov 25): each logo's box is centered on the row, but
+   logos carry their weight off-center (Apple's leaf, the Nike swoosh's thin
+   tail, adidas' stripes over a small wordmark). Each one moves so its
+   visual center of mass, measured from the artwork, sits on the row's
+   center line; values are that offset as a share of the logo's height. */
+.brand { transform: translateY(var(--dy, 0%)); }
+.brand[aria-label="Under Armour"] { --dy: 3.6%; }
+.brand[aria-label="adidas"] { --dy: -11.2%; }
+.brand[aria-label="Crocs"] { --dy: 1.5%; }
+.brand[aria-label="Nike"] { --dy: -8.9%; }
+.brand[aria-label="Microsoft"] { --dy: -1.7%; }
+.brand[aria-label="Apple"] { --dy: -8.8%; }
+.brand[aria-label="Smith Optics"] { --dy: 3.2%; }
+.brand[aria-label="Sony"] { --dy: 2.4%; }
+.app-icons {
+	list-style: none;
+	display: grid;
+	grid-template-columns: repeat(12, var(--app-icon));   /* columns as wide as the icons, */
+	justify-content: space-between;                       /* so the outer icons sit on the content edges */
+	container-type: inline-size;                          /* lets each name size to its share of the row */
+	row-gap: 18px;
+	margin-top: 24px;   /* under its heading */
+}
+.app {   /* one app: icon over its name, like a dock or home screen */
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+}
+.app-icon {   /* the icon art carries its own rounded shape */
+	display: block;
+	width: var(--app-icon);
+	height: var(--app-icon);
+	filter: drop-shadow(var(--app-icon-shadow));   /* follows the icon's shape, not its box */
+}
+.app-name {   /* wider than its icon, centered under it */
+	width: calc(var(--app-icon) * 60 / 62);   /* the text area scales with the icon too, so names wrap the same at every size (Nov 25) */
+	margin-top: 6px;
+	font-size: calc(var(--app-icon) * 13 / 62);   /* always in proportion to the icon: 13px with the 62px icons at full width (Nov 25) */
+	line-height: 1.2;
+	font-weight: 500;    /* Medium (Nov 25; was 700) */
+	color: #999;   /* 40% black (Nov 25; was #666) */
+}
+
+
+/* Featured tools */
+.tools-featured { display: flex; flex-direction: column; gap: calc(var(--project-gap) * 0.6); }   /* 60% of the story gap, above each divider */
+/* A divider after the last story too, spaced like the ones between them (Nov 25) */
+.tools-featured { padding-bottom: calc(var(--project-gap) * 0.6); border-bottom: var(--rule-w) solid var(--rule); }
+/* 1px 10% black divider between the stories */
+.tool + .tool { padding-top: calc(var(--project-gap) * 0.6); border-top: var(--rule-w) solid var(--rule); }   /* and below it */
+
+/* Story on the left, stats and details on the right, half and half */
+.tool-body {
+	display: grid;
+	grid-template-columns: var(--tool-cols);
+	align-items: start;
+}
+.tool-story { grid-column: 1; }
+
+/* Side column, split like the opener: stats stacked on the left, the
+   details list on the right */
+.tool-side {
+	grid-column: 3 / -1;
+	display: grid;
+	grid-template-columns: subgrid;      /* stats in the stats column, details in the last */
+	align-items: start;
+	padding-top: 2px;    /* level with the top of the headline */
+}
+
+.tool-result { margin-bottom: 4px; }              /* tool name first, the headline tight below it */
+.tool-story .caption { margin-bottom: 18px; font-size: 20px; line-height: 1.1; }   /* then the story; subhead 20px (was 15px), line height 1.1 (was 1.35), Nov 25 */
+.tool-story .caption strong { margin-right: 0; letter-spacing: -0.01em; font-weight: 500; }   /* Medium (Nov 25; was 700) */   /* no caption spacer; slightly tight so the retail subhead fits one line */
+.result-num {
+	display: block;
+	font-size: clamp(26px, 2.7vw, 34px);   /* tool name: 34px from about 1260px up (was 29px, Nov 25) */
+	line-height: 1;
+	font-weight: 800;
+	letter-spacing: -0.02em;
+	color: var(--accent);   /* orange (Nov 25; was #999) */
+}
+
+.tool-text { font-size: clamp(17px, 1.56vw, 20px); line-height: 1.5; font-weight: 400; color: var(--mid-gray); }   /* Regular: 20px at the 1280px page (was 22px), shrinking with the window to 17px from about 1090px down, phones included (Nov 25) */
+
+/* Client / Application / Tools used: a plain list, label above entry */
+.tool-side > .tool-stats { grid-column: 1; }
+.tool-side > .tool-meta { grid-column: 3; }
+/* The whole right column (stats plus details, and the top stats plus the
+   Tools built for list) sits 40px left of its tracks, same width */
+.tool-side { position: relative; left: -40px; }
+.tool-meta {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;   /* 22px + the leading lost going from 1.4 to 1.2, whole pixels */
+	line-height: 1.2;
+	color: var(--mid-gray);
+}
+.tool-meta > p { display: flex; flex-direction: column; gap: 6px; }   /* space between each label and its entry */
+.tool-meta .meta-h { line-height: 1.1; }   /* label sits tight on its entry */
+.tool-meta [data-field] { font-size: 17px; }   /* entries 17px (Nov 25; were 15px); labels stay at 0.714 of 15px */
+/* Label caps sized so their cap height (0.706em) matches the entries'
+   x-height (0.504em): 0.504 / 0.706 = 0.714 of the text size */
+.meta-h { font-size: 0.714em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: #999; }
+
+/* Stats: fixed cells that reflow whole (never a wrapped line of text),
+   each topped with a rule */
+.tool-stats {
+	list-style: none;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);   /* stacked */
+	gap: 34px;
+}
+/* Each stat hangs off a vertical orange bar that runs number to label */
+/* Orange bar beside each stat, running from the top of the number's
+   capitals to the baseline of the label's last line. Font metrics
+   (Akzidenz-Grotesk Next, 700 and 800): ascent 1em, descent 0.35em, cap
+   height 0.706em. In a line box of height L, the caps start
+   ((L - 1.35) / 2 + 0.294) em below its top: 0.119em for the story numbers
+   (L = 1), 0.094em for the top numbers (L = 0.95). The 12px labels
+   (L = 1.25) have their baseline (-0.05 + 0.35) x 12 = 3.6px above the
+   bottom of their box. The browser draws the text about half a pixel
+   lower than that, so the bar ends 3px up to meet the drawn baseline.
+   Both ends are rounded to whole pixels (Patrick, Nov 25). */
+.tool-side { --num-size: clamp(28px, 3.9vw, 50px); }   /* story stat number size, set on the whole side column so the details can align to it (Nov 25) */
+.tstat { --cap-top: 0.119; }
+/* The first details label's caps start level with the top of the first
+   stat bar, at every width (Patrick, Nov 25): the bar starts 0.119 of the
+   number size down; the label's caps start about 2px into its line. */
+.tool-side > .tool-meta { padding-top: round(calc(var(--num-size) * 0.119 - 2px), 1px); }
+.tools-stats > li { --num-size: clamp(45px, 5.86vw, 75px); --cap-top: 0.094; }   /* halfway between 66px and 84px (Nov 25) */
+/* Opener stat labels 13.5px, halfway between 12px and 15px (Nov 25) */
+.tools-stats .stat-label { font-size: 13.5px; }
+.tstat, .tools-stats > li { position: relative; padding-left: 14px; }   /* 2px bar + 12px gap */
+.tstat::before, .tools-stats > li::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	width: 2px;
+	top: round(calc(var(--num-size) * var(--cap-top)), 1px);
+	bottom: 3px;
+	background: var(--accent);
+}
+/* Stat animation (ui.js adds .stats-anim): bars start flat and rise from
+   the bottom when their stat comes into view (.is-counted) */
+.stats-anim .tstat::before,
+.stats-anim .tools-stats > li::before {
+	transform: scaleY(0);   /* flat at once, no transition */
+	transform-origin: 50% 100%;
+}
+.stats-anim .tstat.is-counted::before,
+.stats-anim .tools-stats > li.is-counted::before {
+	transform: scaleY(1);   /* grows from 0 to full height with the count */
+	transition: transform var(--stat-bar-ms, 800ms) cubic-bezier(0.33, 1, 0.68, 1) var(--stat-delay, 0ms);   /* ease-out cubic, the counter's curve */
+}
+/* Numbers are not drawn at all until their count starts (ui.js adds .is-live) */
+.stats-anim .stat-num:not(.is-live),
+.stats-anim .tstat-num:not(.is-live) { visibility: hidden; }
+/* The + waits until its number has finished rolling, then fades in */
+.stats-anim .plus { transition: opacity 200ms ease-out; }
+.stats-anim .is-rolling .plus { opacity: 0; transition: none; }
+.tstat-num {
+	display: block;
+	font-size: var(--num-size, clamp(28px, 3.9vw, 50px));   /* set on .tstat */
+	line-height: 1;
+	font-weight: 800;
+	letter-spacing: -0.02em;
+	color: var(--accent);
+	white-space: nowrap;
+}
+.tstat-label {
+	display: block;
+	margin-top: 0;   /* label right under the number (was 6px) */
+	font-size: 12px;          /* same size as the top stat labels (.stat-label) */
+	line-height: 1.25;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: #999;
+}
+/* Plus signs in stat numbers: 60% size, raised so they stay centered
+   on the digits instead of sinking to the baseline */
+.plus {
+	position: relative;
+	top: -0.22em;
+	font-size: 0.6em;
+}
+/* The 1 in stat numbers: every digit in this font is the same width, so
+   the narrow 1 carries extra space on both sides. Trim about half of it;
+   the full trim made 11 touch, since straight stems need more room than
+   round digits */
+.one { margin: 0 -0.08em 0 -0.045em; }
+/* Placeholder stat: dashed outline so it can't pass as a real number */
+.tstat.is-placeholder .tstat-num {
+	opacity: 0.45;
+	outline: 1px dashed var(--accent);
+	outline-offset: 3px;
+}
+
+.tool-link {
+	display: inline-block;
+	margin-top: 16px;
+	font-weight: 700;
+	color: var(--mid-gray);
+	text-decoration: none;
+}
+.tool-link:hover { color: var(--black); }
+
+/* Toolbox grid */
+.tools-label {
+	/* A section heading in the tool names' size and weight, gray, sentence
+	   case (Nov 25; was 12px caps). The same space under the divider as the
+	   stories have. */
+	margin: calc(var(--project-gap) * 0.6) 0 24px;
+	font-size: clamp(26px, 2.7vw, 34px);
+	line-height: 1;
+	font-weight: 800;
+	letter-spacing: -0.02em;
+	color: #ccc;   /* 20% black (Nov 26; was 30%, before that #999) */
+}
+/* Intro under "Other projects": the story text style, then the tiles (Nov 25) */
+.tools-label-text { max-width: 36em; margin: -8px 0 40px; font-size: clamp(17px, 1.56vw, 20px); line-height: 1.5; color: var(--mid-gray); }
+
+/* Four columns; each group is a region two columns wide: its label, then
+   as many rows of tiles as it needs. dense lets a short region fill in
+   beside a tall one. Subgrid keeps every tile on the same tracks, so
+   tiles line up across regions. */
+.tools-grid {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	grid-auto-flow: row dense;
+	gap: 40px 24px;                       /* between regions */
+}
+.tool-region {
+	grid-column: span 2;
+	grid-row: span var(--region-rows, 2);
+	display: grid;
+	grid-template-columns: subgrid;
+	grid-template-rows: subgrid;
+	gap: 12px;                            /* between tiles in a region */
+}
+.tool-region-title {
+	grid-column: 1 / -1;
+	align-self: end;
+	font-size: 13px;
+	line-height: 1.2;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	color: var(--group-color);
+}
+/* Each tile is filled with its group's color, with white text (colors
+   are dark enough for 5:1 contrast) */
+.tile {
+	background: var(--group-color, #888);
+	padding: 18px 20px 20px;   /* more room for the larger type (Nov 25; was 14px 16px 16px) */
+	color: #fff;
+	border-radius: 12px;
+	corner-shape: superellipse(1.23);   /* squircle corners; plain rounded where unsupported */
+	min-height: var(--tile-h, 0);        /* the tallest tile's height, set by ui.js */
+}
+.tile .tile-apps, .tile .tile-name, .tile .tile-desc { color: #fff; }
+.tile .tile-apps { opacity: 0.75; }
+.tile-apps {
+	font-size: 12px;   /* Nov 25; was 10px, now the stat labels' size */
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: #999;
+}
+.tile-name { margin-top: 4px; font-size: 20px; line-height: 1.2; font-weight: 700; color: var(--mid-gray); }   /* 20px like the story subheads (Nov 25; was 15px) */
+.tile-desc { margin-top: 4px; font-size: 16px; line-height: 1.4; color: #999; }   /* Nov 25; was 13px */
+
+/* Footer (Nov 25): the gray divider 60px under each page's content, then
+   one row 24px under it: the disclaimer on the left (Case Studies only)
+   and the contact icons on the right; 72px of white under it. */
+.site-footer { padding: 60px var(--gutter) 72px; }
+.page-end { height: var(--rule-w); margin: 0; border: 0; background: var(--rule); }
+.footer-row { display: flex; align-items: flex-start; gap: 40px; margin-top: 24px; }
+
+/* Close */
+
+@media (max-width: 874px) {
+	.tools-grid { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+	.tool-region { grid-column: auto; grid-row: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: none; gap: 10px; }
+	.tools-opener { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+	.tools-lead, .tool-story { grid-column: auto; }
+	.tools-stats { grid-column: auto; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; }   /* 2x2, read across */
+	.tools-stats > li:nth-child(even) { grid-column: 2; }
+	/* Numbers sized so "5000+" (about 2.9em wide) fills its half of the row,
+	   up to the desktop maximum: ~49px on a 375px phone, 66px from ~480px */
+	.tools-stats > li { --num-size: min(75px, calc(((100vw - 2 * var(--gutter) - 24px) / 2 - 15px) / 2.9)); }
+	.app-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }   /* names hidden, still read aloud */
+	/* Headline: always three lines, sized so the longest ("help small teams",
+	   about 7.8em) fills the width at every phone size, less 10px on the right */
+	.tools-intro strong { font-size: calc((100cqi - 10px) / 7.8); }
+	.br-phone { display: inline; }
+	.br-desk { display: none; }
+	.tools-apps { margin-top: 12px; }
+	.app-icons { margin-top: 24px; }   /* 24px under each heading, like desktop */
+	.tools-brands { margin-top: 12px; }   /* 48px above in all, like desktop */
+	.tools-rule { margin: 0 0 44px; }   /* the opener's 36px gap above it */
+	.tools-stats { row-gap: 28px; margin-top: 0; }
+	.tool-body { grid-template-columns: minmax(0, 1fr); row-gap: 24px; }
+	.tool-side { margin-top: 4px; grid-column: auto; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 28px; }
+	.tool-side > .tool-meta { grid-column: 2; }
+	.tool-side { left: 0; }
+	/* Story stat numbers: 50px like desktop, or smaller where "2000+" (about
+	   2.9em, plus the 14px bar inset) would overrun its half: ~45px at 375px */
+	.tool-side { --num-size: min(50px, calc(((100vw - 2 * var(--gutter) - 28px) / 2 - 14px) / 2.9)); }
+}
+
+
+/* 600 to 874px (Patrick, Nov 25): the one row of 12 app icons keeps 12px
+   gaps and the icons grow to fill the width, instead of small icons with
+   wide gaps. The logos keep their own size, from the old icon size. */
+@media (min-width: 600px) and (max-width: 874px) {
+	.tools-apps { --app-icon: calc((100vw - 2 * var(--gutter) - 11 * 12px) / 12); }
+	.app-icons { column-gap: 12px; }
+	.tools-brands { --brand-size: calc(min(62px, calc((100vw - 2 * var(--gutter)) * 0.0517)) * 56 / 62); }
+}
+
+/* Small phones only (599px and down; Patrick, Nov 25): the app icons go to
+   two full-width rows of six and the logos to two left-aligned rows (four,
+   then five). Above 599px they keep the desktop single rows. */
+@media (max-width: 599px) {
+	.app-icons { grid-template-columns: repeat(6, var(--app-icon)); justify-content: space-between; row-gap: 20px; }   /* 6x2, the row still runs the full width; the space left by the smaller icons goes between them (Nov 25) */
+	.tools-apps { --app-icon: calc((100vw - 2 * var(--gutter) - 5 * 12px) / 6 * 0.9); }   /* six across, 10% smaller than the size that filled the row with 12px gaps (Nov 25) */
+	/* Logos sized so the longer row (Microsoft to Sony) runs the full width
+	   with its four 24px gaps: that row is 7.92 times --brand-size wide
+	   (each logo is size x the square root of its width:height ratio, or
+	   0.72 x size x ratio where the height cap applies); 7.95 leaves a hair
+	   of room so the row never wraps (Nov 25) */
+	.tools-brands { --brand-size: calc((100vw - 2 * var(--gutter) - 4 * 24px) / 7.95); }
+	/* Two rows, not a grid (Patrick, Nov 25): four logos, then five, each row
+	   left-aligned. The container's ::before is a full-width flex item
+	   ordered between the two groups, so it forces the break. */
+	.brand-logos { flex-wrap: wrap; justify-content: flex-start; column-gap: 24px; align-items: center; row-gap: 14px; margin-top: 24px; }   /* left-aligned, 24px between logos, not spread (Nov 25); 14px twice = 28px between rows */
+	/* The first row (Under Armour to Nike) gets its own, larger size so it
+	   also runs the full width with its three 24px gaps: 5.76 x size wide
+	   with Crocs at 85% (5.79 leaves a hair of room) (Nov 25) */
+	.brand:nth-child(-n+4) { order: 1; --brand-size: calc((100vw - 2 * var(--gutter) - 3 * 24px) / 5.79); --brand-max: calc(var(--brand-size) * 0.72); }
+	.brand-logos::before { content: ""; order: 2; flex-basis: 100%; height: 0; }
+	.brand:nth-child(n+5) { order: 3; }   /* Apple starts the second row (Nov 25) */
+}
+
+/* About
+   ------------------------------------------------------------------------- */
+
+/* Bottom breathing room under the last project */
+.projects { padding-bottom: calc(var(--project-gap) - 20px); }
+
+
+/* Phones
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 874px) {
+	/* Name stacks on two lines; the nav stays top right, level with the
+	   x-height of "Patrick". "Hennessey" is about 4.95 times the font size
+	   wide. */
+	:root { --gutter: 30px; }
+
+	/* A little more air under the caption on phones */
+	.caption { margin-bottom: 14px; }
+	/* Three links won't fit beside the name on a phone, so they stack on
+	   the right, Production / Automation / About, leaving the name room. */
+	.site-nav {
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 8px;
+	}
+	.site-header {
+		--nav-room: 104px;       /* stacked nav (~88px) + 16px gap */
+		padding-top: var(--gutter);
+		gap: 16px;
+		/* Floor: never smaller than at a 340px-wide screen. The whole name is
+		   90% of the size that fills the column (Patrick, Nov 25). */
+		--name-size: calc(0.9 * max(
+			calc((340px - 2 * var(--gutter) - var(--nav-room)) / 4.95),
+			min(65.8px, calc((100vw - 2 * var(--gutter) - var(--nav-room)) / 4.95))
+		));
+	}
+	/* Phones (Patrick's mockup, Nov 25): the caps of CASE STUDIES line up
+	   with the x-height of "Patrick", the same rule as the desktop nav: the
+	   x-height sits half a name line minus 0.19em below the top of the name;
+	   the nav's caps start 3.82px into a link. Links 8px apart. */
+	.site-nav { padding-top: round(calc(round(calc(var(--name-size) * 0.9), 1px) / 2 - var(--name-size) * 0.19 - 3.82px), 1px); margin-top: 0; }
+	.about-follow { font-size: calc((100cqi - 10px) / 7.8); }
+	.identity-name .wm-word { display: block; }
+	/* Pull "Hennessey" up under "Patrick" (only between the two lines, so
+	   the subhead keeps its spacing). Whole pixels to avoid shimmer. */
+	.identity-name .wm-word + .wm-word {
+		margin-top: -0.1em;
+		margin-top: round(calc(var(--name-size) * -0.1), 1px);
+	}
+	/* The subhead keeps to one line and may run wider than the name column;
+	   it sits below the nav, so the two never meet. */
+	/* 90% of the desktop 12px, with the name (Patrick, Nov 25) */
+	.identity-sub { white-space: nowrap; font-size: 10.8px; }
+}
+
+
+/* Below 500px the subhead breaks after the ampersand, onto two lines */
+@media (max-width: 499px) {
+	.identity-sub .sub-line2 { display: block; }
+}
+
+
+/* Very small phones: the name and subhead are small enough that their
+   desktop optical offsets overshoot, so use smaller ones. */
+@media (max-width: 479px) {
+	.identity-name { margin-left: -1px; }
+	.identity-sub { margin-left: 0; }
+}
+
+
+/* Where a project's caption rests under the pinned header: the same spot
+   the first one sits at the top of the page. ui.js's scroll detents settle
+   projects here; --header-h is the header's height, kept current by ui.js. */
+html { scroll-padding-top: calc(var(--header-h, 120px) + 60px - var(--header-pad-bottom)); }
+
+
+/* Page switch: the new page's content fades in (driven by ui.js). The
+   header isn't part of it, so the nav never loses its pointer cursor. */
+@keyframes view-in { from { opacity: 0; } }
+.view.view-enter { animation: view-in var(--fade-ms) ease; }
+
+
 @media (prefers-reduced-motion: reduce) {
-	:root { --fade-ms: 0ms; --nav-fade-ms: 0ms; --nav-scoot-ms: 0ms; }
+	.nav-link { transition: none; }
+	.view.view-enter { animation: none; }
 }
