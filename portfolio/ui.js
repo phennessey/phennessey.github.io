@@ -67,18 +67,18 @@
 	});
 
 
-	// --- Views: Tools (default), Gallery and About -------------------------
+	// --- Views: Case Studies (default), Gallery and About ------------------
 	//
-	// The URL hash picks the view (#tools, #gallery, #about), so the
+	// The URL hash picks the view (#case-studies, #gallery, #about), so the
 	// back button and shared links work. Anything else, including no hash,
-	// shows Tools (old #case-studies links land here too).
+	// shows Case Studies (old #tools links land here too).
 
 	var views = document.querySelectorAll('.view');
 	var navLinks = document.querySelectorAll('.nav-link');
 
 	function showView() {
 		// Old names still work: #brand-work, #production and #work (Gallery); #automation
-		// and #case-studies fall through to Tools, the default. Internally Gallery is
+		// and #tools fall through to Case Studies, the default. Internally Gallery is
 		// still data-view="production"
 		var name = (location.hash === '#gallery' || location.hash === '#brand-work' || location.hash === '#production' || location.hash === '#work') ? 'production'
 			: location.hash === '#about' ? 'about'
@@ -413,12 +413,12 @@
 		  resultNum: 'A shared horizontal calendar for planning every milestone',
 		  stats: [ { num: '1000+', label: 'campaign milestones scheduled' }, { num: '4', label: 'years of retail planned' } ],
 		  story: 'Campaign scheduling used to live in a week-by-week grid calendar, which made it hard to see how campaigns overlapped. I proposed a replacement, then built and managed it in Google Sheets: one continuous timeline per year, with a row for every campaign. The team switched and never looked back.' },
-		{ name: 'LED Panel Asset Generator', client: 'adidas', application: 'Video asset slicing for LED panels', tools: 'AppleScript, FFmpeg',
-		  resultNum: 'Production slashed from hours to seconds',
+		{ name: 'LED Panel Asset\u00a0Generator', client: 'adidas', application: 'Video asset slicing for LED panels', tools: 'AppleScript, FFmpeg',
+		  resultNum: 'Production slashed from hours to\u00a0seconds',
 		  stats: [ { num: '360', label: 'times faster' }, { num: '100', label: 'hours saved' } ],
 		  story: 'Video for adidas LED windows had to go through a supplied After Effects template, which took hours to set up when dozens of assets had to be produced. This tool took the MP4 directly and re-encoded it into the slices each window needed \u2013 no After Effects required.' },
-		{ name: 'Box Link Tools for Slack', client: 'Cinco Design', application: 'Box file link sharing and opening in Slack', tools: 'AppleScript, Bash, Claude Code',
-		  resultNum: 'Finally: One-click Box path sharing in macOS',
+		{ name: 'Box Link Tools for\u00a0Slack', client: 'Cinco Design', application: 'Box file link sharing and opening in Slack', tools: 'AppleScript, Bash, Claude Code',
+		  resultNum: 'Finally: One-click Box path sharing in\u00a0macOS',
 		  stats: [ { num: '140+', label: 'hours saved per year' }, { num: '40', label: 'daily users' } ],
 		  story: 'Sharing cloud-based links across teams has always been difficult. Links only open directly in the user\u2019s browser \u2014 rather than their local cloud storage directory \u2014 requiring manual navigation every time. I created a tool that handled link generation and opening which allowed our entire studio to generate sharable links that open the file or folder path directly in their Finder with one click.' },
 		{ name: 'Campaign Image Upscaling', client: 'Under Armour, adidas', application: 'Cross-campaign image upscaling', tools: 'AppleScript, Photoshop',

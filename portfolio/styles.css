@@ -100,6 +100,8 @@ a { color: inherit; }
 .footer-end { flex: none; margin-left: auto; }
 .footer-copy { font-size: 13px; line-height: 1.35; font-weight: 700; color: #999; }   /* ©2026 line on its own (Nov 25) */
 .footer-legal { max-width: calc(44em + 60px); font-size: 13px; line-height: 1.35; color: #999; }   /* the legal line and the statistics note, one paragraph, every page */
+/* The statistics note belongs to Case Studies only (Nov 26) */
+body:not(:has(#view-automation:not([hidden]))) .legal-stats { display: none; }
 .header-icon { display: block; width: var(--header-icon); height: var(--header-icon); color: #999; transition: color 150ms ease; }
 .header-icon svg { display: block; width: 100%; height: 100%; }
 .header-icon:hover { color: var(--black); }
@@ -284,7 +286,8 @@ main {
    tools as a grid of tiles. */
 
 .tools {
-	padding-top: calc(60px - var(--header-pad-bottom));   /* matches Production */
+	--tools-top: calc(60px - var(--header-pad-bottom));
+	padding-top: var(--tools-top);   /* matches Production */
 	padding-bottom: 0;   /* the footer does the bottom spacing (Nov 25) */
 	font-size: var(--caption-size);
 	line-height: 1.35;
@@ -300,7 +303,8 @@ main {
 }
 .tools-lead { grid-column: 1; container-type: inline-size; }   /* the headline sizes to this width */
 /* Headline line breaks: two lines on desktop, three on phones */
-.br-phone { display: none; }
+.br-phone, .br-small { display: none; }
+.br-desk { display: inline; }
 
 /* Orange rule between the opener and the featured tools, full width,
    with rounded ends */
@@ -364,19 +368,19 @@ main {
 	z-index: -1;
 	--mark-w: 467px;
 	right: round(calc(var(--mark-w) * -0.1), 1px);
-	bottom: round(calc(var(--mark-w) * -0.227), 1px);   /* 106px at 467px wide */
+	bottom: round(calc(var(--mark-w) * 1181 / 1019 * -0.15), 1px);   /* at most 15% of its height below the page bottom, at every width (Nov 26; was 22.7% of its width, about 20%) */
 	width: var(--mark-w);
 	height: auto;
-	opacity: 0.2;
+	opacity: 0.15;   /* Nov 26; was 0.2 */
 	pointer-events: none;
 	user-select: none;
 	display: none;
 }
 body:has(#view-about:not([hidden])) .about-mark { display: block; }
 @media (max-width: 874px) {
-	.about-mark { --mark-w: 280px; }
+	.about-mark { --mark-w: 320px; }   /* 320px on phones, halfway between 280 and 360 (Nov 26) */
 }
-.site-footer { position: relative; z-index: 1; }   /* the footer's text and icons sit over the monogram */
+.site-footer { position: relative; }   /* holds the monogram; no z-index, so the monogram (z-index -1) stays behind all text on the page */
 .tools-intro {
 	font-size: clamp(18px, 1.76vw, 22.5px);   /* 1.5x the 15px body text at full width */
 	line-height: 1.4;
@@ -421,42 +425,17 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 /* "Applications served" and "Brands served": the "Other projects" heading
    style, with the row 24px under it (Nov 25) */
 .tools-apps .tools-label, .tools-brands .tools-label { margin: 0; }
-/* Brands the tools served (Nov 25): a second labeled row under the app
-   icons, the same space above it. Each logo is a gray mask of Patrick's
-   SVG, sized so the logos look equally big: same area, so a square mark
-   is --brand-size tall and a wide wordmark is shorter (height = size /
-   the square root of its width-to-height ratio), never taller than
-   --brand-size. One row spread edge to edge; 3 x 3 on phones. */
-.tools-brands { grid-column: 1 / -1; margin-top: var(--app-icon-top); --brand-size: calc(var(--app-icon) * 56 / 62); --brand-max: calc(var(--brand-size) * 0.72); }   /* height cap: 40px at full width (Nov 25) */
-.brand-logos {
-	list-style: none;
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
+.tools-brands { grid-column: 1 / -1; margin-top: var(--app-icon-top); }
+/* The brands (Nov 26): Patrick's designed arrangement of all nine logos,
+   one SVG, drawn in 30% black through a CSS mask and scaled to the full
+   content width. One line above 599px, two lines at 599px and below. */
+.brand-art {
 	margin-top: 24px;
+	aspect-ratio: 2315.54 / 98.14;   /* img/logos_1-line.svg */
+	background: #b3b3b3;
+	-webkit-mask: url(img/logos_1-line.svg) center / contain no-repeat;
+	mask: url(img/logos_1-line.svg) center / contain no-repeat;
 }
-.brand {
-	height: calc(min(var(--brand-max), calc(var(--brand-size) / sqrt(var(--r)))) * var(--scale, 1));   /* never taller than --brand-max; --scale trims a logo that reads too big */
-	aspect-ratio: var(--r);
-	background: #b3b3b3;   /* 30% black (Nov 25; was #999) */
-	-webkit-mask: var(--logo) center / contain no-repeat;
-	mask: var(--logo) center / contain no-repeat;
-}
-.brand[aria-label="Crocs"] { --scale: 0.85; }   /* 15% smaller (Patrick, Nov 25) */
-/* Optical centering (Nov 25): each logo's box is centered on the row, but
-   logos carry their weight off-center (Apple's leaf, the Nike swoosh's thin
-   tail, adidas' stripes over a small wordmark). Each one moves so its
-   visual center of mass, measured from the artwork, sits on the row's
-   center line; values are that offset as a share of the logo's height. */
-.brand { transform: translateY(var(--dy, 0%)); }
-.brand[aria-label="Under Armour"] { --dy: 3.6%; }
-.brand[aria-label="adidas"] { --dy: -11.2%; }
-.brand[aria-label="Crocs"] { --dy: 1.5%; }
-.brand[aria-label="Nike"] { --dy: -8.9%; }
-.brand[aria-label="Microsoft"] { --dy: -1.7%; }
-.brand[aria-label="Apple"] { --dy: -8.8%; }
-.brand[aria-label="Smith Optics"] { --dy: 3.2%; }
-.brand[aria-label="Sony"] { --dy: 2.4%; }
 .app-icons {
 	list-style: none;
 	display: grid;
@@ -515,14 +494,14 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 
 .tool-result { margin-bottom: 4px; }              /* tool name first, the headline tight below it */
 .tool-story .caption { margin-bottom: 18px; font-size: 20px; line-height: 1.1; }   /* then the story; subhead 20px (was 15px), line height 1.1 (was 1.35), Nov 25 */
-.tool-story .caption strong { margin-right: 0; letter-spacing: -0.01em; font-weight: 500; }   /* Medium (Nov 25; was 700) */   /* no caption spacer; slightly tight so the retail subhead fits one line */
+.tool-story .caption strong { margin-right: 0; letter-spacing: -0.01em; font-weight: 500; color: #999; }   /* 40% black, lighter than the #666 title (Nov 26) */   /* Medium (Nov 25; was 700) */   /* no caption spacer; slightly tight so the retail subhead fits one line */
 .result-num {
 	display: block;
 	font-size: clamp(26px, 2.7vw, 34px);   /* tool name: 34px from about 1260px up (was 29px, Nov 25) */
 	line-height: 1;
 	font-weight: 800;
 	letter-spacing: -0.02em;
-	color: var(--accent);   /* orange (Nov 25; was #999) */
+	color: var(--mid-gray);   /* #666 dark gray (Nov 26; was orange, before that #999) */
 }
 
 .tool-text { font-size: clamp(17px, 1.56vw, 20px); line-height: 1.5; font-weight: 400; color: var(--mid-gray); }   /* Regular: 20px at the 1280px page (was 22px), shrinking with the window to 17px from about 1090px down, phones included (Nov 25) */
@@ -542,7 +521,7 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 }
 .tool-meta > p { display: flex; flex-direction: column; gap: 6px; }   /* space between each label and its entry */
 .tool-meta .meta-h { line-height: 1.1; }   /* label sits tight on its entry */
-.tool-meta [data-field] { font-size: 17px; }   /* entries 17px (Nov 25; were 15px); labels stay at 0.714 of 15px */
+.tool-meta [data-field] { font-size: 15px; }   /* entries 15px (Nov 26; were 17px); labels stay at 0.714 of 15px */
 /* Label caps sized so their cap height (0.706em) matches the entries'
    x-height (0.504em): 0.504 / 0.706 = 0.714 of the text size */
 .meta-h { font-size: 0.714em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: #999; }
@@ -656,7 +635,7 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 	   case (Nov 25; was 12px caps). The same space under the divider as the
 	   stories have. */
 	margin: calc(var(--project-gap) * 0.6) 0 24px;
-	font-size: clamp(26px, 2.7vw, 34px);
+	font-size: min(28px, calc((100vw - 2 * var(--gutter)) / 14.6));   /* 28px, or smaller on narrow phones so "Used on work for these brands:" (about 14.45em) stays on one line (Nov 26) */
 	line-height: 1;
 	font-weight: 800;
 	letter-spacing: -0.02em;
@@ -738,8 +717,8 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 	/* Headline: always three lines, sized so the longest ("help small teams",
 	   about 7.8em) fills the width at every phone size, less 10px on the right */
 	.tools-intro strong { font-size: calc((100cqi - 10px) / 7.8); }
+	.br-desk, .br-small { display: none; }
 	.br-phone { display: inline; }
-	.br-desk { display: none; }
 	.tools-apps { margin-top: 12px; }
 	.app-icons { margin-top: 24px; }   /* 24px under each heading, like desktop */
 	.tools-brands { margin-top: 12px; }   /* 48px above in all, like desktop */
@@ -752,40 +731,77 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 	/* Story stat numbers: 50px like desktop, or smaller where "2000+" (about
 	   2.9em, plus the 14px bar inset) would overrun its half: ~45px at 375px */
 	.tool-side { --num-size: min(50px, calc(((100vw - 2 * var(--gutter) - 28px) / 2 - 14px) / 2.9)); }
+	/* Phones (Nov 26, kept): the story's stats side by side on one row, then the
+	   details below them */
+	.tool-side { grid-template-columns: minmax(0, 1fr); row-gap: 22px; }   /* details 22px under the stats (Nov 26) */
+	.tool-side > .tool-stats { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 28px; }
+	/* Details as three tight rows (Nov 26): each label left-aligned, its
+	   entry following right after it on the same baseline (no shared column),
+	   8px apart, 2px between rows */
+	.tool-side > .tool-meta { grid-column: 1; padding-top: 0; display: flex; flex-direction: column; row-gap: 2px; }
+	.tool-meta > p { display: flex; flex-direction: row; align-items: baseline; gap: 8px; }
+	.tool-meta > p > .meta-h { flex: none; }
+	.tool-meta [data-field] { font-size: 15px; line-height: 1.3; }   /* smaller entries so the three columns breathe (Nov 26; were 17px) */
+	/* Story type on phones (Nov 26): the tool name at its full desktop size
+	   (34px; it was down at 26px), the subhead a step smaller (18px; was
+	   20px), so the name clearly leads over the subhead and the 17px story */
+	.result-num { font-size: 34px; }
+	.tool-result { margin-bottom: 10px; }   /* 10px from the tool name to the subhead on phones (Nov 26) */
+	.tile { min-height: 0; }   /* stacked tiles take their own height on phones, not the tallest tile's (Nov 26) */
+	.site-footer { padding-bottom: var(--gutter); }   /* the same 30px under the footer text as at the sides, on phones (Nov 26; 72px on desktop) */
+	.about-text { margin-top: 24px; }   /* less space from "a big team." to the bio on phones (Nov 26; 48px on desktop) */
+	/* The headline's capitals never start inside the white fade under the
+	   header (Nov 26): its top margin makes up whatever the page's top
+	   padding leaves short of the fade (caps start 0.094em into a 0.95 line) */
+	.tools-intro strong { margin-top: max(0px, calc(var(--header-fade) - var(--tools-top) - 0.094em)); }
+	.tool-story .caption { font-size: 18px; }
 }
 
 
 /* 600 to 874px (Patrick, Nov 25): the one row of 12 app icons keeps 12px
    gaps and the icons grow to fill the width, instead of small icons with
-   wide gaps. The logos keep their own size, from the old icon size. */
+   wide gaps. */
 @media (min-width: 600px) and (max-width: 874px) {
 	.tools-apps { --app-icon: calc((100vw - 2 * var(--gutter) - 11 * 12px) / 12); }
 	.app-icons { column-gap: 12px; }
-	.tools-brands { --brand-size: calc(min(62px, calc((100vw - 2 * var(--gutter)) * 0.0517)) * 56 / 62); }
 }
 
 /* Small phones only (599px and down; Patrick, Nov 25): the app icons go to
-   two full-width rows of six and the logos to two left-aligned rows (four,
-   then five). Above 599px they keep the desktop single rows. */
+   two full-width rows of six and the logos to the two-line arrangement. Above 599px they keep the desktop single rows. */
 @media (max-width: 599px) {
+	/* Headline on four lines (Patrick, Nov 26): "I make tools / to help /
+	   small teams / do big work.", sized so the longest line ("do big work.",
+	   about 5.66em) fills the width less 10px on the right */
+	#view-automation .br-desk, #view-automation .br-phone { display: none; }
+	#view-automation .br-small { display: inline; }   /* Case Studies only; About keeps its three-line phone headline */
+	#view-automation .tools-intro strong { font-size: calc((100cqi - 10px) / 6.2); }   /* about 8% under the size that filled the width (Nov 26) */
+	/* Less space around the headline on small phones (Nov 26): 20px less
+	   above it, and no margin under it (the opener's 36px gap remains) */
+	.tools { --tools-top: calc(40px - var(--header-pad-bottom)); }
+	/* A shorter fade under the header here, so the headline can sit higher
+	   and still start below it */
+	:root { --header-fade: 32px; }
+	#view-automation .tools-intro strong { margin-bottom: 0; }   /* Case Studies only; About keeps its gap above the orange line */
+	.tool-meta [data-field] { font-size: 13px; }   /* smaller detail entries on small phones (Nov 26; 15px up to 874px) */
+	/* Tighter vertical spacing through the opener on small phones (Nov 26):
+	   24px between its parts (was 36px), 20px between the two stat rows (was
+	   28px), 32px above each section heading (was 48px), 16px under each
+	   heading (was 24px), 32px under the orange rule (was 44px) */
+	.tools-opener { gap: 24px; }
+	.tools-stats { row-gap: 20px; }
+	.tools-apps, .tools-brands { margin-top: 8px; }
+	.app-icons, .brand-art { margin-top: 16px; }
+	.tools-rule { margin: 16px 0 40px; }   /* 40px above (with the 24px gap) and below the orange rule (Nov 26; was 24 and 32) */
+	/* Top stats smaller here so they don't outweigh the headline (Nov 26):
+	   72% of the size that filled their half of the row */
+	.tools-stats > li { --num-size: calc(((100vw - 2 * var(--gutter) - 24px) / 2 - 15px) / 2.9 * 0.72); }
 	.app-icons { grid-template-columns: repeat(6, var(--app-icon)); justify-content: space-between; row-gap: 20px; }   /* 6x2, the row still runs the full width; the space left by the smaller icons goes between them (Nov 25) */
-	.tools-apps { --app-icon: calc((100vw - 2 * var(--gutter) - 5 * 12px) / 6 * 0.9); }   /* six across, 10% smaller than the size that filled the row with 12px gaps (Nov 25) */
-	/* Logos sized so the longer row (Microsoft to Sony) runs the full width
-	   with its four 24px gaps: that row is 7.92 times --brand-size wide
-	   (each logo is size x the square root of its width:height ratio, or
-	   0.72 x size x ratio where the height cap applies); 7.95 leaves a hair
-	   of room so the row never wraps (Nov 25) */
-	.tools-brands { --brand-size: calc((100vw - 2 * var(--gutter) - 4 * 24px) / 7.95); }
-	/* Two rows, not a grid (Patrick, Nov 25): four logos, then five, each row
-	   left-aligned. The container's ::before is a full-width flex item
-	   ordered between the two groups, so it forces the break. */
-	.brand-logos { flex-wrap: wrap; justify-content: flex-start; column-gap: 24px; align-items: center; row-gap: 14px; margin-top: 24px; }   /* left-aligned, 24px between logos, not spread (Nov 25); 14px twice = 28px between rows */
-	/* The first row (Under Armour to Nike) gets its own, larger size so it
-	   also runs the full width with its three 24px gaps: 5.76 x size wide
-	   with Crocs at 85% (5.79 leaves a hair of room) (Nov 25) */
-	.brand:nth-child(-n+4) { order: 1; --brand-size: calc((100vw - 2 * var(--gutter) - 3 * 24px) / 5.79); --brand-max: calc(var(--brand-size) * 0.72); }
-	.brand-logos::before { content: ""; order: 2; flex-basis: 100%; height: 0; }
-	.brand:nth-child(n+5) { order: 3; }   /* Apple starts the second row (Nov 25) */
+	.tools-apps { --app-icon: min(56px, calc((100vw - 2 * var(--gutter)) / 8.5)); }   /* six across, each gap at least half an icon wide, icons never over 56px (Nov 26) */
+	.brand-art {   /* img/logos_2-line.svg */
+		aspect-ratio: 1421.52 / 239.59;
+		-webkit-mask-image: url(img/logos_2-line.svg);
+		mask-image: url(img/logos_2-line.svg);
+	}
 }
 
 /* About
@@ -824,11 +840,17 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 			min(65.8px, calc((100vw - 2 * var(--gutter) - var(--nav-room)) / 4.95))
 		));
 	}
-	/* Phones (Patrick's mockup, Nov 25): the caps of CASE STUDIES line up
-	   with the x-height of "Patrick", the same rule as the desktop nav: the
-	   x-height sits half a name line minus 0.19em below the top of the name;
-	   the nav's caps start 3.82px into a link. Links 8px apart. */
-	.site-nav { padding-top: round(calc(round(calc(var(--name-size) * 0.9), 1px) / 2 - var(--name-size) * 0.19 - 3.82px), 1px); margin-top: 0; }
+	/* Phones (Patrick's mockup, Nov 26): the stacked links span the name.
+	   CASE STUDIES' caps start level with the caps of "Patrick" (0.069em below
+	   the top of the name) and ABOUT sits on the "Hennessey" baseline (1.575em
+	   below it). A link's caps start 3.82px into its 17.55px line and its
+	   baseline is 13px in, so the first cap to the last baseline is 44.28px
+	   plus the two gaps; the gaps take up the rest (at least 2px). */
+	.site-nav {
+		padding-top: 0;
+		margin-top: round(calc(var(--name-size) * 0.069 - 3.82px), 1px);
+		gap: round(max(2px, calc((var(--name-size) * 1.506 - 44.28px) / 2)), 1px);
+	}
 	.about-follow { font-size: calc((100cqi - 10px) / 7.8); }
 	.identity-name .wm-word { display: block; }
 	/* Pull "Hennessey" up under "Patrick" (only between the two lines, so
