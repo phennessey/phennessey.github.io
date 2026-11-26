@@ -840,16 +840,13 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 			min(65.8px, calc((100vw - 2 * var(--gutter) - var(--nav-room)) / 4.95))
 		));
 	}
-	/* Phones (Patrick's mockup, Nov 26): the stacked links span the name.
-	   CASE STUDIES' caps start level with the caps of "Patrick" (0.069em below
-	   the top of the name) and ABOUT sits on the "Hennessey" baseline (1.575em
-	   below it). A link's caps start 3.82px into its 17.55px line and its
-	   baseline is 13px in, so the first cap to the last baseline is 44.28px
-	   plus the two gaps; the gaps take up the rest (at least 2px). */
+	/* Phones (Patrick, Nov 26): the stacked links start with CASE STUDIES'
+	   caps level with the caps of "Patrick" (0.069em below the top of the
+	   name; a link's caps start 3.82px into its line), always 8px apart. */
 	.site-nav {
 		padding-top: 0;
 		margin-top: round(calc(var(--name-size) * 0.069 - 3.82px), 1px);
-		gap: round(max(2px, calc((var(--name-size) * 1.506 - 44.28px) / 2)), 1px);
+		gap: 8px;   /* always 8px between the stacked links (Patrick, Nov 26) */
 	}
 	.about-follow { font-size: calc((100cqi - 10px) / 7.8); }
 	.identity-name .wm-word { display: block; }
