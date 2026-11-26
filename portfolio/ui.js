@@ -13,8 +13,8 @@
 	];
 
 	// Projects, in page order. image is the file in img/ (WebP, quality 85,
-	// made from the max-quality JPEGs alongside it; 2444px wide, about 2x the
-	// 1200px it displays at; 1816px tall unless height says otherwise, which
+	// made from the max-quality JPEGs alongside it; 2400px wide, 2x the
+	// 1200px it displays at; 1784px tall unless height says otherwise, which
 	// the page uses to reserve the right space before the image loads).
 	// agency matches a name above and decides which section it appears in.
 	var PROJECTS = [
@@ -29,7 +29,7 @@
 		{ image: 'slide9.webp',  agency: 'Fiction',      client: 'adidas',       project: 'NBA + NCAA campaign',                                 roles: 'layout, print and digital production, automation, file management & delivery' },
 		{ image: 'slide10.webp', agency: 'Fiction',      client: 'adidas',       project: 'NOLA Pelicans Stadium',            roles: 'layout, print and digital production, automation, file management & delivery' },
 		{ image: 'slide11.webp', agency: 'Fiction',      client: 'adidas',       project: 'Factory Outlet windows',                              roles: 'production management, layout, print production, automation, delivery' },
-		{ image: 'slide12.webp', height: 1300, agency: 'Fiction',      client: 'adidas',       project: 'Factory Outlet graphics',                             roles: 'architectural measurements, production management, styleguide production' },
+		{ image: 'slide12.webp', height: 1277, agency: 'Fiction',      client: 'adidas',       project: 'Factory Outlet graphics',                             roles: 'architectural measurements, production management, styleguide production' },
 		{ image: 'slide13.webp', agency: 'Fiction',      client: 'Reebok',       project: 'Activ-Chill retail',                                  roles: 'layout, print production, file management & delivery' },
 		{ image: 'slide14.webp', agency: 'Fiction',      client: 'Apple',        project: 'iPhone, iPad, iPod launches',                          roles: 'layout, file management, print and documentation production' }
 	];
@@ -58,7 +58,7 @@
 			fill(el, data);
 			var image = el.querySelector('.project-image');
 			if (data.height) image.height = data.height;
-			image.src = 'img/' + data.image;
+			image.src = 'img/' + data.image + '?v=2400';   // version tag: bump when the slide files are re-exported (2400px, Nov 26)
 			image.alt = data.client + ': ' + data.project;
 			holder.appendChild(el);
 		});
