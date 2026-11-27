@@ -24,17 +24,18 @@
 	--nav-room: 300px;                         /* nav width + gap, kept clear of the name (104px on phones) */
 	--fade-ms: 100ms;                          /* cross-fade between About and Work */
 	--header-pad-bottom: 16px;                 /* white space under the subhead */
-	--header-fade: 60px;                       /* fade below the header (img/fade.png) */
+	--header-fade: 32px;                       /* fade below the header (img/fade.png); 32px at every width (Nov 27; was 60px above 599px) */
 	/* Automation columns, as shares of the content width: story or intro
 	   (53%), a gap (10%), stats (20.5%), a small gap (2.5%), details or the
 	   apps list (14%) */
-	--tool-cols: minmax(0, calc(53% + 34px)) minmax(0, 10fr) minmax(0, calc(20.5% - 10px)) minmax(0, 2.5fr) minmax(0, calc(14% - 24px));   /* stats track 34px narrower from the left; the story column takes it (Nov 25). Details column 24px narrower, moved 24px right, and the stats track 24px wider for the larger numbers (Nov 26) */
+	--tool-cols: minmax(0, 1fr) 10% calc(20.5% - 10px) 2.5% max(calc(14% - 24px), 112px);   /* stats track 34px narrower from the left; the story column takes it (Nov 25). Details column 24px narrower, moved 24px right, and the stats track 24px wider for the larger numbers (Nov 26) */
 	--project-gap: clamp(48px, calc(3.5vw + 20px), 64.8px);    /* space between projects */
-	--app-icon: min(62px, calc((100vw - 2 * var(--gutter)) * 0.0517));   /* Tools built for: 62px at full width, scaling down with the page so the gaps keep their proportion */
+	--app-icon: round(down, min(62px, calc((min(100vw, var(--page-max)) - 2 * var(--gutter)) * 0.0387 + 15.6px)), 1px);   /* one row from 600px up (Nov 27): 62px icons with ~41px gaps at full width; as the page narrows the gaps tighten steadily, to half the desktop proportion at 600px (~36px icons, ~9px gaps; Patrick, Nov 27). Icons fill the rest. 6 x 2 at 599px and down */
 	--app-icon-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);   /* soft shadow under each app icon */
 	--nav-after-name: 40px;                    /* desktop: space between the name and CASE STUDIES */
-	--stats-top: 13px;                         /* space between the headline and the stats row */
-	--app-icon-top: 48px;                      /* space between the stats row and the icons */
+	--head-max: 99px;                          /* HARD LIMIT (Patrick, Nov 27): no opening statement is ever larger than 99px, at any width, on any page */
+	--head-gap: 24px;                          /* one standard (Nov 27): the space under every page's opening statement, at every width */
+	--section-gap: 48px;                       /* one standard (Nov 27): between the parts of each opener (stats, icons, logos) and on both sides of the orange rule, at every width */
 
 }
 
@@ -193,7 +194,7 @@ body:not(:has(#view-automation:not([hidden]))) .legal-stats { display: none; }
 
 .nav-link {
 	position: relative;
-	font-size: 13px;   /* fixed: same on phones as on a 1440px desktop */
+	font-size: var(--nav-size, 13px);   /* 13px: same on phones as on a 1440px desktop; smaller only below 340px */
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.02em;
@@ -249,10 +250,8 @@ main {
 #view-production .gallery-intro { padding-bottom: 0; }
 /* The orange rule between the logos and the slides (Nov 26), spaced as on
    Case Studies: 52px above and 56px below on desktop */
-#view-production .tools-rule { margin: 52px 0 56px; }
-@media (max-width: 874px) { #view-production .tools-rule { margin: 36px 0 44px; } }
-@media (max-width: 599px) { #view-production .tools-rule { margin: 40px 0; } }
-#view-production .gallery-intro .brand-art { margin-top: 0; }
+
+#view-production .gallery-intro .brand-art { margin-top: var(--head-gap); }
 #view-production .projects { padding-top: 0; }
 
 .agency-projects {
@@ -307,7 +306,7 @@ main {
    tools as a grid of tiles. */
 
 .tools {
-	--tools-top: calc(60px - var(--header-pad-bottom));
+	--tools-top: calc(40px - var(--header-pad-bottom));   /* 24px at every width (Nov 27) */
 	padding-top: var(--tools-top);   /* matches Production */
 	padding-bottom: 0;   /* the footer does the bottom spacing (Nov 25) */
 	font-size: var(--caption-size);
@@ -324,15 +323,26 @@ main {
 }
 .tools-lead { grid-column: 1; container-type: inline-size; }   /* the headline sizes to this width */
 /* Headline line breaks: two lines on desktop, three on phones */
-.br-phone, .br-small, .br-about { display: none; }
+/* Opening statements' line breaks (Nov 27): two lines, then the narrow
+   set on small phones (599px and down) */
+.br-narrow { display: none; }
 .br-desk { display: inline; }
+@media (max-width: 599px) {
+	.br-desk { display: none; }
+	.br-narrow { display: inline; }
+	.view .tools-intro strong, .view .about-follow { font-size: round(down, min(var(--head-max), calc((100cqi - 10px) / var(--ln))), 1px); }
+	/* The stats go 2x2 here too, with the narrow headline (Nov 27; were 2x2
+	   from 874px, which left wide empty columns) */
+	.view .tools-stats { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); row-gap: var(--head-gap); }
+	.view .tools-stats > li { --num-size: round(down, calc(0.74 * min(var(--head-max), (var(--w) - 10px) / 6.2)), 1px); }
+}
 
 /* Orange rule between the opener and the featured tools, full width,
    with rounded ends */
 .tools-rule {
 	grid-column: 1 / -1;
 	height: 2px;   /* same weight as the stat bars (Nov 24) */
-	margin: 52px 0 56px;   /* under the brand logos, before the stories (Nov 25) */
+	margin: var(--section-gap) 0;
 	border: 0;
 	border-radius: 1px;
 	background: var(--accent);
@@ -347,29 +357,28 @@ main {
 	color: #999;   /* 40% black */
 }
 
-/* The opening line, set at the old headline's size on its own line */
-.tools-intro strong {
-	display: block;
-	margin-bottom: 18px;
-	font-size: calc((100cqi - 8px) / 11.6);   /* the longer line ("small teams do big work.", about 11.6em) fills the column less 8px on the right (Nov 25): ~104px at full width */
-	line-height: 0.95;   /* Nov 25; was 1 */
+/* Opening statements (Nov 27): one rule for all three pages. They always
+   fill the width: two lines, never over --head-max (99px, a hard limit); on small phones the narrow line set. Whole pixels.
+   --l2 / --ln: each page's longest two-line / narrow line, in em, with a
+   few px to spare. */
+#view-automation { --l2: 11.6; --ln: 6.2; }    /* "small teams do big work." / "do big work." */
+#view-production { --l2: 8.45; --ln: 6.08; }   /* "My tools delivered" / "these brands." */
+#view-about { --l2: 9.5; --ln: 6.2; }          /* "Imagine what I could" / "Imagine what" */
+.tools-intro strong, .about-follow {
+	font-size: round(down, min(var(--head-max), calc((100cqi - 8px) / var(--l2))), 1px);
+	line-height: 0.95;
 	text-wrap: balance;   /* even lines, no single word left on the last */
-	font-weight: 700;   /* Bold (Nov 25; was 800) */
-	letter-spacing: -0.03em;   /* Nov 25; was -0.02em */
-	color: #b3b3b3;   /* 30% black (Nov 25; was 40%) */
+	font-weight: 800;     /* ExtraBold */
+	letter-spacing: -0.03em;
+	color: #b3b3b3;       /* 30% black */
 }
-/* About: the same headline, then the follow-up at the same size and
-   weight in orange, then the bio */
-.about-follow {
-	margin-top: 0;
-	font-size: calc((100cqi - 8px) / 11.6);
-	line-height: 0.95;   /* Nov 25; was 1 */
-	text-wrap: balance;
-	font-weight: 700;   /* Bold (Nov 25; was 800) */
-	letter-spacing: -0.03em;   /* Nov 25; was -0.02em */
-	color: #b3b3b3;   /* the other pages' headline gray (Nov 26; was orange) */
-}
-#view-automation .tools-intro strong, #view-about .tools-intro strong, #view-production .tools-intro strong, .about-follow { font-weight: 800; }   /* all three pages' headlines and About's line in ExtraBold (Nov 25) */
+.tools-intro strong { display: block; margin-bottom: 0; }
+/* The space from the header to the headline (Nov 27): one standard at every
+   width, about 48px from the subhead to the headline's capitals. The caps
+   never start inside the 32px fade under the header: the top margin makes
+   up whatever the page's 24px top padding leaves short (caps start 0.094em
+   into a 0.95 line). */
+.tools-intro strong, .about-follow { margin-top: max(0px, calc(var(--header-fade) - var(--tools-top) - 0.094em)); }
 .head-dot { color: var(--accent); }   /* the closing period of each page's opening line, in orange (Nov 26) */
 .about-text {
 	max-width: 30.6em;   /* about 690px at full size: 50px under the longest line it had at 36em (Nov 25) */
@@ -385,7 +394,6 @@ main {
    orange rule, then the stories */
 /* About (Nov 26): the headline, the orange rule, then "Imagine..." and
    the bio */
-#view-about .tools-rule { margin: 52px 0 56px; }
 /* Monogram (img/sig.webp, from Patrick's sig.png; mockup Nov 25): About
    only, 20% opacity, always anchored to the bottom right of the white
    page: 10% of it off the right edge and 106px of it below the bottom,
@@ -423,7 +431,7 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 	grid-template-columns: repeat(4, minmax(0, 1fr));   /* one row of four */
 	column-gap: 24px;
 	row-gap: 32px;
-	margin-top: var(--stats-top);
+	margin-top: var(--head-gap);
 }
 .tools-stats .stat-label { max-width: none; }   /* one line where the column allows */
 .stat-num {
@@ -449,7 +457,7 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 
 /* Tools built for: one row of app icons across the full page width,
    under the headline and stats */
-.tools-apps { grid-column: 1 / -1; margin-top: var(--app-icon-top); }   /* 48px under the stats */
+.tools-apps { grid-column: 1 / -1; margin-top: var(--section-gap); }
 /* "Applications served" and "Brands served": the "Other projects" heading
    style, with the row 24px under it (Nov 25) */
 .tools-apps .tools-label, .tools-brands .tools-label { margin: 0; }
@@ -457,7 +465,7 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
    of the stat labels above ("hours saved") */
 .tools-apps .app-icons { margin-top: 0; }
 .apps-label { max-width: none; margin-top: 16px; font-size: 13.5px; }
-.tools-brands { grid-column: 1 / -1; margin-top: var(--app-icon-top); }
+.tools-brands { grid-column: 1 / -1; margin-top: var(--section-gap); }
 /* The brands (Nov 26): Patrick's designed arrangement of all nine logos,
    one SVG, drawn in 30% black through a CSS mask and scaled to the full
    content width. One line above 599px, two lines at 599px and below. */
@@ -592,13 +600,21 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
    bottom of their box. The browser draws the text about half a pixel
    lower than that, so the bar ends 3px up to meet the drawn baseline.
    Both ends are rounded to whole pixels (Patrick, Nov 25). */
-.tool-side { --num-size: round(clamp(31px, 4.29vw, 55px), 1px); }   /* story stat number size, set on the whole side column so the details can align to it (Nov 25); 10% larger, whole pixels (Nov 26; was clamp(28px, 3.9vw, 50px)) */
+.tool-side { --num-size: round(down, min(55px, 4.29vw), 1px); }   /* story stat number size, set on the whole side column so the details can align to it (Nov 25); 10% larger, whole pixels (Nov 26; was clamp(28px, 3.9vw, 50px)) */
 .tstat { --cap-top: 0.119; }
 /* The first details label's caps start level with the top of the first
    stat bar, at every width (Patrick, Nov 25): the bar starts 0.119 of the
    number size down; the label's caps start about 2px into its line. */
 .tool-side > .tool-meta { padding-top: round(calc(var(--num-size) * 0.119 - 2px), 1px); }
-.tools-stats > li { --num-size: clamp(45px, 5.86vw, 75px); --cap-top: 0.094; }   /* halfway between 66px and 84px (Nov 25) */
+/* Top stat numbers (Nov 27): 74% of the opening statement's size at every
+   width, the desktop proportion (73px under the 99px maximum), so they
+   never outweigh it. The headline's size, worked out from the window:
+   W is the content width. */
+.tools-stats > li {
+	--w: calc(min(100vw, var(--page-max)) - 2 * var(--gutter));
+	--num-size: round(down, calc(0.74 * min(var(--head-max), (var(--w) - 8px) / 11.6)), 1px);
+	--cap-top: 0.094;
+}
 /* Opener stat labels 13.5px, halfway between 12px and 15px (Nov 25) */
 .tools-stats .stat-label { font-size: 13.5px; }
 .tstat, .tools-stats > li { position: relative; padding-left: 14px; }   /* 2px bar + 12px gap */
@@ -753,23 +769,19 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 @media (max-width: 874px) {
 	.tools-grid { grid-template-columns: minmax(0, 1fr); gap: 32px; }
 	.tool-region { grid-column: auto; grid-row: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: none; gap: 10px; }
-	.tools-opener { grid-template-columns: minmax(0, 1fr); gap: 36px; }
-	.tools-lead, .tool-story { grid-column: auto; }
-	.tools-stats { grid-column: auto; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; }   /* 2x2, read across */
-	.tools-stats > li:nth-child(even) { grid-column: 2; }
-	/* Numbers sized so "5000+" (about 2.9em wide) fills its half of the row,
-	   up to the desktop maximum: ~49px on a 375px phone, 66px from ~480px */
-	.tools-stats > li { --num-size: min(75px, calc(((100vw - 2 * var(--gutter) - 24px) / 2 - 15px) / 2.9)); }
-	/* Headline: always three lines, sized so the longest ("help small teams",
-	   about 7.8em) fills the width at every phone size, less 10px on the right */
-	.tools-intro strong { font-size: calc((100cqi - 10px) / 7.8); }
-	.br-desk, .br-small { display: none; }
-	.br-phone { display: inline; }
-	.tools-apps { margin-top: 12px; }
-	.app-icons { margin-top: 24px; }   /* 24px under each heading, like desktop */
-	.tools-brands { margin-top: 12px; }   /* 48px above in all, like desktop */
-	.tools-rule { margin: 0 0 44px; }   /* the opener's 36px gap above it */
-	.tools-stats { row-gap: 28px; margin-top: 0; }
+	.tools-opener { grid-template-columns: minmax(0, 1fr); }
+	.tools-lead { grid-column: auto; }
+	.tile { min-height: 0; }   /* stacked tiles take their own height on phones, not the tallest tile's (Nov 26) */
+	.site-footer { padding-bottom: var(--gutter); }   /* the same 30px under the footer text as at the sides, on phones (Nov 26; 72px on desktop) */
+}
+
+
+
+/* Stories (Nov 27): the desktop row (story | stats | details) holds down to
+   600px; at 599px and down, the story, then its stats side by side, then
+   the details */
+@media (max-width: 599px) {
+	.tool-story { grid-column: auto; }
 	.tool-body { grid-template-columns: minmax(0, 1fr); row-gap: 24px; }
 	.tool-side { margin-top: 4px; grid-column: auto; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 28px; }
 	.tool-side > .tool-meta { grid-column: 2; }
@@ -793,56 +805,14 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 	   20px), so the name clearly leads over the subhead and the 17px story */
 	.result-num { font-size: 34px; }
 	.tool-result { margin-bottom: 10px; }   /* 10px from the tool name to the subhead on phones (Nov 26) */
-	.tile { min-height: 0; }   /* stacked tiles take their own height on phones, not the tallest tile's (Nov 26) */
-	.site-footer { padding-bottom: var(--gutter); }   /* the same 30px under the footer text as at the sides, on phones (Nov 26; 72px on desktop) */
-	#view-about .tools-rule { margin: 40px 0; }   /* less space from "a big team." to the bio on phones (Nov 26; 48px on desktop) */
-	/* The headline's capitals never start inside the white fade under the
-	   header (Nov 26): its top margin makes up whatever the page's top
-	   padding leaves short of the fade (caps start 0.094em into a 0.95 line) */
-	.tools-intro strong, #view-about .about-follow { margin-top: max(0px, calc(var(--header-fade) - var(--tools-top) - 0.094em)); }   /* About opens with the orange line (Nov 26) */
 	.tool-story .caption { font-size: 18px; }
 }
-
-
-/* 600 to 874px (Patrick, Nov 25): the one row of 12 app icons keeps 12px
-   gaps and the icons grow to fill the width, instead of small icons with
-   wide gaps. */
-@media (min-width: 600px) and (max-width: 874px) {
-	.tools-apps { --app-icon: calc((100vw - 2 * var(--gutter) - 11 * 12px) / 12); }
-	.app-icons { column-gap: 12px; }
-}
-
 /* Small phones only (599px and down; Patrick, Nov 25): the app icons go to
    two full-width rows of six and the logos to the two-line arrangement. Above 599px they keep the desktop single rows. */
 @media (max-width: 599px) {
-	/* Headline on four lines (Patrick, Nov 26): "I make tools / to help /
-	   small teams / do big work.", sized so the longest line ("do big work.",
-	   about 5.66em) fills the width less 10px on the right */
-	#view-automation .br-desk, #view-automation .br-phone { display: none; }
-	#view-automation .br-small { display: inline; }   /* Case Studies only */
-	#view-automation .tools-intro strong { font-size: calc((100cqi - 10px) / 6.2); }   /* about 8% under the size that filled the width (Nov 26) */
-	/* Less space around the headline on small phones (Nov 26): 20px less
-	   above it, and no margin under it (the opener's 36px gap remains) */
-	.tools { --tools-top: calc(40px - var(--header-pad-bottom)); }
-	/* A shorter fade under the header here, so the headline can sit higher
-	   and still start below it */
-	:root { --header-fade: 32px; }
-	#view-automation .tools-intro strong { margin-bottom: 0; }   /* Case Studies only; About keeps its gap above the orange line */
 	.tool-meta [data-field] { font-size: 13px; }   /* smaller detail entries on small phones (Nov 26; 15px up to 874px) */
-	/* Tighter vertical spacing through the opener on small phones (Nov 26):
-	   24px between its parts (was 36px), 20px between the two stat rows (was
-	   28px), 32px above each section heading (was 48px), 16px under each
-	   heading (was 24px), 32px under the orange rule (was 44px) */
-	.tools-opener { gap: 24px; }
-	.tools-stats { row-gap: 20px; }
-	.tools-apps, .tools-brands { margin-top: 8px; }
-	.app-icons, .brand-art { margin-top: 16px; }
-	.tools-rule { margin: 16px 0 40px; }   /* 40px above (with the 24px gap) and below the orange rule (Nov 26; was 24 and 32) */
-	/* Top stats smaller here so they don't outweigh the headline (Nov 26):
-	   72% of the size that filled their half of the row */
-	.tools-stats > li { --num-size: calc(((100vw - 2 * var(--gutter) - 24px) / 2 - 15px) / 2.9 * 0.72); }
 	.app-icons { grid-template-columns: repeat(6, var(--app-icon)); justify-content: space-between; row-gap: 20px; }   /* 6x2, the row still runs the full width; the space left by the smaller icons goes between them (Nov 25) */
-	.tools-apps { --app-icon: min(56px, calc((100vw - 2 * var(--gutter)) / 8.5)); }   /* six across, each gap at least half an icon wide, icons never over 56px (Nov 26) */
+	.tools-apps { --app-icon: round(down, min(56px, calc((100vw - 2 * var(--gutter)) / 8.5)), 1px); }   /* six across, each gap at least half an icon wide, icons never over 56px (Nov 26) */
 	.brand-art {   /* img/logos_2-line.svg */
 		aspect-ratio: 1421.52 / 239.59;
 		-webkit-mask-image: url(img/logos_2-line.svg);
@@ -868,12 +838,6 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 
 	/* A little more air under the caption on phones */
 	.caption { margin-bottom: 14px; }
-	/* Phones (Patrick, Nov 26): three set lines, "Imagine what / I could do
-	   for / your team.", sized so the longest ("Imagine what", about 6.2em)
-	   fills the width less 10px, but never wider than the bio below it
-	   (30.6em of its 18px phone text), whole pixels */
-	.about-follow { font-size: round(down, calc(min(100cqi - 10px, 30.6 * 18px) / 6.2), 1px); }
-	.br-about { display: inline; }
 }
 
 
@@ -885,24 +849,24 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 		align-items: flex-end;
 	}
 	.site-header {
-		--nav-room: 111px;       /* stacked nav (95px) + 16px gap */
+		--nav-size: 13px;
+		/* Room kept for the stacked nav: its widest link (about 7.31 times
+		   the link size: 95px at 13px) plus the 16px gap. The name never
+		   crosses this boundary (Patrick, Nov 27). */
+		--nav-room: calc(var(--nav-size) * 7.31 + 16px);
 		padding-top: var(--gutter);
 		gap: 16px;
 		/* Stacked name at 60px, like desktop (Patrick, Nov 26). Only where
 		   "Hennessey" (about 5.02em) and the stacked nav can't fit side by
-		   side, below about 475px, does it shrink to fit, in whole pixels,
-		   never smaller than at a 340px-wide screen. */
-		--name-size: round(down, max(
-			calc((340px - 2 * var(--gutter) - var(--nav-room)) / 5.05),
-			min(60px, calc((100vw - 2 * var(--gutter) - var(--nav-room)) / 5.05))
-		), 1px);
+		   side, below about 475px, does it shrink to fit, in whole pixels. */
+		--name-size: round(down, min(60px, calc((100vw - 2 * var(--gutter) - var(--nav-room)) / 5.05)), 1px);
 	}
 	.site-nav {
 		padding-top: 0;
 		/* Back on top (Patrick, Nov 26): CASE STUDIES' caps level with the
 		   caps of "Patrick" (0.069em below the top of the name; a link's
 		   caps start 3.82px into its line), then 8px lower; the links 8px apart */
-		margin-top: calc(round(calc(var(--name-size) * 0.069 - 3.82px), 1px) + 8px);
+		margin-top: calc(round(calc(var(--name-size) * 0.069 - var(--nav-size) * 0.294), 1px) + 8px);   /* 0.294: 3.82px at 13px */
 		gap: 8px;
 	}
 	.identity-name .wm-word { display: block; }
@@ -931,11 +895,19 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 	.identity-sub { margin-left: 0; }
 }
 
+/* Absurdly small screens (below 340px; Patrick, Nov 27): the nav links and
+   the subhead shrink with the screen too, in whole pixels, so the name and
+   the nav always keep 16px apart (13px and 11px at 340px) */
+@media (max-width: 339px) {
+	.site-header { --nav-size: max(6px, round(down, 3.82vw, 1px)); }
+	.identity-sub { font-size: max(5px, round(down, 3.23vw, 1px)); white-space: normal; }   /* and wraps inside the name's column rather than reach the nav */
+}
+
 
 /* Where a project's caption rests under the pinned header: the same spot
    the first one sits at the top of the page. ui.js's scroll detents settle
    projects here; --header-h is the header's height, kept current by ui.js. */
-html { scroll-padding-top: calc(var(--header-h, 120px) + 60px - var(--header-pad-bottom)); }
+html { scroll-padding-top: calc(var(--header-h, 120px) + 40px - var(--header-pad-bottom)); }
 
 
 /* Page switch: the new page's content fades in (driven by ui.js). The
