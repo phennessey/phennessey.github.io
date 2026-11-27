@@ -28,7 +28,7 @@
 	/* Automation columns, as shares of the content width: story or intro
 	   (53%), a gap (10%), stats (20.5%), a small gap (2.5%), details or the
 	   apps list (14%) */
-	--tool-cols: minmax(0, calc(53% + 34px)) minmax(0, 10fr) minmax(0, calc(20.5% - 34px)) minmax(0, 2.5fr) minmax(0, 14fr);   /* stats track 34px narrower from the left; the story column takes it (Nov 25) */
+	--tool-cols: minmax(0, calc(53% + 34px)) minmax(0, 10fr) minmax(0, calc(20.5% - 10px)) minmax(0, 2.5fr) minmax(0, calc(14% - 24px));   /* stats track 34px narrower from the left; the story column takes it (Nov 25). Details column 24px narrower, moved 24px right, and the stats track 24px wider for the larger numbers (Nov 26) */
 	--project-gap: clamp(48px, calc(3.5vw + 20px), 64.8px);    /* space between projects */
 	--app-icon: min(62px, calc((100vw - 2 * var(--gutter)) * 0.0517));   /* Tools built for: 62px at full width, scaling down with the page so the gaps keep their proportion */
 	--app-icon-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);   /* soft shadow under each app icon */
@@ -86,7 +86,16 @@ a { color: inherit; }
 	   "Patrick H" as wide as the subhead. The full name is about 8.77 times
 	   its font size wide, so on narrow screens the second value shrinks it
 	   to fit beside the nav instead. */
-	--name-size: min(65.8px, calc((100vw - 2 * var(--gutter) - var(--nav-room)) / 8.8));
+	--name-size: 60px;   /* 60px at every size (Patrick, Nov 26): the name never shrinks; when it runs out of room it stacks instead. At 60px the "y" of the stacked "Hennessey" clears the end of the one-line subhead */
+	/* Where the baseline of "Hennessey" sits below the top of the name
+	   (Nov 26), from the font's metrics: ascent 1.0em, descent 0.35em, in a
+	   line box of round(0.9em). --base-1: the name on one line;
+	   --base-2: "Hennessey" on the second line of the stacked name. */
+	--name-line: round(calc(var(--name-size) * 0.9), 1px);
+	--base-1: calc((var(--name-line) - var(--name-size) * 1.35) / 2 + var(--name-size));
+	--base-2: calc(var(--name-line) + round(calc(var(--name-size) * -0.1), 1px) + var(--base-1));
+	/* A nav link (13px, normal line height) has its baseline 13px down */
+	--link-base: 13px;
 }
 
 /* The nav always stays on the right: it never shrinks or wraps, and the
@@ -105,19 +114,19 @@ body:not(:has(#view-automation:not([hidden]))) .legal-stats { display: none; }
 .header-icon { display: block; width: var(--header-icon); height: var(--header-icon); color: #999; transition: color 150ms ease; }
 .header-icon svg { display: block; width: 100%; height: 100%; }
 .header-icon:hover { color: var(--black); }
-/* Desktop (875px and up; was 797px until Nov 25): the nav sits at the far
-   right, on the name's baseline (Nov 25; the contact icons moved to the
-   footer) */
-@media (min-width: 875px) {
+/* Desktop header (920px and up; Nov 26): the name on one line at 60px,
+   the nav at the far right, top aligned with the name. Below 920px the
+   one-line name and the nav no longer fit with at least 45px between them, so the header stacks (see
+   "Stacked header" below), even where the rest of the page is still in its
+   desktop layout (875px and up). */
+@media (min-width: 920px) {
 	.site-header {
-		align-items: baseline;
+		align-items: flex-start;
 		justify-content: flex-start;
 		gap: 0;
-		/* room kept beside the name for the nav (kept at 480px so the name
-		   never gets narrower than its subhead above 875px) */
-		--nav-room: 480px;
 	}
-	.site-nav { padding-top: 0; margin-left: auto; }
+	/* The links sit on the baseline of "Hennessey" (Patrick, Nov 26) */
+	.site-header .site-nav { padding-top: 0; margin-top: round(calc(var(--base-1) - var(--link-base) - 8px), 1px);   /* 8px above the baseline (Patrick, Nov 26) */ margin-left: auto; }   /* .site-header for weight: the base .site-nav rule comes later */
 }
 .identity { flex: 0 1 auto; min-width: 0; }
 
@@ -234,6 +243,18 @@ main {
 	gap: var(--project-gap);   /* same spacing as between projects */
 }
 
+/* Gallery opener (Nov 26): "The tools I've made helped these brands." in
+   the Case Studies headline style, the logo arrangement under it, then
+   the slides */
+#view-production .gallery-intro { padding-bottom: 0; }
+/* The orange rule between the logos and the slides (Nov 26), spaced as on
+   Case Studies: 52px above and 56px below on desktop */
+#view-production .tools-rule { margin: 52px 0 56px; }
+@media (max-width: 874px) { #view-production .tools-rule { margin: 36px 0 44px; } }
+@media (max-width: 599px) { #view-production .tools-rule { margin: 40px 0; } }
+#view-production .gallery-intro .brand-art { margin-top: 0; }
+#view-production .projects { padding-top: 0; }
+
 .agency-projects {
 	display: flex;
 	flex-direction: column;
@@ -303,7 +324,7 @@ main {
 }
 .tools-lead { grid-column: 1; container-type: inline-size; }   /* the headline sizes to this width */
 /* Headline line breaks: two lines on desktop, three on phones */
-.br-phone, .br-small { display: none; }
+.br-phone, .br-small, .br-about { display: none; }
 .br-desk { display: inline; }
 
 /* Orange rule between the opener and the featured tools, full width,
@@ -346,18 +367,25 @@ main {
 	text-wrap: balance;
 	font-weight: 700;   /* Bold (Nov 25; was 800) */
 	letter-spacing: -0.03em;   /* Nov 25; was -0.02em */
-	color: var(--accent);
+	color: #b3b3b3;   /* the other pages' headline gray (Nov 26; was orange) */
 }
-#view-automation .tools-intro strong, #view-about .tools-intro strong, .about-follow { font-weight: 800; }   /* both pages' headlines and About's orange line in ExtraBold (Nov 25) */
+#view-automation .tools-intro strong, #view-about .tools-intro strong, #view-production .tools-intro strong, .about-follow { font-weight: 800; }   /* all three pages' headlines and About's line in ExtraBold (Nov 25) */
+.head-dot { color: var(--accent); }   /* the closing period of each page's opening line, in orange (Nov 26) */
 .about-text {
 	max-width: 30.6em;   /* about 690px at full size: 50px under the longest line it had at 36em (Nov 25) */
-	margin-top: 48px;
+	margin-top: 24px;   /* under "Imagine what I could do for your team." (Nov 26; was 48px on desktop) */
 	font-size: clamp(18px, 1.76vw, 22.5px);
 	line-height: 1.4;
 	font-weight: 500;   /* Medium (Nov 25; was 700) */
 	letter-spacing: -0.01em;
 	color: var(--mid-gray);
 }
+/* Case Studies (Nov 26): "These tools make an impact" at About's
+   headline size, the four stats, the app icons and brand logos, the
+   orange rule, then the stories */
+/* About (Nov 26): the headline, the orange rule, then "Imagine..." and
+   the bio */
+#view-about .tools-rule { margin: 52px 0 56px; }
 /* Monogram (img/sig.webp, from Patrick's sig.png; mockup Nov 25): About
    only, 20% opacity, always anchored to the bottom right of the white
    page: 10% of it off the right edge and 106px of it below the bottom,
@@ -425,6 +453,10 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 /* "Applications served" and "Brands served": the "Other projects" heading
    style, with the row 24px under it (Nov 25) */
 .tools-apps .tools-label, .tools-brands .tools-label { margin: 0; }
+/* No heading over the icons now (Nov 26): a label under them in the style
+   of the stat labels above ("hours saved") */
+.tools-apps .app-icons { margin-top: 0; }
+.apps-label { max-width: none; margin-top: 16px; font-size: 13.5px; }
 .tools-brands { grid-column: 1 / -1; margin-top: var(--app-icon-top); }
 /* The brands (Nov 26): Patrick's designed arrangement of all nine logos,
    one SVG, drawn in 30% black through a CSS mask and scaled to the full
@@ -457,14 +489,29 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 	height: var(--app-icon);
 	filter: drop-shadow(var(--app-icon-shadow));   /* follows the icon's shape, not its box */
 }
-.app-name {   /* wider than its icon, centered under it */
-	width: calc(var(--app-icon) * 60 / 62);   /* the text area scales with the icon too, so names wrap the same at every size (Nov 25) */
-	margin-top: 6px;
-	font-size: calc(var(--app-icon) * 13 / 62);   /* always in proportion to the icon: 13px with the 62px icons at full width (Nov 25) */
+.app { position: relative; }
+/* App names (Nov 26): no longer printed under the icons; each shows as a
+   small tooltip above its icon on hover or keyboard focus, and stays in
+   the page for screen readers */
+.app-name {
+	position: absolute;
+	bottom: calc(100% + 8px);
+	left: 50%;
+	transform: translate(-50%, 4px);
+	padding: 5px 8px;
+	border-radius: 6px;
+	background: #333;
+	color: #fff;
+	font-size: 12px;
+	font-weight: 500;
 	line-height: 1.2;
-	font-weight: 500;    /* Medium (Nov 25; was 700) */
-	color: #999;   /* 40% black (Nov 25; was #666) */
+	white-space: nowrap;
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity 120ms ease, transform 120ms ease;
+	z-index: 2;
 }
+.app:hover .app-name, .app:focus-within .app-name { opacity: 1; transform: translate(-50%, 0); }
 
 
 /* Featured tools */
@@ -545,7 +592,7 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
    bottom of their box. The browser draws the text about half a pixel
    lower than that, so the bar ends 3px up to meet the drawn baseline.
    Both ends are rounded to whole pixels (Patrick, Nov 25). */
-.tool-side { --num-size: clamp(28px, 3.9vw, 50px); }   /* story stat number size, set on the whole side column so the details can align to it (Nov 25) */
+.tool-side { --num-size: round(clamp(31px, 4.29vw, 55px), 1px); }   /* story stat number size, set on the whole side column so the details can align to it (Nov 25); 10% larger, whole pixels (Nov 26; was clamp(28px, 3.9vw, 50px)) */
 .tstat { --cap-top: 0.119; }
 /* The first details label's caps start level with the top of the first
    stat bar, at every width (Patrick, Nov 25): the bar starts 0.119 of the
@@ -584,7 +631,7 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 .stats-anim .is-rolling .plus { opacity: 0; transition: none; }
 .tstat-num {
 	display: block;
-	font-size: var(--num-size, clamp(28px, 3.9vw, 50px));   /* set on .tstat */
+	font-size: var(--num-size, clamp(31px, 4.29vw, 55px));   /* set on .tstat */
 	line-height: 1;
 	font-weight: 800;
 	letter-spacing: -0.02em;
@@ -713,7 +760,6 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 	/* Numbers sized so "5000+" (about 2.9em wide) fills its half of the row,
 	   up to the desktop maximum: ~49px on a 375px phone, 66px from ~480px */
 	.tools-stats > li { --num-size: min(75px, calc(((100vw - 2 * var(--gutter) - 24px) / 2 - 15px) / 2.9)); }
-	.app-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }   /* names hidden, still read aloud */
 	/* Headline: always three lines, sized so the longest ("help small teams",
 	   about 7.8em) fills the width at every phone size, less 10px on the right */
 	.tools-intro strong { font-size: calc((100cqi - 10px) / 7.8); }
@@ -730,7 +776,7 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 	.tool-side { left: 0; }
 	/* Story stat numbers: 50px like desktop, or smaller where "2000+" (about
 	   2.9em, plus the 14px bar inset) would overrun its half: ~45px at 375px */
-	.tool-side { --num-size: min(50px, calc(((100vw - 2 * var(--gutter) - 28px) / 2 - 14px) / 2.9)); }
+	.tool-side { --num-size: round(down, min(55px, calc(((100vw - 2 * var(--gutter) - 28px) / 2 - 14px) / 2.9)), 1px); }   /* 55px cap, 10% up (Nov 26; was 50px) */
 	/* Phones (Nov 26, kept): the story's stats side by side on one row, then the
 	   details below them */
 	.tool-side { grid-template-columns: minmax(0, 1fr); row-gap: 22px; }   /* details 22px under the stats (Nov 26) */
@@ -749,11 +795,11 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 	.tool-result { margin-bottom: 10px; }   /* 10px from the tool name to the subhead on phones (Nov 26) */
 	.tile { min-height: 0; }   /* stacked tiles take their own height on phones, not the tallest tile's (Nov 26) */
 	.site-footer { padding-bottom: var(--gutter); }   /* the same 30px under the footer text as at the sides, on phones (Nov 26; 72px on desktop) */
-	.about-text { margin-top: 24px; }   /* less space from "a big team." to the bio on phones (Nov 26; 48px on desktop) */
+	#view-about .tools-rule { margin: 40px 0; }   /* less space from "a big team." to the bio on phones (Nov 26; 48px on desktop) */
 	/* The headline's capitals never start inside the white fade under the
 	   header (Nov 26): its top margin makes up whatever the page's top
 	   padding leaves short of the fade (caps start 0.094em into a 0.95 line) */
-	.tools-intro strong { margin-top: max(0px, calc(var(--header-fade) - var(--tools-top) - 0.094em)); }
+	.tools-intro strong, #view-about .about-follow { margin-top: max(0px, calc(var(--header-fade) - var(--tools-top) - 0.094em)); }   /* About opens with the orange line (Nov 26) */
 	.tool-story .caption { font-size: 18px; }
 }
 
@@ -773,7 +819,7 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 	   small teams / do big work.", sized so the longest line ("do big work.",
 	   about 5.66em) fills the width less 10px on the right */
 	#view-automation .br-desk, #view-automation .br-phone { display: none; }
-	#view-automation .br-small { display: inline; }   /* Case Studies only; About keeps its three-line phone headline */
+	#view-automation .br-small { display: inline; }   /* Case Studies only */
 	#view-automation .tools-intro strong { font-size: calc((100cqi - 10px) / 6.2); }   /* about 8% under the size that filled the width (Nov 26) */
 	/* Less space around the headline on small phones (Nov 26): 20px less
 	   above it, and no margin under it (the opener's 36px gap remains) */
@@ -822,33 +868,43 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 
 	/* A little more air under the caption on phones */
 	.caption { margin-bottom: 14px; }
-	/* Three links won't fit beside the name on a phone, so they stack on
-	   the right, Production / Automation / About, leaving the name room. */
+	/* Phones (Patrick, Nov 26): three set lines, "Imagine what / I could do
+	   for / your team.", sized so the longest ("Imagine what", about 6.2em)
+	   fills the width less 10px, but never wider than the bio below it
+	   (30.6em of its 18px phone text), whole pixels */
+	.about-follow { font-size: round(down, calc(min(100cqi - 10px, 30.6 * 18px) / 6.2), 1px); }
+	.br-about { display: inline; }
+}
+
+
+/* Stacked header (below 920px; Nov 26): the name on two lines and the
+   three links stacked at the right, always 8px apart */
+@media (max-width: 919px) {
 	.site-nav {
 		flex-direction: column;
 		align-items: flex-end;
-		gap: 8px;
 	}
 	.site-header {
-		--nav-room: 104px;       /* stacked nav (~88px) + 16px gap */
+		--nav-room: 111px;       /* stacked nav (95px) + 16px gap */
 		padding-top: var(--gutter);
 		gap: 16px;
-		/* Floor: never smaller than at a 340px-wide screen. The whole name is
-		   90% of the size that fills the column (Patrick, Nov 25). */
-		--name-size: calc(0.9 * max(
-			calc((340px - 2 * var(--gutter) - var(--nav-room)) / 4.95),
-			min(65.8px, calc((100vw - 2 * var(--gutter) - var(--nav-room)) / 4.95))
-		));
+		/* Stacked name at 60px, like desktop (Patrick, Nov 26). Only where
+		   "Hennessey" (about 5.02em) and the stacked nav can't fit side by
+		   side, below about 475px, does it shrink to fit, in whole pixels,
+		   never smaller than at a 340px-wide screen. */
+		--name-size: round(down, max(
+			calc((340px - 2 * var(--gutter) - var(--nav-room)) / 5.05),
+			min(60px, calc((100vw - 2 * var(--gutter) - var(--nav-room)) / 5.05))
+		), 1px);
 	}
-	/* Phones (Patrick, Nov 26): the stacked links start with CASE STUDIES'
-	   caps level with the caps of "Patrick" (0.069em below the top of the
-	   name; a link's caps start 3.82px into its line), always 8px apart. */
 	.site-nav {
 		padding-top: 0;
-		margin-top: round(calc(var(--name-size) * 0.069 - 3.82px), 1px);
-		gap: 8px;   /* always 8px between the stacked links (Patrick, Nov 26) */
+		/* Back on top (Patrick, Nov 26): CASE STUDIES' caps level with the
+		   caps of "Patrick" (0.069em below the top of the name; a link's
+		   caps start 3.82px into its line), then 8px lower; the links 8px apart */
+		margin-top: calc(round(calc(var(--name-size) * 0.069 - 3.82px), 1px) + 8px);
+		gap: 8px;
 	}
-	.about-follow { font-size: calc((100cqi - 10px) / 7.8); }
 	.identity-name .wm-word { display: block; }
 	/* Pull "Hennessey" up under "Patrick" (only between the two lines, so
 	   the subhead keeps its spacing). Whole pixels to avoid shimmer. */
@@ -858,10 +914,9 @@ body:has(#view-about:not([hidden])) .about-mark { display: block; }
 	}
 	/* The subhead keeps to one line and may run wider than the name column;
 	   it sits below the nav, so the two never meet. */
-	/* 90% of the desktop 12px, with the name (Patrick, Nov 25) */
-	.identity-sub { white-space: nowrap; font-size: 10.8px; }
+	/* 11px on phones (was 10.8px, 90% of the desktop 12px; whole pixels, Nov 26) */
+	.identity-sub { white-space: nowrap; font-size: 11px; }
 }
-
 
 /* Below 500px the subhead breaks after the ampersand, onto two lines */
 @media (max-width: 499px) {

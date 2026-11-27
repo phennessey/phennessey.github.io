@@ -67,9 +67,9 @@
 	});
 
 
-	// --- Views: Case Studies (default), Gallery and About ------------------
+	// --- Views: Case Studies (default), Brand Work and About ------------------
 	//
-	// The URL hash picks the view (#case-studies, #gallery, #about), so the
+	// The URL hash picks the view (#case-studies, #brand-work, #about), so the
 	// back button and shared links work. Anything else, including no hash,
 	// shows Case Studies (old #tools links land here too).
 
@@ -77,8 +77,8 @@
 	var navLinks = document.querySelectorAll('.nav-link');
 
 	function showView() {
-		// Old names still work: #brand-work, #production and #work (Gallery); #automation
-		// and #tools fall through to Case Studies, the default. Internally Gallery is
+		// Old names still work: #gallery, #production and #work (Brand Work); #automation
+		// and #tools fall through to Case Studies, the default. Internally Brand Work is
 		// still data-view="production"
 		var name = (location.hash === '#gallery' || location.hash === '#brand-work' || location.hash === '#production' || location.hash === '#work') ? 'production'
 			: location.hash === '#about' ? 'about'
