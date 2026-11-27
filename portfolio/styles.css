@@ -330,7 +330,7 @@ main {
 @media (max-width: 599px) {
 	.br-desk { display: none; }
 	.br-narrow { display: inline; }
-	.view .tools-intro strong, .view .about-follow { font-size: round(down, min(var(--head-max), calc((100cqi - 10px) / var(--ln))), 1px); }
+	.view .tools-intro strong, .view .about-follow { font-size: round(down, min(var(--head-max), calc((100cqi - 10px) / 6.2)), 1px); }
 	/* The stats go 2x2 here too, with the narrow headline (Nov 27; were 2x2
 	   from 874px, which left wide empty columns) */
 	.view .tools-stats { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); row-gap: var(--head-gap); }
@@ -357,13 +357,14 @@ main {
 	color: #999;   /* 40% black */
 }
 
-/* Opening statements (Nov 27): one rule for all three pages. They always
-   fill the width: two lines, never over --head-max (99px, a hard limit); on small phones the narrow line set. Whole pixels.
-   --l2 / --ln: each page's longest two-line / narrow line, in em, with a
-   few px to spare. */
-#view-automation { --l2: 11.6; --ln: 6.2; }    /* "small teams do big work." / "do big work." */
-#view-production { --l2: 8.45; --ln: 6.08; }   /* "My tools delivered" / "these brands." */
-#view-about { --l2: 9.5; --ln: 6.2; }          /* "Imagine what I could" / "Imagine what" */
+/* Opening statements (Nov 27): two lines, never over --head-max (99px);
+   narrow line sets on small phones. The size is set by --l2, in em: Case
+   Studies fills the width with "small teams do big work." (11.6em); Brand
+   Work and About split the difference between that size and filling the
+   width with their own longest line (Patrick, Nov 27). Whole pixels. */
+.view { --l2: 11.6; }
+#view-production { --l2: 9.78; }   /* halfway between the Case Studies size and filling with "My tools delivered" (8.45em) */
+#view-about { --l2: 10.45; }       /* halfway between the Case Studies size and filling with "Imagine what I could" (9.5em) */
 .tools-intro strong, .about-follow {
 	font-size: round(down, min(var(--head-max), calc((100cqi - 8px) / var(--l2))), 1px);
 	line-height: 0.95;
